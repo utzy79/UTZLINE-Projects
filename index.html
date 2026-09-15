@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Projects</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v2">
+<link rel="manifest" href="./manifest.json?v=v4">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v2">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v2">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v4">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v4">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -696,7 +696,7 @@
     </button>
     <button class="tbtn" id="switchProjectBtn" title="Switch to a different level in this project, start a new level, or go back to all projects" style="display:none;">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="6.4" height="6.4" rx="1"/><rect x="11.1" y="4" width="6.4" height="6.4" rx="1"/><rect x="2.5" y="12.4" width="6.4" height="6.4" rx="1"/><rect x="11.1" y="12.4" width="6.4" height="6.4" rx="1"/></svg>
-      Switch level
+      Switch project / level
     </button>
     <button class="tbtn primary" id="saveBtn" title="Save everything in one go: a plan file (.utzline.json — reopen it later to keep adjusting) AND a flattened, timestamped PDF (labels and lines stay true vector, so they're never blurry no matter how far you zoom in, but it can't be reopened here for further editing). With a project/level open, this writes straight into that level's own folders.">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 3.5h9.6l3.4 3.4v9.1a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1v-11.5a1 1 0 0 1 1-1z"/><path d="M6 3.5v4.2h6v-4.2"/><rect x="6" y="11.3" width="8" height="5.2" rx="0.6"/></svg>
@@ -776,7 +776,8 @@
     <div class="toast" id="toast"></div>
 
     <!-- ============================== project gate ==============================
-         Shown at boot (and again whenever you use "Switch level") instead of
+         Shown at boot (and again whenever you use "Switch project / level")
+         instead of
          dropping straight into a single ongoing plan -- this is the one
          thing that makes this fork "UTZLINE Projects" rather than plain
          UTZLINE Site Measure. Exactly one of the four states below is
@@ -898,7 +899,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v2";
+  var APP_VERSION = "v4";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1861,7 +1862,11 @@
         startBlankPlan(name);
       });
     }).then(function(){
-      state.fileBase = sanitizeFileBase(name);
+      // The plan name always reflects "<Project>_<Level>" once a level is
+      // open, regardless of what applyRestoredState/startBlankPlan set it
+      // to above -- this is the single source of truth for a level's
+      // identity, so it's set last, after everything else has settled.
+      state.fileBase = sanitizeFileBase(activeProjectName + "_" + name);
       updateFileNameBtn();
       refreshBrandSubtitle();
       history = [deepClone(state.objects)]; historyIndex = 0;
@@ -1969,27 +1974,43 @@
   function saveAllProjectAware(){
     if (!(activeLevelSavesHandle && activeLevelPdfsHandle)){ saveAll(); return; }
     if (!state.imageW){ showToast("Open a plan or photo first."); return; }
-    var jsonOK = false, pdfOK = false, pdfFilename = "";
+    // Turns whatever a rejected promise handed back into a short, humanly
+    // reportable string -- a real Error (name + message), this app's own
+    // {code: "..."} rejection shape, or a DOMException -- so a failure can
+    // be read straight off the toast (and told to support) without anyone
+    // needing to open devtools, which is often impractical on a phone on
+    // site.
+    function describeError(err){
+      if (!err) return "unknown error";
+      if (err.code) return err.code;
+      if (err.name && err.message) return err.name + ": " + err.message;
+      if (err.name) return err.name;
+      if (err.message) return err.message;
+      try{ return String(err); }catch(e){ return "unknown error"; }
+    }
+    var jsonOK = false, pdfOK = false, pdfFilename = "", jsonErr = null, pdfErr = null;
     saveActiveLevelFile().then(function(){
       jsonOK = true;
     }).catch(function(err){
+      jsonErr = err;
       console.error("Level save failed:", err);
     }).then(function(){
       return exportPDFToActiveLevel(null, null).then(function(res){
         pdfOK = true;
         pdfFilename = res.filename;
       }).catch(function(err){
+        pdfErr = err;
         console.error("Level PDF export failed:", err);
       });
     }).then(function(){
       if (jsonOK && pdfOK){
         showToast("Saved “" + activeLevelName + "” and exported " + pdfFilename + ".");
       } else if (jsonOK && !pdfOK){
-        showToast("Saved the plan file, but the PDF export failed — try Save again.");
+        showToast("Saved the plan file, but the PDF export failed (" + describeError(pdfErr) + ") — try Save again.", 8000);
       } else if (!jsonOK && pdfOK){
-        showToast("Exported " + pdfFilename + ", but saving the plan file failed — try Save again.");
+        showToast("Exported " + pdfFilename + ", but saving the plan file failed (" + describeError(jsonErr) + ") — try Save again.", 8000);
       } else {
-        showToast("Couldn't save to this level's folder — try again.");
+        showToast("Couldn't save to this level's folder (" + describeError(jsonErr) + ") — try again.", 8000);
       }
     });
   }
@@ -4179,6 +4200,72 @@
       sub.textContent = activeProjectName || "plan markup";
     }
   }
+  // Press-and-hold on a project/level row deletes it, gated behind two
+  // sequential confirmations (a mis-tap that only gets past the first is
+  // still fully reversible -- nothing happens until both are answered
+  // "yes"). Pointer Events cover mouse AND touch through one code path,
+  // which is all this app needs since the folder-picker feature already
+  // requires desktop/Android Chrome. A long press is distinguished from a
+  // normal tap by a short hold with the finger/pointer not moving far
+  // (a real scroll or drag cancels it); once it fires, the click that a
+  // touchend/mouseup would otherwise still dispatch is swallowed so the
+  // row doesn't ALSO open right after you delete (or decline to delete) it.
+  function wireLongPress(el, onLongPress){
+    var LONG_PRESS_MS = 550;
+    var MOVE_TOLERANCE = 10;
+    var timer = null, startX = 0, startY = 0, fired = false;
+    function clearTimer(){ if (timer){ clearTimeout(timer); timer = null; } }
+    el.addEventListener("pointerdown", function(e){
+      if (e.button !== undefined && e.button !== 0) return;
+      fired = false;
+      startX = e.clientX; startY = e.clientY;
+      clearTimer();
+      timer = setTimeout(function(){
+        timer = null;
+        fired = true;
+        if (navigator.vibrate) { try{ navigator.vibrate(30); }catch(err){} }
+        onLongPress();
+      }, LONG_PRESS_MS);
+    });
+    el.addEventListener("pointermove", function(e){
+      if (!timer) return;
+      if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE || Math.abs(e.clientY - startY) > MOVE_TOLERANCE) clearTimer();
+    });
+    el.addEventListener("pointerup", clearTimer);
+    el.addEventListener("pointercancel", clearTimer);
+    el.addEventListener("pointerleave", clearTimer);
+    el.addEventListener("click", function(e){
+      if (fired){
+        e.preventDefault();
+        e.stopPropagation();
+        fired = false;
+      }
+    }, true);
+  }
+  // kind: "project" (removed from projectsRootHandle) or "level" (removed
+  // from activeProjectHandle). Two showConfirm()s in a row -- the second
+  // spelling out that it's permanent and, for a project, takes every level
+  // in it with it -- before anything is actually removed.
+  function confirmAndDeleteEntry(kind, name, onDeleted){
+    var what = kind === "project" ? "project" : "level";
+    showConfirm("Delete the " + what + " “" + name + "”?").then(function(ok){
+      if (!ok) return;
+      var warn = kind === "project"
+        ? "Are you sure? This permanently deletes every level in “" + name + "”, along with all their saved plans and PDFs. This cannot be undone."
+        : "Are you sure? This permanently deletes “" + name + "”'s saved plan and all its exported PDFs. This cannot be undone.";
+      showConfirm(warn).then(function(ok2){
+        if (!ok2) return;
+        var parentHandle = kind === "project" ? projectsRootHandle : activeProjectHandle;
+        parentHandle.removeEntry(name, { recursive: true }).then(function(){
+          showToast("Deleted “" + name + "”.");
+          if (onDeleted) onDeleted();
+        }).catch(function(err){
+          console.error("Delete " + kind + " failed:", err);
+          showToast("Couldn't delete “" + name + "” — try again.");
+        });
+      });
+    });
+  }
   function populateProjectList(){
     return listExistingProjects().then(function(names){
       projectListItems.innerHTML = "";
@@ -4193,6 +4280,7 @@
         var row = document.createElement("button");
         row.type = "button";
         row.className = "project-row";
+        row.title = "Tap to open — press and hold to delete";
         var label = document.createElement("span");
         label.textContent = name;
         var arrow = document.createElement("span");
@@ -4205,6 +4293,9 @@
             console.error("Open project failed:", err);
             showToast("Couldn't open “" + name + "” — try again.");
           });
+        });
+        wireLongPress(row, function(){
+          confirmAndDeleteEntry("project", name, function(){ populateProjectList(); });
         });
         projectListItems.appendChild(row);
       });
@@ -4226,6 +4317,7 @@
         var row = document.createElement("button");
         row.type = "button";
         row.className = "project-row";
+        row.title = "Tap to open — press and hold to delete";
         var label = document.createElement("span");
         label.textContent = name;
         var arrow = document.createElement("span");
@@ -4238,6 +4330,9 @@
             console.error("Open level failed:", err);
             showToast("Couldn't open “" + name + "” — try again.");
           });
+        });
+        wireLongPress(row, function(){
+          confirmAndDeleteEntry("level", name, function(){ populateLevelList(); });
         });
         levelListItems.appendChild(row);
       });
@@ -4362,7 +4457,7 @@
       });
     }
     if (!state.objects.length){ goToGate(); return; }
-    showConfirm("Switch level? Make sure this plan is saved first (Save writes straight into “" + activeLevelName + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
+    showConfirm("Switch project or level? Make sure this plan is saved first (Save writes straight into “" + activeLevelName + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
       if (ok) goToGate();
     });
   }
@@ -4914,7 +5009,16 @@
   function applyLoadedImage(dataUrl, w, h, fileName){
     state.imageDataURL = dataUrl;
     state.imageW = w; state.imageH = h;
-    state.fileBase = sanitizeFileBase((fileName || "plan").replace(/\.[a-z0-9]+$/i, ""));
+    // While a level is open, its plan name is always "<Project>_<Level>"
+    // (set once by openLevel) -- bringing in a new photo/PDF replaces the
+    // artwork, not the level's identity, so an imported file's own name
+    // must never clobber it here. Outside a level (the plain single-plan
+    // mode this app also falls back to) there's no project/level name to
+    // protect, so the old behaviour -- name the plan after whatever file
+    // was opened -- still applies.
+    if (!activeLevelName){
+      state.fileBase = sanitizeFileBase((fileName || "plan").replace(/\.[a-z0-9]+$/i, ""));
+    }
     state.objects = []; state.selectedId = null;
     history = []; historyIndex = -1;
     applyImageToDom();

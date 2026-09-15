@@ -41,7 +41,26 @@
 // app's curly quotes/arrows/etc were only ever rendering correctly by
 // accident, dependent on the host's Content-Type header carrying the right
 // charset.)
-var CACHE_NAME = "utzline-projects-cache-v2";
+//
+// (v3: a save/PDF-export failure toast now includes the actual underlying
+// error (name/message, or this app's own short error code) instead of just
+// "try again" -- found necessary after a real-world report of a save
+// silently only writing the plan file, not the PDF, on a large real plan
+// (a ~6000x4239px architectural drawing) that couldn't be reproduced in
+// testing; showing the real error is the fastest way to pin down a failure
+// that only happens on specific real hardware/plans, without needing
+// devtools access on a phone.)
+//
+// (v4: press-and-hold a project or level row to delete it, gated behind
+// two sequential confirmations (recursively removes that folder and
+// everything saved in it -- there is no undo). The "Switch level" toolbar
+// button is renamed "Switch project / level" to better describe what it
+// actually does. Fixed a naming bug: a level's plan name is now always
+// "<Project>_<Level>" (previously just "<Level>"), and -- the actual
+// reported bug -- bringing in a new photo/PDF while a level is open no
+// longer clobbers that name with the imported file's own filename; only
+// the artwork changes, the level's identity doesn't.)
+var CACHE_NAME = "utzline-projects-cache-v4";
 var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
 
 var PRECACHE_URLS = [
