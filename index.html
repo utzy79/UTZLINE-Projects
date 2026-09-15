@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+<meta charset="utf-8">
 <title>UTZLINE Projects</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v1">
+<link rel="manifest" href="./manifest.json?v=v2">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v1">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v1">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v2">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v2">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -453,6 +454,12 @@
   .project-row:hover, .project-row:focus-visible{ background:var(--surface-1); border-color:var(--accent); }
   .project-row-arrow{ color:var(--text-secondary); flex:none; font-weight:400; }
   .project-gate-empty{ font-size:12.5px; color:var(--text-secondary); text-align:center; padding:10px 0 16px; }
+  .project-gate-back{
+    display:block; background:none; border:none; padding:0; margin:0 0 14px;
+    color:var(--text-secondary); font-size:13px; font:inherit; cursor:pointer;
+    text-decoration:underline; text-underline-offset:2px;
+  }
+  .project-gate-back:hover, .project-gate-back:focus-visible{ color:var(--text-primary); }
 
   /* ---------- share-as choice ---------- */
   .share-choice-box{max-width:340px;}
@@ -687,11 +694,11 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12.4 3.6l4 4-9 9-4.6.9.9-4.6z"/></svg>
       <span id="fileNameBtnLabel">plan</span>
     </button>
-    <button class="tbtn" id="switchProjectBtn" title="Switch to a different project, or start a new one — brings back the opening project picker" style="display:none;">
+    <button class="tbtn" id="switchProjectBtn" title="Switch to a different level in this project, start a new level, or go back to all projects" style="display:none;">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="6.4" height="6.4" rx="1"/><rect x="11.1" y="4" width="6.4" height="6.4" rx="1"/><rect x="2.5" y="12.4" width="6.4" height="6.4" rx="1"/><rect x="11.1" y="12.4" width="6.4" height="6.4" rx="1"/></svg>
-      Switch project
+      Switch level
     </button>
-    <button class="tbtn primary" id="saveBtn" title="Save everything in one go: a project file (.utzline.json — reopen it later with Open project to keep adjusting) AND a flattened PDF (labels and lines stay true vector, so they're never blurry no matter how far you zoom in, but it can't be reopened here for further editing). With a project open, this writes straight into that project's own folders.">
+    <button class="tbtn primary" id="saveBtn" title="Save everything in one go: a plan file (.utzline.json — reopen it later to keep adjusting) AND a flattened, timestamped PDF (labels and lines stay true vector, so they're never blurry no matter how far you zoom in, but it can't be reopened here for further editing). With a project/level open, this writes straight into that level's own folders.">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 3.5h9.6l3.4 3.4v9.1a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1v-11.5a1 1 0 0 1 1-1z"/><path d="M6 3.5v4.2h6v-4.2"/><rect x="6" y="11.3" width="8" height="5.2" rx="0.6"/></svg>
       Save
     </button>
@@ -769,27 +776,31 @@
     <div class="toast" id="toast"></div>
 
     <!-- ============================== project gate ==============================
-         Shown at boot (and again whenever you use "Switch project") instead
-         of dropping straight into a single ongoing plan -- this is the one
+         Shown at boot (and again whenever you use "Switch level") instead of
+         dropping straight into a single ongoing plan -- this is the one
          thing that makes this fork "UTZLINE Projects" rather than plain
-         UTZLINE Site Measure. Exactly one of the three states below is
+         UTZLINE Site Measure. Exactly one of the four states below is
          visible at a time, toggled in script via each section's [hidden]
          attribute: gateSetup (no Projects folder chosen yet), gateReconnect
          (a folder was chosen before but its permission has lapsed -- browser
-         restart, OS-level revocation, etc.), gateList (the normal case: pick
-         an existing project or start a new one). Positioned the same way as
-         the confirm/rename modal-backdrops just below (position:absolute,
-         covering .app), just opaque and BELOW them (z-index 30 vs 40) --
-         New Project and Switch Project both open the rename/confirm dialog
-         from a click that originates on the gate itself, and that dialog
-         needs to render on top of the gate, not disappear behind it. -->
+         restart, OS-level revocation, etc.), gateList (pick an existing
+         project or start a new one), gateLevels (one folder deeper: pick an
+         existing level of whichever project was just opened, or start a new
+         one -- a project is a folder of levels, e.g. "Level 1"/"Level 2",
+         each its own independent plan with its own save file and pdfs
+         history). Positioned the same way as the confirm/rename
+         modal-backdrops just below (position:absolute, covering .app), just
+         opaque and BELOW them (z-index 30 vs 40) -- New Project/New Level
+         and Switch Level all open the rename/confirm dialog from a click
+         that originates on the gate itself, and that dialog needs to render
+         on top of the gate, not disappear behind it. -->
 
     <div class="project-gate" id="projectGate" hidden>
       <div class="project-gate-box">
         <div class="project-gate-brand"><img id="projectGateIcon" src="" alt="" aria-hidden="true"><h1>UTZLINE Projects</h1></div>
 
         <div id="gateSetup">
-          <p>Choose a folder on this device to keep your projects in. Each project you create gets its own folder inside it, with a <b>saves</b> folder (the working file you reopen) and a <b>pdfs</b> folder (every PDF you export) of its own.</p>
+          <p>Choose a folder on this device to keep your projects in. Each project you create gets its own folder inside it, holding one folder per level (e.g. "Level 1", "Level 2") -- and each level has its own <b>saves</b> folder (the working file you reopen) and <b>pdfs</b> folder (every PDF you export).</p>
           <div class="project-gate-actions">
             <button class="mbtn mbtn-accent" id="chooseProjectsRootBtn">Choose Projects Folder</button>
           </div>
@@ -810,6 +821,15 @@
           <div class="project-gate-actions">
             <button class="mbtn mbtn-accent" id="newProjectBtn">+ New Project</button>
             <button class="mbtn" id="switchProjectsRootBtn">Use a Different Projects Folder</button>
+          </div>
+        </div>
+
+        <div id="gateLevels" hidden>
+          <button type="button" class="project-gate-back" id="backToProjectsBtn">← All projects</button>
+          <p id="gateLevelsLabel"></p>
+          <div class="project-list" id="levelListItems"></div>
+          <div class="project-gate-actions">
+            <button class="mbtn mbtn-accent" id="newLevelBtn">+ New Level</button>
           </div>
         </div>
       </div>
@@ -878,7 +898,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v1";
+  var APP_VERSION = "v2";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1593,14 +1613,17 @@
     if (Date.now() - lastBackupAt < autoBackupIntervalMin * 60 * 1000) return;
     backupDirty = false;
     lastBackupAt = Date.now();
-    // A project being open (see the per-project-folders section further
-    // down) always wins over the generic destinations below -- there's a
+    // A level being open (see the per-project-folders section further down)
+    // always wins over the generic destinations below -- there's a
     // specific, already-known-good place for this plan's own file, so
     // auto-backup just keeps THAT file current instead of also scattering
     // timestamped copies into a claude.ai downloads bridge or a separately-
-    // chosen generic backup folder.
-    if (activeProjectSavesHandle){
-      saveActiveProjectFile().then(function(){
+    // chosen generic backup folder. Deliberately JSON-only here (unlike a
+    // manual Save, which also drops a PDF) -- this fires as often as every
+    // 30 seconds, and a fresh PDF render on every tick would both be
+    // wasteful and flood the pdfs folder with near-duplicates.
+    if (activeLevelSavesHandle){
+      saveActiveLevelFile().then(function(){
         showToast("Backed up.");
         autoBackupFailWarned = false;
       }).catch(function(err){
@@ -1686,12 +1709,17 @@
   /* ============================== per-project folders ==============================
      What actually makes this fork "UTZLINE Projects": every project gets its
      own named folder (created once, under one root "Projects" folder chosen
-     the first time the app is used) with a saves/ subfolder -- one
-     continuously-overwritten <ProjectName>.utzline.json, the file reopened
-     automatically the next time that project is chosen -- and a pdfs/
-     subfolder, where every Save writes a fresh timestamped export. The app
-     always opens to a picker (see the gate wiring further down) instead of
-     straight into one ongoing plan.
+     the first time the app is used), and every project is itself a folder of
+     LEVELS (e.g. "Level 1", "Ground Floor") -- each level is a fully
+     independent plan/photo with its own markup, living in its own subfolder
+     directly under the project. Each level's folder has a saves/ subfolder
+     -- one continuously-overwritten <LevelName>.utzline.json, the file
+     reopened automatically the next time that level is chosen -- and a
+     pdfs/ subfolder, where every Save (not just the explicit Export PDF
+     action) drops a fresh timestamped export. The app always opens to a
+     picker (see the gate wiring further down) instead of straight into one
+     ongoing plan; opening a project itself just leads to ITS picker (which
+     level?), never straight to a canvas.
 
      This relies on the exact same File System Access API as the original
      app's single "auto-backup folder" feature, and reuses its
@@ -1713,12 +1741,21 @@
   var projectsRootName = "";
   var activeProjectName = "";
   var activeProjectHandle = null;
-  var activeProjectSavesHandle = null;
-  var activeProjectPdfsHandle = null;
+  // A project is a folder of levels (e.g. "Level 1", "Ground Floor") rather
+  // than a single plan -- each level is its own independent uploaded plan/
+  // photo with its own markup, own save file, and own pdfs history, living
+  // in its own subfolder directly under the project's folder. activeLevel*
+  // below is what every Save/PDF/auto-backup actually writes into;
+  // activeProject* just tracks which project that level lives inside, for
+  // display and for the "back to this project's levels" navigation.
+  var activeLevelName = "";
+  var activeLevelHandle = null;
+  var activeLevelSavesHandle = null;
+  var activeLevelPdfsHandle = null;
 
   function projectSaveFilename(name){ return sanitizeFileBase(name) + ".utzline.json"; }
 
-  function ensureProjectSubfolders(dirHandle){
+  function ensureWorkFolders(dirHandle){
     return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
       return dirHandle.getDirectoryHandle("pdfs", { create: true }).then(function(pdfsH){
         return { savesHandle: savesH, pdfsHandle: pdfsH };
@@ -1726,14 +1763,15 @@
     });
   }
 
-  // Every subfolder directly under the Projects root IS a project, by
-  // construction (nothing else is ever created directly under the root) --
-  // sorted case-insensitively so the list reads the same regardless of
-  // creation order.
-  function listExistingProjects(){
-    if (!projectsRootHandle || typeof projectsRootHandle.values !== "function") return Promise.resolve([]);
+  // Lists the immediate subdirectories of a given directory handle -- used
+  // both for "every subfolder directly under the Projects root is a
+  // project" and "every subfolder directly under a project is a level of
+  // that project", since both are the exact same shape. Sorted case-
+  // insensitively so the list reads the same regardless of creation order.
+  function listSubdirNames(dirHandle){
+    if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
     var names = [];
-    var iter = projectsRootHandle.values();
+    var iter = dirHandle.values();
     function step(){
       return iter.next().then(function(res){
         if (res.done) return names;
@@ -1746,27 +1784,65 @@
       return list;
     });
   }
+  function listExistingProjects(){ return listSubdirNames(projectsRootHandle); }
+  function listExistingLevels(){ return listSubdirNames(activeProjectHandle); }
 
-  function startBlankProject(name){
+  function startBlankPlan(name){
     var blank = generateBlank();
     applyLoadedImage(blank.dataURL, blank.w, blank.h, name);
   }
 
-  // Opens (creating if missing) the named project's folder and its saves/
-  // pdfs subfolders, restores its existing save file if there is one, and
-  // leaves activeProject* pointing at it for every subsequent Save/PDF/
-  // auto-backup. The same create-if-missing call covers both "open an
-  // existing project" and "this project's folder vanished since the list
-  // was built" without a separate existence check racing the real open.
-  function openProject(name){
+  // Resolves (creating if missing) the named project's own folder and lands
+  // on its level picker -- this does NOT load a canvas by itself; a project
+  // is just a folder of levels, so opening one always means "choose which
+  // level to work on" (openLevel), never "here's a plan". The same
+  // create-if-missing call covers both "open an existing project" and "this
+  // project's folder vanished since the list was built" without a separate
+  // existence check racing the real open.
+  function openProjectLevels(name){
     return projectsRootHandle.getDirectoryHandle(name, { create: true }).then(function(dirH){
-      activeProjectHandle = dirH;
-      return ensureProjectSubfolders(dirH);
-    }).then(function(subs){
       activeProjectName = name;
-      activeProjectSavesHandle = subs.savesHandle;
-      activeProjectPdfsHandle = subs.pdfsHandle;
-      return activeProjectSavesHandle.getFileHandle(projectSaveFilename(name)).then(function(fh){
+      activeProjectHandle = dirH;
+      return populateLevelList();
+    }).then(function(){
+      gateLevelsLabel.textContent = "“" + activeProjectName + "” — choose a level, or start a new one.";
+      showGateState("levels");
+    });
+  }
+
+  // "New Project" is a request to start something fresh -- a name that
+  // collides with an existing project folder (case-insensitively; the
+  // underlying filesystem may or may not itself be case-sensitive, so this
+  // can't rely on that) gets a numbered suffix instead of silently
+  // reopening whatever's already there under that name. Landing on the new
+  // project's (empty) level list, rather than immediately naming a first
+  // level too, keeps this the same shape as the root project list's own
+  // empty state.
+  function createNewProject(rawName){
+    var name = sanitizeFileBase(rawName);
+    return listExistingProjects().then(function(existing){
+      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+      var finalName = name, n = 2;
+      while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
+        finalName = name + " " + n; n++;
+      }
+      return openProjectLevels(finalName);
+    });
+  }
+
+  // Opens (creating if missing) the named level's folder (a subfolder of
+  // the currently open project) and its saves/pdfs subfolders, restores its
+  // existing save file if there is one, and leaves activeLevel* pointing at
+  // it for every subsequent Save/PDF/auto-backup.
+  function openLevel(name){
+    return activeProjectHandle.getDirectoryHandle(name, { create: true }).then(function(dirH){
+      activeLevelHandle = dirH;
+      return ensureWorkFolders(dirH);
+    }).then(function(subs){
+      activeLevelName = name;
+      activeLevelSavesHandle = subs.savesHandle;
+      activeLevelPdfsHandle = subs.pdfsHandle;
+      return activeLevelSavesHandle.getFileHandle(projectSaveFilename(name)).then(function(fh){
         return fh.getFile();
       }).then(function(file){
         return file.text();
@@ -1776,13 +1852,13 @@
         if (saved && (saved.utzlineProject || saved.redlineProject) && saved.imageDataURL){
           applyRestoredState(saved);
         } else {
-          startBlankProject(name);
+          startBlankPlan(name);
         }
       }, function(){
-        // No save file yet for this project (a brand-new folder, or one
+        // No save file yet for this level (a brand-new folder, or one
         // created outside this app) -- start it blank rather than treating
         // a missing file as an error.
-        startBlankProject(name);
+        startBlankPlan(name);
       });
     }).then(function(){
       state.fileBase = sanitizeFileBase(name);
@@ -1794,101 +1870,127 @@
       updateUndoRedoButtons();
       hideProjectGate();
       if (switchProjectBtn) switchProjectBtn.style.display = "";
-      showToast("Opened “" + name + "”.");
+      showToast("Opened “" + activeProjectName + " — " + name + "”.");
     });
   }
 
-  // "New Project" is a request to start something fresh -- a name that
-  // collides with an existing project folder (case-insensitively; the
-  // underlying filesystem may or may not itself be case-sensitive, so this
-  // can't rely on that) gets a numbered suffix instead of silently
-  // reopening whatever's already there under that name.
-  function createNewProject(rawName){
+  // "New Level" mirrors "New Project" one folder deeper -- a name that
+  // collides with an existing level of THIS project gets a numbered suffix.
+  function createNewLevel(rawName){
     var name = sanitizeFileBase(rawName);
-    return listExistingProjects().then(function(existing){
+    return listExistingLevels().then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
       var finalName = name, n = 2;
       while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
         finalName = name + " " + n; n++;
       }
-      return openProject(finalName);
+      return openLevel(finalName);
     });
   }
 
-  // Writes the current plan's editable state straight into this project's
-  // own saves/ folder as one continuously-overwritten canonical file (named
-  // after the project, not timestamped) -- reopening a project always means
+  // Writes the current plan's editable state straight into this level's own
+  // saves/ folder as one continuously-overwritten canonical file (named
+  // after the level, not timestamped) -- reopening a level always means
   // "pick up exactly where I left off", not "choose from a pile of
   // timestamped saves". Same verifiedHandleWrite safety net (write, read
   // back, and a delayed re-check for a cloud-sync client hollowing the file
   // out afterward) as every other folder-write in this app.
-  function saveActiveProjectFile(){
-    if (!activeProjectSavesHandle) return Promise.reject({ code: "no_project" });
+  function saveActiveLevelFile(){
+    if (!activeLevelSavesHandle) return Promise.reject({ code: "no_level" });
     var blob;
     try{ blob = new Blob([JSON.stringify(projectPayload())], { type: "application/json" }); }
     catch(e){ return Promise.reject(e); }
-    return activeProjectSavesHandle.getFileHandle(projectSaveFilename(activeProjectName), { create: true }).then(function(fh){
+    return activeLevelSavesHandle.getFileHandle(projectSaveFilename(activeLevelName), { create: true }).then(function(fh){
       return verifiedHandleWrite(fh, blob);
     });
   }
 
   // PDF (or PNG, if the PDF libraries didn't load) export straight into this
-  // project's own pdfs/ folder. Unlike the save file above, every export
-  // gets its own timestamped filename (suggestFilename) and accumulates
-  // rather than overwrites -- a folder of "here's what got sent on each
-  // date" is exactly what you want there.
-  function exportBlobToActiveProject(renderFn, ext, toastMsg){
-    if (!activeProjectPdfsHandle) return Promise.resolve();
+  // level's own pdfs/ folder. Unlike the save file above, every export gets
+  // its own timestamped filename (suggestFilename) and accumulates rather
+  // than overwrites -- a folder of "here's what got sent on each date" is
+  // exactly what you want there.
+  function exportBlobToActiveLevel(renderFn, ext, toastMsg){
+    if (!activeLevelPdfsHandle) return Promise.reject({ code: "no_level" });
     var filename = suggestFilename(ext, true);
     var theBlob;
     return renderFn().then(function(blob){
       theBlob = blob;
-      return activeProjectPdfsHandle.getFileHandle(filename, { create: true });
+      return activeLevelPdfsHandle.getFileHandle(filename, { create: true });
     }).then(function(fh){
       return verifiedHandleWrite(fh, theBlob);
     }).then(function(){
-      showToast(toastMsg || ("Saved " + filename + " to this project's pdfs folder."));
-    }).catch(function(err){
-      console.error("Project export failed:", err);
-      showToast("Couldn't save that file to this project's folder — try again.");
+      if (toastMsg) showToast(toastMsg);
+      return { filename: filename };
     });
   }
-  function exportPDFToActiveProject(){
-    if (!state.imageW) return Promise.resolve();
+  // Resolves with the exported filename on success, rejects on any failure
+  // (missing/failed PDF libs still counts as success -- it falls back to a
+  // PNG rather than losing the export, and says so in the toast passed
+  // through from the caller who asked for the fallback message). Callers
+  // that want their own combined success/failure messaging (saveAllLevelAware
+  // below) pass toastMsg as null/undefined and handle it themselves; direct
+  // "Export PDF" toolbar actions elsewhere pass their own.
+  function exportPDFToActiveLevel(toastMsg, fallbackToastMsg){
+    if (!state.imageW) return Promise.reject({ code: "no_plan" });
     if (window.__pdfLibFailed){
-      return exportBlobToActiveProject(renderExportBlob, "png", "PDF export couldn't load (network/firewall) — saved as PNG to this project's pdfs folder.");
+      return exportBlobToActiveLevel(renderExportBlob, "png", fallbackToastMsg);
     }
     if (!pdfLibsReady()){
-      showToast("Preparing PDF export…");
-      return waitForPdfLibs(8000).then(function(ready){
+      return waitForPdfLibs(20000).then(function(ready){
         if (window.__pdfLibFailed){
-          return exportBlobToActiveProject(renderExportBlob, "png", "PDF export couldn't load (network/firewall) — saved as PNG to this project's pdfs folder.");
+          return exportBlobToActiveLevel(renderExportBlob, "png", fallbackToastMsg);
         }
-        if (!ready){ showToast("PDF export is still loading — try Save again in a moment."); return; }
-        return exportBlobToActiveProject(renderExportPdfBlob, "pdf", null);
+        if (!ready) return Promise.reject({ code: "pdf_libs_not_ready" });
+        return exportBlobToActiveLevel(renderExportPdfBlob, "pdf", toastMsg);
       });
     }
-    return exportBlobToActiveProject(renderExportPdfBlob, "pdf", null);
+    return exportBlobToActiveLevel(renderExportPdfBlob, "pdf", toastMsg);
   }
 
-  // The project-aware replacement for the original app's saveAll(): when a
-  // project is open, Save always means "write straight into this project's
-  // own folders" -- no picker, no download, nothing to remember to point at
-  // the right place. Falls back to the original picker/plain-download
-  // saveAll() whenever no project is active (Projects unsupported in this
-  // browser, or the root folder hasn't been chosen/reconnected yet), so the
-  // app still works before -- or entirely without -- ever setting up
-  // Projects.
+  // The level-aware replacement for the original app's saveAll(): when a
+  // level is open, Save always means "write straight into this level's own
+  // folders" -- no picker, no download, nothing to remember to point at the
+  // right place -- AND every Save also drops a fresh timestamped PDF into
+  // that level's pdfs folder, same as a manual Export PDF would. Falls back
+  // to the original picker/plain-download saveAll() whenever no level is
+  // active (Projects unsupported in this browser, or the root/project/level
+  // hasn't been chosen yet), so the app still works before -- or entirely
+  // without -- ever setting up Projects.
+  //
+  // The two writes are reported as ONE outcome rather than two separate
+  // toasts stepping on each other: earlier builds showed "Saved to
+  // project." immediately after the JSON write, then a second toast when
+  // the (often slower, since it renders the whole plan to PDF) export
+  // finished -- easy to miss the second one, and easy to misread as "it
+  // only saved the file, not the PDF" if the export toast got cut off or
+  // silently failed. This waits for both and always says which one(s)
+  // actually landed.
   function saveAllProjectAware(){
-    if (!(activeProjectSavesHandle && activeProjectPdfsHandle)){ saveAll(); return; }
+    if (!(activeLevelSavesHandle && activeLevelPdfsHandle)){ saveAll(); return; }
     if (!state.imageW){ showToast("Open a plan or photo first."); return; }
-    saveActiveProjectFile().then(function(){
-      showToast("Saved to project.");
+    var jsonOK = false, pdfOK = false, pdfFilename = "";
+    saveActiveLevelFile().then(function(){
+      jsonOK = true;
     }).catch(function(err){
-      console.error("Project save failed:", err);
-      showToast("Couldn't save to this project's folder — try again.");
+      console.error("Level save failed:", err);
     }).then(function(){
-      return exportPDFToActiveProject();
+      return exportPDFToActiveLevel(null, null).then(function(res){
+        pdfOK = true;
+        pdfFilename = res.filename;
+      }).catch(function(err){
+        console.error("Level PDF export failed:", err);
+      });
+    }).then(function(){
+      if (jsonOK && pdfOK){
+        showToast("Saved “" + activeLevelName + "” and exported " + pdfFilename + ".");
+      } else if (jsonOK && !pdfOK){
+        showToast("Saved the plan file, but the PDF export failed — try Save again.");
+      } else if (!jsonOK && pdfOK){
+        showToast("Exported " + pdfFilename + ", but saving the plan file failed — try Save again.");
+      } else {
+        showToast("Couldn't save to this level's folder — try again.");
+      }
     });
   }
   var autosaveTimer = null;
@@ -4032,9 +4134,11 @@
      real in-page dialog instead. */
   /* ============================== project gate (opening menu) ==============================
      UI for the per-project-folders feature defined further up. Exactly one
-     of gateSetup/gateReconnect/gateList is visible at a time inside
-     #projectGate -- see the HTML comment above that markup for what each
-     state means. */
+     of gateSetup/gateReconnect/gateList/gateLevels is visible at a time
+     inside #projectGate -- see the HTML comment above that markup for what
+     each state means. gateList is the top-level project picker; gateLevels
+     is the same shape one folder deeper, listing the levels inside whichever
+     project was just opened. */
   var projectGate = document.getElementById("projectGate");
   var gateSetup = document.getElementById("gateSetup");
   var gateSetupError = document.getElementById("gateSetupError");
@@ -4048,21 +4152,32 @@
   var projectListItems = document.getElementById("projectListItems");
   var newProjectBtn = document.getElementById("newProjectBtn");
   var switchProjectsRootBtn = document.getElementById("switchProjectsRootBtn");
+  var gateLevels = document.getElementById("gateLevels");
+  var gateLevelsLabel = document.getElementById("gateLevelsLabel");
+  var levelListItems = document.getElementById("levelListItems");
+  var newLevelBtn = document.getElementById("newLevelBtn");
+  var backToProjectsBtn = document.getElementById("backToProjectsBtn");
 
   function hideProjectGate(){ projectGate.hidden = true; }
   function showGateState(which){
     gateSetup.hidden = which !== "setup";
     gateReconnect.hidden = which !== "reconnect";
     gateList.hidden = which !== "list";
+    gateLevels.hidden = which !== "levels";
     projectGate.hidden = false;
   }
-  // Shows the active project's name in place of the generic "plan markup"
-  // subtitle once one is open -- purely cosmetic, but a real, constant
-  // reminder of which job you're in given the app can now hold more than
-  // one.
+  // Shows "Project — Level" in place of the generic "plan markup" subtitle
+  // once a level is open -- purely cosmetic, but a real, constant reminder
+  // of which job (and which level of it) you're in given the app can now
+  // hold more than one of each.
   function refreshBrandSubtitle(){
     var sub = document.getElementById("brandSubtitle");
-    if (sub) sub.textContent = activeProjectName || "plan markup";
+    if (!sub) return;
+    if (activeLevelName){
+      sub.textContent = activeProjectName + " — " + activeLevelName;
+    } else {
+      sub.textContent = activeProjectName || "plan markup";
+    }
   }
   function populateProjectList(){
     return listExistingProjects().then(function(names){
@@ -4086,12 +4201,45 @@
         row.appendChild(label);
         row.appendChild(arrow);
         row.addEventListener("click", function(){
-          openProject(name).catch(function(err){
+          openProjectLevels(name).catch(function(err){
             console.error("Open project failed:", err);
             showToast("Couldn't open “" + name + "” — try again.");
           });
         });
         projectListItems.appendChild(row);
+      });
+    });
+  }
+  // Same shape as populateProjectList, one folder deeper: lists the levels
+  // inside whichever project is currently open (activeProjectHandle).
+  function populateLevelList(){
+    return listExistingLevels().then(function(names){
+      levelListItems.innerHTML = "";
+      if (!names.length){
+        var empty = document.createElement("div");
+        empty.className = "project-gate-empty";
+        empty.textContent = "No levels yet — start your first one below.";
+        levelListItems.appendChild(empty);
+        return;
+      }
+      names.forEach(function(name){
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "project-row";
+        var label = document.createElement("span");
+        label.textContent = name;
+        var arrow = document.createElement("span");
+        arrow.className = "project-row-arrow";
+        arrow.textContent = "Open →";
+        row.appendChild(label);
+        row.appendChild(arrow);
+        row.addEventListener("click", function(){
+          openLevel(name).catch(function(err){
+            console.error("Open level failed:", err);
+            showToast("Couldn't open “" + name + "” — try again.");
+          });
+        });
+        levelListItems.appendChild(row);
       });
     });
   }
@@ -4168,30 +4316,53 @@
       console.error("Choose Projects folder failed:", err);
     });
   });
-  // Leaves the current project and returns to the picker -- guarded by the
-  // same "you have unsaved work" confirm as Open project/New/Open already
-  // use, since switching clears activeProject* without touching whatever's
-  // currently on screen.
+  newLevelBtn.addEventListener("click", function(){
+    showRenameDialog("", "Name your new level:").then(function(value){
+      if (value === null) return; // cancelled
+      var clean = sanitizeFileBase(value);
+      createNewLevel(clean).catch(function(err){
+        console.error("Create level failed:", err);
+        showToast("Couldn't create that level — try again.");
+      });
+    });
+  });
+  // Steps back out to the top-level project list without opening a level --
+  // nothing on screen to lose here (the gate is still up, no plan loaded
+  // from this project yet), so no confirm needed.
+  backToProjectsBtn.addEventListener("click", function(){
+    activeProjectName = ""; activeProjectHandle = null;
+    populateProjectList().then(function(){
+      gateListFolderLabel.textContent = "Projects folder: “" + projectsRootName + "”";
+      showGateState("list");
+    });
+  });
+  // Leaves the current level and returns to that project's level list --
+  // guarded by the same "you have unsaved work" confirm as Open/New already
+  // use, since switching clears activeLevel* without touching whatever's
+  // currently on screen. Deliberately drops back to THIS project's levels,
+  // not all the way out to the project list -- "All projects" in the level
+  // gate covers going further out, without forcing every level switch
+  // through two screens.
   function switchProject(){
     function goToGate(){
-      activeProjectName = ""; activeProjectHandle = null;
-      activeProjectSavesHandle = null; activeProjectPdfsHandle = null;
+      activeLevelName = ""; activeLevelHandle = null;
+      activeLevelSavesHandle = null; activeLevelPdfsHandle = null;
       refreshBrandSubtitle();
       // Purely cosmetic (the toolbar sits fully hidden behind the gate
-      // either way), but leaving the old project's name showing in the
+      // either way), but leaving the old level's name showing in the
       // filename button would read wrong the instant the gate's own
       // opacity/z-index ever changed -- reset it the same way a fresh
-      // blank project would.
+      // blank level would.
       state.fileBase = "plan";
       updateFileNameBtn();
       if (switchProjectBtn) switchProjectBtn.style.display = "none";
-      populateProjectList().then(function(){
-        gateListFolderLabel.textContent = "Projects folder: “" + projectsRootName + "”";
-        showGateState("list");
+      populateLevelList().then(function(){
+        gateLevelsLabel.textContent = "“" + activeProjectName + "” — choose a level, or start a new one.";
+        showGateState("levels");
       });
     }
     if (!state.objects.length){ goToGate(); return; }
-    showConfirm("Switch project? Make sure this plan is saved first (Save writes straight into “" + activeProjectName + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
+    showConfirm("Switch level? Make sure this plan is saved first (Save writes straight into “" + activeLevelName + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
       if (ok) goToGate();
     });
   }

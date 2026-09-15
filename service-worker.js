@@ -28,7 +28,20 @@
 // "?v=<version>" cache-busting query string the original app's v40 fix
 // introduced, so this app never inherits the stale-favicon/install-icon bug
 // that fix was written for.)
-var CACHE_NAME = "utzline-projects-cache-v1";
+//
+// (v2: a project is now itself a folder of LEVELS -- e.g. "Level 1",
+// "Level 2" -- each a fully independent plan/photo with its own markup, own
+// save file, and own pdfs history in its own subfolder under the project.
+// Opening a project leads to ITS level picker, not straight to a canvas.
+// "Save" now always drops a fresh timestamped PDF alongside the plan file
+// on every save, not just when explicitly exporting -- and reports the two
+// outcomes as one combined toast instead of two that could step on each
+// other, so a failed PDF export is never silently indistinguishable from a
+// successful one. Also adds an explicit <meta charset="utf-8">, since the
+// app's curly quotes/arrows/etc were only ever rendering correctly by
+// accident, dependent on the host's Content-Type header carrying the right
+// charset.)
+var CACHE_NAME = "utzline-projects-cache-v2";
 var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
 
 var PRECACHE_URLS = [

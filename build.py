@@ -150,8 +150,18 @@ def build():
     title_line_end = html.index("\n", html.index("<title>")) + 1
     html = html[:title_line_end] + pwa_head_tags(version) + html[title_line_end:]
 
-    # 4. Wrap in a full document.
-    html = '<!DOCTYPE html>\n<html lang="en">\n' + html + "\n</html>\n"
+    # 4. Wrap in a full document. <meta charset="utf-8"> goes first, before
+    #    even <title> -- without an explicit charset, the browser falls back
+    #    to guessing from the HTTP Content-Type header (GitHub Pages happens
+    #    to send charset=utf-8 for .html by default, so this was invisible
+    #    there) or, with no header at all -- e.g. opening the file directly,
+    #    or a local test harness loading it via file:// -- to a locale-
+    #    dependent default that isn't always UTF-8. This app's UI text is
+    #    full of non-ASCII characters (curly quotes, en/em dashes, arrows,
+    #    the multiply sign), so a wrong guess renders as mojibake instead of
+    #    quietly doing nothing. Being explicit removes the dependency on
+    #    whatever's serving these files ever getting that header right.
+    html = '<!DOCTYPE html>\n<html lang="en">\n<meta charset="utf-8">\n' + html + "\n</html>\n"
 
     # 5. Append the service worker registration, before the closing </html>.
     html = html.rstrip()
