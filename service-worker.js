@@ -89,7 +89,20 @@
 // anything. Delete now double-checks afterward (same instinct as this
 // app's save-verification logic) and reports an honest failure instead of
 // a false "Deleted" if the item is still there.)
-var CACHE_NAME = "utzline-projects-cache-v6";
+//
+// (v7: a real report showed NO toast at all after both delete
+// confirmations -- neither success nor failure -- meaning some step in
+// v6's removeEntry-then-verify chain was apparently never settling either
+// way on that device. Both async steps are now raced against a timeout
+// (10s for the delete itself, 6s for the follow-up existence check), so a
+// hung filesystem call can no longer leave the user staring at nothing: a
+// hung removeEntry() now reports a clear timeout failure, and a hung
+// verification step still reports success -- just honestly flagged as
+// unverified -- rather than blocking on a check that isn't essential to
+// trust in the first place. Declining either delete confirmation now also
+// shows an explicit "Delete cancelled." toast, so a deliberate cancel is
+// never visually identical to the flow going nowhere.)
+var CACHE_NAME = "utzline-projects-cache-v7";
 var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
 
 var PRECACHE_URLS = [

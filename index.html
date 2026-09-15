@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Projects</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v6">
+<link rel="manifest" href="./manifest.json?v=v7">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v6">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v6">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v7">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v7">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -913,7 +913,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v6";
+  var APP_VERSION = "v7";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -4274,6 +4274,39 @@
       }
     }, true);
   }
+  // Races `promise` against a timer so a call into a flaky filesystem layer
+  // can never hang a UI flow forever with no visible outcome at all -- a
+  // real report of the delete flow showing NO toast whatsoever (not even a
+  // failure one) after both confirmations pointed straight at this: some
+  // step in confirmAndDeleteEntry's removeEntry-then-verify chain (most
+  // likely on an Android folder backed by Storage Access Framework rather
+  // than a plain filesystem) apparently never settles either way, so the
+  // .then()/.catch() that shows a toast never runs. Rejects with
+  // {code: "timeout:<label>"} on expiry -- callers branch on that prefix to
+  // tell "genuinely timed out" apart from every other rejection reason.
+  function withTimeout(promise, ms, label){
+    return new Promise(function(resolve, reject){
+      var settled = false;
+      var timer = setTimeout(function(){
+        if (settled) return;
+        settled = true;
+        var err = new Error(label + " didn't respond within " + ms + "ms");
+        err.code = "timeout:" + label;
+        reject(err);
+      }, ms);
+      promise.then(function(v){
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(v);
+      }, function(e){
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(e);
+      });
+    });
+  }
   // kind: "project" (removed from projectsRootHandle) or "level" (removed
   // from activeProjectHandle). Two showConfirm()s in a row -- the second
   // spelling out that it's permanent and, for a project, takes every level
@@ -4281,14 +4314,17 @@
   function confirmAndDeleteEntry(kind, name, onDeleted){
     var what = kind === "project" ? "project" : "level";
     showConfirm("Delete the " + what + " “" + name + "”?").then(function(ok){
-      if (!ok) return;
+      // A toast on decline too (not just success/failure) -- so a genuine
+      // "I changed my mind" tap is never visually indistinguishable from
+      // the flow having silently gone nowhere.
+      if (!ok){ showToast("Delete cancelled."); return; }
       var warn = kind === "project"
         ? "Are you sure? This permanently deletes every level in “" + name + "”, along with all their saved plans and PDFs. This cannot be undone."
         : "Are you sure? This permanently deletes “" + name + "”'s saved plan and all its exported PDFs. This cannot be undone.";
       showConfirm(warn).then(function(ok2){
-        if (!ok2) return;
+        if (!ok2){ showToast("Delete cancelled."); return; }
         var parentHandle = kind === "project" ? projectsRootHandle : activeProjectHandle;
-        parentHandle.removeEntry(name, { recursive: true }).then(function(){
+        withTimeout(parentHandle.removeEntry(name, { recursive: true }), 10000, "delete").then(function(){
           // Same instinct as verifiedHandleWrite() elsewhere in this file:
           // don't just trust that a call which didn't throw actually did
           // what it says. Some real-world File System Access
@@ -4299,20 +4335,31 @@
           // or entirely untouched -- which would otherwise show a
           // confident "Deleted" toast for something that's still sitting
           // right there. Asking the parent for that name again immediately
-          // afterward is what actually tells us which one happened.
-          return parentHandle.getDirectoryHandle(name).then(function(){
+          // afterward is what actually tells us which one happened -- also
+          // timed out, separately, in case THIS is the step that hangs
+          // rather than removeEntry itself.
+          return withTimeout(parentHandle.getDirectoryHandle(name), 6000, "verify").then(function(){
             // Resolved -- it's still there despite removeEntry not
             // throwing. Report this as the real failure it is rather than
             // a false success.
             var err = new Error("removeEntry completed without error, but “" + name + "” is still there afterward");
             err.code = "delete_did_not_take";
             return Promise.reject(err);
-          }, function(){
-            // Rejected (NotFoundError, as expected) -- genuinely gone.
+          }, function(err){
+            // A genuine NotFoundError (or anything else that isn't our own
+            // timeout) means the directory is actually gone -- success.
+            // Our own verify timing out means we genuinely can't tell, so
+            // don't block a probably-real success on it forever; say so
+            // plainly instead of pretending we're sure either way.
+            if (err && err.code === "timeout:verify") return "unverified";
             return true;
           });
-        }).then(function(){
-          showToast("Deleted “" + name + "”.");
+        }).then(function(verified){
+          if (verified === "unverified"){
+            showToast("Deleted “" + name + "” (couldn't fully confirm — checking the folder again took too long).", 8000);
+          } else {
+            showToast("Deleted “" + name + "”.");
+          }
           if (onDeleted) onDeleted();
         }).catch(function(err){
           console.error("Delete " + kind + " failed:", err);
