@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
 Rebuilds /home/claude/redline-projects-pwa/index.html from the canonical
-Artifact source at /home/claude/redline-projects/source.html (the
-"UTZLINE Projects" fork -- a separate app/deployment from the original
-UTZLINE Site Measure at /home/claude/redline/source.html, kept
-intentionally independent so nothing here can affect that one).
+Artifact source at /home/claude/redline-projects/source.html. This was
+originally a separate "UTZLINE Projects" fork, kept intentionally
+independent from the single-plan UTZLINE Site Measure at
+/home/claude/redline/source.html so nothing here could affect that one.
+As of v11 this per-project-folders app IS UTZLINE Site Measure going
+forward -- the old single-plan version at /home/claude/redline is
+retired -- but this build script and its output directory keep their
+existing "redline-projects" names to avoid a pointless churn of paths
+that nothing outside this workspace depends on.
 
 The Artifact source is a bare fragment (title/link/script/style/body --
 no doctype/html/head/body) meant to be dropped into claude.ai's own page
@@ -102,7 +107,7 @@ def pwa_head_tags(version):
         '<meta name="mobile-web-app-capable" content="yes">\n'
         '<meta name="apple-mobile-web-app-capable" content="yes">\n'
         '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
-        '<meta name="apple-mobile-web-app-title" content="UTZLINE Projects">\n'
+        '<meta name="apple-mobile-web-app-title" content="UTZLINE Site Measure">\n'
     )
 
 SERVICE_WORKER_SCRIPT = (
@@ -110,7 +115,7 @@ SERVICE_WORKER_SCRIPT = (
     'if ("serviceWorker" in navigator) {\n'
     '  window.addEventListener("load", function () {\n'
     '    navigator.serviceWorker.register("./service-worker.js").catch(function (err) {\n'
-    '      console.warn("UTZLINE Projects: service worker registration failed", err);\n'
+    '      console.warn("UTZLINE Site Measure: service worker registration failed", err);\n'
     "    });\n"
     "  });\n"
     "}\n"

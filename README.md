@@ -1,9 +1,21 @@
-# UTZLINE Projects — installable app
+# UTZLINE Site Measure — installable app
 
-This folder is the self-contained, installable version of **UTZLINE
-Projects** — a completely separate app from **UTZLINE Site Measure**.
+This folder is the self-contained, installable version of the app. It
+was originally built as a separate "UTZLINE Projects" fork of the
+older, single-plan **UTZLINE Site Measure** — as of v11, this app IS
+UTZLINE Site Measure going forward, and the old single-plan version is
+retired. Everything in the app itself (page title, toolbar brand,
+opening screen, installed-app name) says "UTZLINE Site Measure" now.
+
+**One thing has deliberately NOT changed yet: the GitHub repo and
+hosted URL below are still named `UTZLINE-Projects`.** Renaming those
+is a bigger, separate step (it affects the live URL, any installed
+shortcuts, and the Android APK's Trusted Web Activity target) — ask if
+and when you want to do that; nothing here depends on it happening
+first.
+
 It shares the same underlying markup/photo-annotation and PDF-export
-code, but adds an opening project picker. A project is a folder of
+code as the old version, but adds an opening project picker. A project is a folder of
 **levels** (e.g. "Level 1", "Level 2") — each level is a fully
 independent plan/photo with its own markup, its own `saves/` subfolder
 (the working file you reopen) and its own `pdfs/` subfolder (every PDF

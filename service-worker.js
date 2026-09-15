@@ -1,11 +1,17 @@
-// UTZLINE Projects offline service worker.
-// This is a separate app/deployment forked from UTZLINE Site Measure
-// (the original redline-pwa) at v40 of that app -- same plan/photo
-// markup engine, plus a per-project folder system layered on top. Kept
-// under its own cache namespace ("utzline-projects-cache-*", not
-// "redline-cache-*") and its own versioning, starting fresh at v1, so
-// nothing about this app's releases is tangled up with the original
-// app's, which continues to be maintained completely independently.
+// UTZLINE Site Measure offline service worker.
+// This app was originally a separate "UTZLINE Projects" fork of UTZLINE
+// Site Measure (the original redline-pwa) at v40 of that app -- same
+// plan/photo markup engine, plus a per-project folder system layered on
+// top. Kept under its own cache namespace ("utzline-projects-cache-*" up
+// through v10, not "redline-cache-*") and its own versioning, starting
+// fresh at v1, so nothing about this app's releases got tangled up with
+// the original app's while both existed side by side. As of v11 this app
+// IS UTZLINE Site Measure going forward -- the old single-plan version is
+// retired -- and the cache namespace below is renamed to match
+// ("utzline-sitemeasure-cache-*"), which also has the practical effect of
+// discarding every previously-cached file under the old name on next
+// install (see the "activate" handler further down, which deletes any
+// cache not matching the current CACHE_NAME regardless of naming scheme).
 //
 // Cache-first app shell: everything the app needs is a small, fixed set of
 // local files (no CDN calls once installed), so a simple versioned cache
@@ -151,8 +157,18 @@
 // from 10s to 25s to match: this makes many small real filesystem calls
 // instead of one atomic one, and a project with a lot of saved plans and
 // exported PDFs can genuinely take longer to walk that way.)
-var CACHE_NAME = "utzline-projects-cache-v10";
-var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
+// (v11: this app -- formerly the separate "UTZLINE Projects" fork -- is now
+// UTZLINE Site Measure itself; the old single-plan version is retired.
+// Purely a branding/identity change (page title, toolbar brand, project-
+// gate heading, PWA manifest name/short_name, this cache namespace) -- no
+// functional change to how projects, levels, saving, or delete work. The
+// saved-project file extension deliberately stays .utzline.json rather
+// than changing again: there's no reason to touch a working file format
+// just for a rename, and the app already carries one legacy extension
+// (.redline.json) for backward compatibility -- a third would be
+// unnecessary churn for zero benefit.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v11";
+var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
   "./",

@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <meta charset="utf-8">
-<title>UTZLINE Projects</title>
+<title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v10">
+<link rel="manifest" href="./manifest.json?v=v11">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v10">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v10">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v11">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v11">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="UTZLINE Projects">
+<meta name="apple-mobile-web-app-title" content="UTZLINE Site Measure">
 <style>
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;src:url('./mono.woff2') format('woff2');}
 @font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:500;src:url('./sans.woff2') format('woff2');}
@@ -637,7 +637,7 @@
          at tablet/desktop sizes -- children lay out exactly as if they
          were still direct children of .toolbar. -->
     <div class="toolbar-row" id="toolbarRow1">
-    <div class="brand"><img class="brand-icon" id="brandIcon" src="" alt="" aria-hidden="true"><span>UTZLINE Projects<small id="brandSubtitle">plan markup</small></span></div>
+    <div class="brand"><img class="brand-icon" id="brandIcon" src="" alt="" aria-hidden="true"><span>UTZLINE Site Measure<small id="brandSubtitle">plan markup</small></span></div>
     <div class="sep"></div>
 
     <div class="tgroup" id="toolButtons">
@@ -809,9 +809,13 @@
     <!-- ============================== project gate ==============================
          Shown at boot (and again whenever you use "Switch project / level")
          instead of
-         dropping straight into a single ongoing plan -- this is the one
-         thing that makes this fork "UTZLINE Projects" rather than plain
-         UTZLINE Site Measure. Exactly one of the four states below is
+         dropping straight into a single ongoing plan -- this per-project
+         folder system is what used to make this "UTZLINE Projects", a
+         separate fork from the original single-plan UTZLINE Site Measure.
+         As of v11 this app IS UTZLINE Site Measure going forward -- the
+         old single-plan version is retired, and this per-project system is
+         just how the app works now, not a fork-specific feature anymore.
+         Exactly one of the four states below is
          visible at a time, toggled in script via each section's [hidden]
          attribute: gateSetup (no Projects folder chosen yet), gateReconnect
          (a folder was chosen before but its permission has lapsed -- browser
@@ -829,7 +833,7 @@
 
     <div class="project-gate" id="projectGate" hidden>
       <div class="project-gate-box">
-        <div class="project-gate-brand"><img id="projectGateIcon" src="" alt="" aria-hidden="true"><h1>UTZLINE Projects</h1></div>
+        <div class="project-gate-brand"><img id="projectGateIcon" src="" alt="" aria-hidden="true"><h1>UTZLINE Site Measure</h1></div>
 
         <div id="gateSetup">
           <p>Choose a folder on this device to keep your projects in. Each project you create gets its own folder inside it, holding one folder per level (e.g. "Level 1", "Level 2") -- and each level has its own <b>saves</b> folder (the working file you reopen) and <b>pdfs</b> folder (every PDF you export).</p>
@@ -930,7 +934,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v10";
+  var APP_VERSION = "v11";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1745,9 +1749,12 @@
   setInterval(maybeAutoBackup, 30 * 1000);
 
   /* ============================== per-project folders ==============================
-     What actually makes this fork "UTZLINE Projects": every project gets its
-     own named folder (created once, under one root "Projects" folder chosen
-     the first time the app is used), and every project is itself a folder of
+     The per-project folder system (formerly the thing that set the
+     "UTZLINE Projects" fork apart from the original UTZLINE Site Measure --
+     see the note at the top of the project-gate markup further up): every
+     project gets its own named folder (created once, under one root
+     "Projects" folder chosen the first time the app is used), and every
+     project is itself a folder of
      LEVELS (e.g. "Level 1", "Ground Floor") -- each level is a fully
      independent plan/photo with its own markup, living in its own subfolder
      directly under the project. Each level's folder has a saves/ subfolder
@@ -6433,7 +6440,7 @@
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
     navigator.serviceWorker.register("./service-worker.js").catch(function (err) {
-      console.warn("UTZLINE Projects: service worker registration failed", err);
+      console.warn("UTZLINE Site Measure: service worker registration failed", err);
     });
   });
 }
