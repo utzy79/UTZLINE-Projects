@@ -131,7 +131,27 @@
 // delete_did_not_take, etc.) always give .code as a STRING, so those still
 // take priority; a native browser error now falls through to
 // "Name: message" first, with its numeric code only as a last resort.)
-var CACHE_NAME = "utzline-projects-cache-v9";
+//
+// (v10: v9's error message showed the real culprit -- deleting "test"
+// failed with "TypeMismatchError: The path supplied exists, but was not
+// an entry of matching type." That's the exact error Chromium normally
+// throws from getFileHandle()/getDirectoryHandle() when a name resolves
+// to an entry of the wrong kind -- coming out of removeEntry() strongly
+// suggests the browser's own ONE-SHOT recursive removal
+// (removeEntry(name, {recursive:true})) is doing an internal walk-and-
+// check that trips over a kind mismatch partway through on this
+// particular Android SAF-backed folder. Recursive removal in a single
+// call is also a far less-traveled corner of the API than a plain
+// single-entry removeEntry() -- exactly the kind of path more likely to
+// have platform-specific bugs. Delete no longer ever calls
+// removeEntry(name, {recursive:true}) at all: it now walks the folder
+// itself (every file removed directly, every subfolder emptied out
+// first) and removes each already-empty entry one at a time -- the
+// simplest, most ordinary shape the API has. The delete timeout widened
+// from 10s to 25s to match: this makes many small real filesystem calls
+// instead of one atomic one, and a project with a lot of saved plans and
+// exported PDFs can genuinely take longer to walk that way.)
+var CACHE_NAME = "utzline-projects-cache-v10";
 var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
 
 var PRECACHE_URLS = [

@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Projects</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v9">
+<link rel="manifest" href="./manifest.json?v=v10">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v9">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v9">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v10">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v10">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -930,7 +930,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v9";
+  var APP_VERSION = "v10";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -4354,6 +4354,56 @@
       });
     });
   }
+  // Empties `dirHandle` by removing every child one at a time -- files
+  // directly, subdirectories by recursing into them first so each one is
+  // already empty by the time ITS OWN removeEntry() runs. Every single
+  // removeEntry() call this makes is for one plain, already-empty entry --
+  // the simplest, most ordinary shape the File System Access API has.
+  function emptyDirectory(dirHandle){
+    // .values() itself is synchronous -- it returns the (async) iterator
+    // directly, the same as Array.prototype.values() does for a plain
+    // array. Only .next() on the returned iterator is what returns a
+    // promise. Wrapping the .values() call itself in a .then() here would
+    // throw immediately in both a real browser and this app's own test
+    // harness alike.
+    var iter = dirHandle.values();
+    function next(){
+      return iter.next().then(function(result){
+        if (result.done) return;
+        var child = result.value;
+        var removeThis = child.kind === "directory"
+          ? dirHandle.getDirectoryHandle(child.name).then(emptyDirectory).then(function(){
+              return dirHandle.removeEntry(child.name);
+            })
+          : dirHandle.removeEntry(child.name);
+        return removeThis.then(next);
+      });
+    }
+    return next();
+  }
+  // Deletes `name` from `parentHandle` WITHOUT ever calling the browser's
+  // own removeEntry(name, {recursive:true}) -- a real report showed that
+  // one-shot recursive removal rejecting with "TypeMismatchError: The path
+  // supplied exists, but was not an entry of matching type." on an Android
+  // folder backed by the Storage Access Framework. That message is what
+  // the browser normally throws from getFileHandle()/getDirectoryHandle()
+  // when a name resolves to an entry of the wrong kind -- coming out of
+  // removeEntry() instead strongly suggests the recursive-removal code
+  // path itself is doing some internal walk-and-check that's tripping over
+  // a kind mismatch partway through, on this specific SAF-backed folder.
+  // Recursive removal in one call is also a far less-traveled corner of
+  // the API than a plain single-entry removeEntry() -- exactly the kind of
+  // path more likely to have platform-specific surprises. Walking the tree
+  // ourselves and removing each already-empty entry individually sidesteps
+  // whatever that internal inconsistency is, rather than trying to guess
+  // at and work around it directly.
+  function removeEntryDeep(parentHandle, name){
+    return parentHandle.getDirectoryHandle(name).then(function(dirHandle){
+      return emptyDirectory(dirHandle).then(function(){
+        return parentHandle.removeEntry(name);
+      });
+    });
+  }
   // kind: "project" (removed from projectsRootHandle) or "level" (removed
   // from activeProjectHandle). Two showConfirm()s in a row -- the second
   // spelling out that it's permanent and, for a project, takes every level
@@ -4381,7 +4431,13 @@
       showConfirm(warn).then(function(ok2){
         if (!ok2){ showToast("Delete cancelled."); return; }
         var parentHandle = kind === "project" ? projectsRootHandle : activeProjectHandle;
-        withTimeout(parentHandle.removeEntry(name, { recursive: true }), 10000, "delete").then(function(){
+        // 25s, not the old 10s: removeEntryDeep() makes one real
+        // filesystem/SAF call per file and folder instead of a single
+        // atomic recursive call, and a project with several levels' worth
+        // of saved plans and exported PDFs can genuinely take a while to
+        // walk one entry at a time on Android's SAF, where each call carries
+        // its own IPC overhead.
+        withTimeout(removeEntryDeep(parentHandle, name), 25000, "delete").then(function(){
           // Same instinct as verifiedHandleWrite() elsewhere in this file:
           // don't just trust that a call which didn't throw actually did
           // what it says. Some real-world File System Access
