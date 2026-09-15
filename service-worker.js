@@ -102,7 +102,25 @@
 // trust in the first place. Declining either delete confirmation now also
 // shows an explicit "Delete cancelled." toast, so a deliberate cancel is
 // never visually identical to the flow going nowhere.)
-var CACHE_NAME = "utzline-projects-cache-v7";
+//
+// (v8: FOUND THE REAL CAUSE of "no toast at all" -- the toast element and
+// the project/level picker screen ("the gate") both had z-index:30, and
+// the gate sits later in the page, so on a tie the gate always painted
+// ON TOP of the toast. Every delete happens from that exact picker screen,
+// so every delete toast -- success, decline, failure, v7's new timeout
+// messages, all the way back to v4 -- was being generated and shown
+// correctly, then rendered invisibly underneath the picker's own opaque
+// background the whole time. The same blind spot explains why toolbar
+// buttons whose feedback is a toast (e.g. "check for update") looked
+// broken while the picker was on screen. The toast now renders above both
+// the picker and the confirm/rename dialogs. Also added: two more
+// .catch()s in the delete flow for an exception thrown on the way to
+// removeEntry() rather than returned as a rejected promise (previously an
+// unhandled rejection with well and truly no toast at all), and an
+// app-wide "unhandledrejection" listener as a last-resort net that turns
+// any future uncaught promise failure, anywhere in the app, into a visible
+// toast instead of silence.)
+var CACHE_NAME = "utzline-projects-cache-v8";
 var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
 
 var PRECACHE_URLS = [

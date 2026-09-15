@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Projects</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v7">
+<link rel="manifest" href="./manifest.json?v=v8">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v7">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v7">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v8">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v8">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -381,7 +381,24 @@
     position:absolute; left:50%; bottom:16px; transform:translateX(-50%) translateY(8px);
     background:var(--text-primary); color:var(--surface-1);
     padding:8px 14px; border-radius:7px; font-size:12.5px;
-    box-shadow:var(--shadow); opacity:0; pointer-events:none; z-index:30;
+    box-shadow:var(--shadow); opacity:0; pointer-events:none;
+    /* Was z-index:30 -- the SAME value as .project-gate below, and earlier
+       in the DOM, so on equal z-index the later element (the gate) always
+       painted on top whenever both existed at once. Every delete happens
+       from the project/level list, which IS the gate -- so every delete
+       toast (success, failure, or timeout, all the way back to v4) was
+       being computed and shown correctly, then silently rendered UNDER the
+       gate's own opaque background the entire time. That's the real
+       explanation for "no toast at all" surviving v6's verification fix
+       and v7's timeout fix untouched: neither one could have changed
+       anything, because the toast itself was never the broken part -- its
+       visibility was. The same blind spot explained why toolbar buttons
+       whose only feedback IS a toast (like "check for update") looked like
+       they did nothing while the project/level picker was still on
+       screen. Set above BOTH the gate (30) and the confirm/rename dialogs
+       (40) so a toast is always the topmost thing on screen, whatever else
+       is open when it fires. */
+    z-index:45;
     transition:opacity .18s ease, transform .18s ease;
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
@@ -913,7 +930,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v7";
+  var APP_VERSION = "v8";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -2006,6 +2023,23 @@
     if (err.message) return err.message;
     try{ return String(err); }catch(e){ return "unknown error"; }
   }
+  // Last-resort safety net, added in v8 alongside the toast-visibility fix
+  // and the extra .catch()es in confirmAndDeleteEntry: catches ANY promise
+  // rejection anywhere in the app that nothing else handled, and turns it
+  // into a visible toast instead of dead silence. Every prior "no toast at
+  // all" report turned out to have a real, traceable cause once found (a
+  // missing .catch(), a toast rendered invisibly underneath the project
+  // gate) -- but tracing each one has depended entirely on a real device,
+  // a screenshot, and a fair bit of guessing in between. This doesn't fix
+  // anything by itself; it just guarantees that if some OTHER call site
+  // ever has the same gap, it shows up as a toast (with enough detail to
+  // act on) instead of another round of "nothing happened."
+  window.addEventListener("unhandledrejection", function(event){
+    var err = event && event.reason;
+    console.error("Unhandled rejection:", err);
+    showToast("Something went wrong (" + describeError(err) + ").", 8000);
+    if (event && event.preventDefault) event.preventDefault();
+  });
   function saveAllProjectAware(){
     if (!(activeLevelSavesHandle && activeLevelPdfsHandle)){ saveAll(); return; }
     if (!state.imageW){ showToast("Open a plan or photo first."); return; }
@@ -4313,6 +4347,16 @@
   // in it with it -- before anything is actually removed.
   function confirmAndDeleteEntry(kind, name, onDeleted){
     var what = kind === "project" ? "project" : "level";
+    // Both showConfirm() chains below now end in their own .catch() -- belt
+    // and suspenders alongside the withTimeout() chain further in. Neither
+    // of these outer .then()s used to have one: if anything threw
+    // SYNCHRONOUSLY on the way to building the withTimeout() call (for
+    // instance, parentHandle.removeEntry() throwing immediately instead of
+    // returning a rejected promise, which some real folder-handle
+    // implementations can do for a permission or state problem), that
+    // exception had nowhere to go -- an unhandled rejection with no toast
+    // at all, indistinguishable from the fake-fs-only hang v7 was built to
+    // catch. This closes that gap too.
     showConfirm("Delete the " + what + " “" + name + "”?").then(function(ok){
       // A toast on decline too (not just success/failure) -- so a genuine
       // "I changed my mind" tap is never visually indistinguishable from
@@ -4365,7 +4409,17 @@
           console.error("Delete " + kind + " failed:", err);
           showToast("Couldn't delete “" + name + "” (" + describeError(err) + ") — try again.", 8000);
         });
+      }).catch(function(err){
+        // Catches anything that throws on the way to the withTimeout()
+        // call above (see the big comment at the top of this function) --
+        // most plausibly parentHandle.removeEntry() itself throwing
+        // synchronously rather than returning a rejected promise.
+        console.error("Delete " + kind + " failed before it could start:", err);
+        showToast("Couldn't delete “" + name + "” (" + describeError(err) + ") — try again.", 8000);
       });
+    }).catch(function(err){
+      console.error("Delete " + kind + " failed before it could start:", err);
+      showToast("Couldn't delete “" + name + "” (" + describeError(err) + ") — try again.", 8000);
     });
   }
   function populateProjectList(){
