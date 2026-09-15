@@ -79,7 +79,17 @@
 // only ever fit its original single use before other flows started
 // reusing the same dialog). The exit button moved to the very end of the
 // toolbar's second row, after auto-backup.)
-var CACHE_NAME = "utzline-projects-cache-v5";
+//
+// (v6: press-and-hold-to-delete now registers reliably on Android (v5
+// fixed that), but a real report showed the two confirmations going
+// through with nothing actually deleted -- the working theory is that a
+// real device's picked folder can be backed by Android's own Storage
+// Access Framework rather than a plain filesystem, and removeEntry() on
+// one of those can resolve successfully without actually removing
+// anything. Delete now double-checks afterward (same instinct as this
+// app's save-verification logic) and reports an honest failure instead of
+// a false "Deleted" if the item is still there.)
+var CACHE_NAME = "utzline-projects-cache-v6";
 var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
 
 var PRECACHE_URLS = [

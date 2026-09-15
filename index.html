@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Projects</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v5">
+<link rel="manifest" href="./manifest.json?v=v6">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v5">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v5">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v6">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v6">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -913,7 +913,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v5";
+  var APP_VERSION = "v6";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1991,23 +1991,24 @@
   // only saved the file, not the PDF" if the export toast got cut off or
   // silently failed. This waits for both and always says which one(s)
   // actually landed.
+  // Turns whatever a rejected promise handed back into a short, humanly
+  // reportable string -- a real Error (name + message), this app's own
+  // {code: "..."} rejection shape, or a DOMException -- so a failure can be
+  // read straight off a toast (and told to support) without anyone needing
+  // to open devtools, which is often impractical on a phone on site. Shared
+  // by every folder-backed operation that can fail in a way worth actually
+  // seeing the reason for (save/PDF export, and now delete).
+  function describeError(err){
+    if (!err) return "unknown error";
+    if (err.code) return err.code;
+    if (err.name && err.message) return err.name + ": " + err.message;
+    if (err.name) return err.name;
+    if (err.message) return err.message;
+    try{ return String(err); }catch(e){ return "unknown error"; }
+  }
   function saveAllProjectAware(){
     if (!(activeLevelSavesHandle && activeLevelPdfsHandle)){ saveAll(); return; }
     if (!state.imageW){ showToast("Open a plan or photo first."); return; }
-    // Turns whatever a rejected promise handed back into a short, humanly
-    // reportable string -- a real Error (name + message), this app's own
-    // {code: "..."} rejection shape, or a DOMException -- so a failure can
-    // be read straight off the toast (and told to support) without anyone
-    // needing to open devtools, which is often impractical on a phone on
-    // site.
-    function describeError(err){
-      if (!err) return "unknown error";
-      if (err.code) return err.code;
-      if (err.name && err.message) return err.name + ": " + err.message;
-      if (err.name) return err.name;
-      if (err.message) return err.message;
-      try{ return String(err); }catch(e){ return "unknown error"; }
-    }
     var jsonOK = false, pdfOK = false, pdfFilename = "", jsonErr = null, pdfErr = null;
     saveActiveLevelFile().then(function(){
       jsonOK = true;
@@ -4288,11 +4289,34 @@
         if (!ok2) return;
         var parentHandle = kind === "project" ? projectsRootHandle : activeProjectHandle;
         parentHandle.removeEntry(name, { recursive: true }).then(function(){
+          // Same instinct as verifiedHandleWrite() elsewhere in this file:
+          // don't just trust that a call which didn't throw actually did
+          // what it says. Some real-world File System Access
+          // implementations (notably Android, where a picked folder can be
+          // backed by Android's own Storage Access Framework rather than a
+          // plain filesystem) are known to resolve removeEntry() without
+          // error yet leave a non-empty directory only partially removed
+          // or entirely untouched -- which would otherwise show a
+          // confident "Deleted" toast for something that's still sitting
+          // right there. Asking the parent for that name again immediately
+          // afterward is what actually tells us which one happened.
+          return parentHandle.getDirectoryHandle(name).then(function(){
+            // Resolved -- it's still there despite removeEntry not
+            // throwing. Report this as the real failure it is rather than
+            // a false success.
+            var err = new Error("removeEntry completed without error, but “" + name + "” is still there afterward");
+            err.code = "delete_did_not_take";
+            return Promise.reject(err);
+          }, function(){
+            // Rejected (NotFoundError, as expected) -- genuinely gone.
+            return true;
+          });
+        }).then(function(){
           showToast("Deleted “" + name + "”.");
           if (onDeleted) onDeleted();
         }).catch(function(err){
           console.error("Delete " + kind + " failed:", err);
-          showToast("Couldn't delete “" + name + "” — try again.");
+          showToast("Couldn't delete “" + name + "” (" + describeError(err) + ") — try again.", 8000);
         });
       });
     });
