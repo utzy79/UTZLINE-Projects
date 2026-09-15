@@ -120,7 +120,18 @@
 // app-wide "unhandledrejection" listener as a last-resort net that turns
 // any future uncaught promise failure, anywhere in the app, into a visible
 // toast instead of silence.)
-var CACHE_NAME = "utzline-projects-cache-v8";
+//
+// (v9: v8's toast fix worked -- a real device now shows "Couldn't delete
+// "test" (17) -- try again." instead of nothing. That's genuine progress
+// (a real, specific browser error, not a mystery hang) but "(17)" itself
+// is useless: it's a DOMException's legacy NUMERIC .code -- here 17,
+// TypeMismatchError -- and describeError() was checking err.code before
+// err.name/err.message, so the number won out over the actually-useful
+// name. This app's own rejection shapes (timeout:delete,
+// delete_did_not_take, etc.) always give .code as a STRING, so those still
+// take priority; a native browser error now falls through to
+// "Name: message" first, with its numeric code only as a last resort.)
+var CACHE_NAME = "utzline-projects-cache-v9";
 var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
 
 var PRECACHE_URLS = [
