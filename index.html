@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Projects</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v4">
+<link rel="manifest" href="./manifest.json?v=v5">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v4">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v4">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v5">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v5">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -450,6 +450,20 @@
     padding:12px 14px; border-radius:8px; cursor:pointer;
     border:1px solid var(--border-strong); background:var(--surface-2); color:var(--text-primary);
     font-size:14px; font-weight:600;
+    /* touch-action isn't inherited from body's own touch-action:none (that
+       CSS property explicitly does NOT inherit -- every element defaults
+       to its own "auto" unless it says otherwise), so without this a real
+       Android Chrome finger-hold on a row is still fair game for the
+       browser's own default touch handling to interpret however it likes.
+       That can send this row a pointercancel well before a custom JS
+       press-and-hold timer (see wireLongPress()) ever completes, silently
+       eating the long-press-to-delete gesture on a real phone even though
+       nothing about it looks wrong in a mouse-driven desktop test.
+       "manipulation" is the standard fix: it tells the browser this
+       element only does simple taps, so its own gesture recognizer steps
+       aside and leaves the whole touch sequence to our own JS. */
+    touch-action:manipulation;
+    -webkit-touch-callout:none;
   }
   .project-row:hover, .project-row:focus-visible{ background:var(--surface-1); border-color:var(--accent); }
   .project-row-arrow{ color:var(--text-secondary); flex:none; font-weight:400; }
@@ -706,15 +720,9 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v8"/><path d="M6.5 6.5L10 3l3.5 3.5"/><path d="M4.5 10.5v4a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"/></svg>
       Share
     </button>
-    <button class="ibtn" id="exitAppBtn" title="Exit app" aria-label="Exit app" style="display:none;">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.2H4.8a1 1 0 0 0-1 1v11.6a1 1 0 0 0 1 1H8"/><path d="M7.8 10h8.4M12.8 6.2l3.8 3.8-3.8 3.8"/></svg>
-    </button>
-
-    <!-- Moved to the very end of the row (after Exit) at the user's request
-         -- it's a settings-style control, not a file action like New/Open/
-         Save, so it reads better tucked away past everything you actually
-         DO with a plan, rather than sitting first and competing with them
-         for attention. -->
+    <!-- A settings-style control, not a file action like New/Open/Save, so
+         it reads better tucked away past everything you actually DO with a
+         plan, rather than sitting in among them competing for attention. -->
     <div class="tgroup autobk-group" id="autoBackupGroup">
       <label class="autobk" id="autoBackupLabel" title="Offers a backup PNG for download on this schedule while you have unsaved changes (each save still needs your confirmation — that step can't be skipped)">
         <input type="checkbox" id="autoBackupToggle" checked>
@@ -732,6 +740,12 @@
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.5 6a1 1 0 0 1 1-1h3.3l1.2 1.4h7a1 1 0 0 1 1 1v7.1a1 1 0 0 1-1 1h-11.5a1 1 0 0 1-1-1z"/></svg>
       </button>
     </div>
+    <!-- Very last thing in the row, at the user's request -- it leaves the
+         app entirely, so it reads best as the final item after every other
+         action and setting, not in among them. -->
+    <button class="ibtn" id="exitAppBtn" title="Exit app" aria-label="Exit app" style="display:none;">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.2H4.8a1 1 0 0 0-1 1v11.6a1 1 0 0 0 1 1H8"/><path d="M7.8 10h8.4M12.8 6.2l3.8 3.8-3.8 3.8"/></svg>
+    </button>
     </div><!-- /toolbarRow2 -->
     <input type="file" id="fileInput" accept="image/*,application/pdf" style="display:none">
     <input type="file" id="insertImageInput" accept="image/*,application/pdf" style="display:none">
@@ -841,7 +855,7 @@
         <p id="confirmMsg"></p>
         <div class="modal-actions">
           <button class="mbtn" id="confirmCancel">Cancel</button>
-          <button class="mbtn mbtn-accent" id="confirmOk">Open anyway</button>
+          <button class="mbtn mbtn-accent" id="confirmOk">Confirm</button>
         </div>
       </div>
     </div>
@@ -899,7 +913,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v4";
+  var APP_VERSION = "v5";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1547,7 +1561,12 @@
     var d = new Date();
     var pad = function(n){ return String(n).padStart(2, "0"); };
     var datePart = d.getFullYear() + "_" + pad(d.getMonth() + 1) + "_" + pad(d.getDate());
-    var timePart = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    // Hyphens, not colons -- ":" is one of a handful of characters the File
+    // System Access API's getFileHandle() rejects outright with a "Name is
+    // not allowed" TypeError (it enforces cross-platform-safe names even on
+    // platforms that would otherwise tolerate a colon), so a colon here
+    // would silently break every write into a real folder-backed handle.
+    var timePart = pad(d.getHours()) + "-" + pad(d.getMinutes()) + "-" + pad(d.getSeconds());
     return (state.fileBase || "plan") + "_UTZLINE autobackup " + datePart + " " + timePart + ".png";
   }
   // Same timestamp pattern as autoBackupFilename, but for the fully editable
@@ -1561,7 +1580,8 @@
     var d = new Date();
     var pad = function(n){ return String(n).padStart(2, "0"); };
     var datePart = d.getFullYear() + "_" + pad(d.getMonth() + 1) + "_" + pad(d.getDate());
-    var timePart = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    // See the matching comment in autoBackupFilename() above -- same reason.
+    var timePart = pad(d.getHours()) + "-" + pad(d.getMinutes()) + "-" + pad(d.getSeconds());
     return (state.fileBase || "plan") + " autobackup " + datePart + " " + timePart + ".utzline.json";
   }
   // Writes straight into the chosen directory handle -- no picker, no
@@ -4212,7 +4232,11 @@
   // row doesn't ALSO open right after you delete (or decline to delete) it.
   function wireLongPress(el, onLongPress){
     var LONG_PRESS_MS = 550;
-    var MOVE_TOLERANCE = 10;
+    // A bit more forgiving than a mouse pointer needs -- a real fingertip
+    // naturally drifts a few CSS pixels during a still hold (contact-area
+    // shift, touch-coordinate smoothing), and a too-tight tolerance reads
+    // on a phone as "long-press randomly cancels itself".
+    var MOVE_TOLERANCE = 16;
     var timer = null, startX = 0, startY = 0, fired = false;
     function clearTimer(){ if (timer){ clearTimeout(timer); timer = null; } }
     el.addEventListener("pointerdown", function(e){
@@ -4234,6 +4258,13 @@
     el.addEventListener("pointerup", clearTimer);
     el.addEventListener("pointercancel", clearTimer);
     el.addEventListener("pointerleave", clearTimer);
+    // Android Chrome's own long-press gesture recognizer (the one behind
+    // "copy/share" popups on links, images, and sometimes plain elements)
+    // can still fire a contextmenu event around the same ~500ms mark even
+    // with touch-action:manipulation set above -- left alone, that native
+    // popup can appear right on top of the confirm dialog our own timer
+    // just triggered, making it look like nothing happened. Swallow it.
+    el.addEventListener("contextmenu", function(e){ e.preventDefault(); });
     el.addEventListener("click", function(e){
       if (fired){
         e.preventDefault();
@@ -5240,7 +5271,19 @@
     var d = new Date();
     var pad = function(n){ return String(n).padStart(2, "0"); };
     var datePart = d.getFullYear() + "_" + pad(d.getMonth() + 1) + "_" + pad(d.getDate());
-    var timePart = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    // Hyphens, not colons. THIS is the real cause of the "PDF export fails
+    // on real hardware but never in testing" reports: a real
+    // FileSystemDirectoryHandle.getFileHandle() (exportBlobToActiveLevel's
+    // write into activeLevelPdfsHandle, below) throws a TypeError, "Name is
+    // not allowed", for any name containing a colon -- one of a small set
+    // of characters the File System Access API blocks everywhere for
+    // cross-platform safety, not just on Windows. The test harness's fake
+    // filesystem (fake-fs.js) never validated names at all, so every
+    // exported filename here sailed through with a colon in the time
+    // portion in every test run, and the bug only ever showed up against a
+    // REAL directory handle -- exactly what a real Android device exercises
+    // and a file:// Playwright test never does.
+    var timePart = pad(d.getHours()) + "-" + pad(d.getMinutes()) + "-" + pad(d.getSeconds());
     var tag = flattened === true ? "_UTZLINE" : (flattened ? "_" + flattened : "");
     return (state.fileBase || "plan") + tag + " " + datePart + " " + timePart + "." + ext;
   }

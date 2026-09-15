@@ -60,7 +60,26 @@
 // reported bug -- bringing in a new photo/PDF while a level is open no
 // longer clobbers that name with the imported file's own filename; only
 // the artwork changes, the level's identity doesn't.)
-var CACHE_NAME = "utzline-projects-cache-v4";
+//
+// (v5: FOUND THE REAL CAUSE of the long-unreproducible "PDF export fails
+// on real hardware" bug -- every exported/auto-backup filename embedded a
+// colon in its timestamp (e.g. "14:23:38"), which a real
+// FileSystemDirectoryHandle.getFileHandle() rejects outright with a
+// TypeError ("Name is not allowed") on every platform, not just Windows.
+// The sandboxed test harness's fake filesystem never validated names at
+// all, so this sailed through every test run and only ever broke against
+// a real folder handle -- exactly what a real device exercises and a
+// file:// test never does. Timestamps now use hyphens. Also: press-and-
+// hold to delete wasn't registering reliably on Android -- .project-row
+// never set its own touch-action, so Android Chrome's own gesture
+// handling could still race the custom JS long-press timer and cancel it
+// early; explicit touch-action:manipulation plus swallowing the native
+// long-press contextmenu event fixes that. The confirm dialog's OK button
+// now says "Confirm" instead of the leftover "Open anyway" (a label that
+// only ever fit its original single use before other flows started
+// reusing the same dialog). The exit button moved to the very end of the
+// toolbar's second row, after auto-backup.)
+var CACHE_NAME = "utzline-projects-cache-v5";
 var ICON_VERSION = CACHE_NAME.replace("utzline-projects-cache-", "");
 
 var PRECACHE_URLS = [
