@@ -199,7 +199,16 @@
 // both updated to handle a tiled plan correctly too. "Insert image" (a
 // second reference photo/PDF placed as its own resizable object) is
 // unaffected -- it keeps its original behaviour exactly as before.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v14";
+// (v15: the export title-block bar's title and logo are now about 4x
+// bigger, scaling with the export size the same way as before -- the old
+// sizing looked fine on a normal photo but read tiny on a real full-size
+// drawing sheet. Also fixes a layout bug the bigger text uncovered: a
+// longer project/level(/room) name could run into the save-timestamp block
+// on the right. The title now measures the space actually left of the
+// timestamp and shrinks to fit, only truncating with an ellipsis as a last
+// resort for a name that still wouldn't fit even then -- it no longer
+// overlaps anything.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v15";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v14">
+<link rel="manifest" href="./manifest.json?v=v15">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v14">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v14">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v15">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v15">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -965,7 +965,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v14";
+  var APP_VERSION = "v15";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -6015,7 +6015,14 @@
   function computeExportBounds(){
     var cb = computeContentBounds();
     var contentW = cb.x1 - cb.x0;
-    var wmSize = clamp(contentW * 0.011, 11, 32);
+    // 4x the original 0.011/11/32 figures -- requested after the title-block
+    // bar shipped reading too small at real drawing-sheet sizes (a large
+    // plan's title/logo were landing right at the old 32px ceiling, tiny
+    // relative to a sheet that size). Keeping the same shape (still scales
+    // with contentW, still clamped top and bottom) just at 4x the scale, so
+    // it still grows/shrinks with the export size exactly as before -- a
+    // small plan's bar isn't oversized, a big one's isn't undersized.
+    var wmSize = clamp(contentW * 0.044, 44, 128);
     var footerH = Math.round(wmSize * 3.6);
     return { x0: cb.x0, y0: cb.y0, x1: cb.x1, y1: cb.y1 + footerH, wmSize: wmSize, contentY1: cb.y1 };
   }
@@ -6078,13 +6085,24 @@
     // rather than relying on whatever's behind it defaulting to white, with
     // a thin top border so it reads as a deliberate bar rather than just
     // empty page margin.
-    var wmSize = cb.wmSize || clamp(contentW * 0.011, 11, 32);
+    var wmSize = cb.wmSize || clamp(contentW * 0.044, 44, 128);
     var pad = wmSize * 0.8;
     var footerTop = cb.contentY1 != null ? cb.contentY1 : cb.y1;
     var footerH = cb.y1 - footerTop;
     var footerMidY = (footerTop + cb.y1) / 2;
     clone.appendChild(el("rect", { x: cb.x0, y: footerTop, width: contentW, height: footerH, fill: "#ffffff" }));
     clone.appendChild(el("line", { x1: cb.x0, y1: footerTop, x2: cb.x1, y2: footerTop, stroke: "#c5ccc9", "stroke-width": Math.max(1, wmSize * 0.05) }));
+
+    // Logo + save timestamp geometry, bottom-right of the bar -- computed
+    // BEFORE the title below so the title can fit itself into whatever
+    // space is actually left of this fixed block, rather than the two
+    // being laid out independently and left to collide.
+    var wmImgSize = wmSize * 2.6;
+    var wmImgX = cb.x1 - pad - wmImgSize;
+    var wmImgY = footerMidY - wmImgSize / 2;
+    var stampText = formatSaveStamp(new Date());
+    var stampWidth = textWidth(stampText, wmSize, "sans");
+    var stampX = wmImgX - wmSize * 0.6;
 
     // Plan title, bottom-left of the bar. Plain filled text with no
     // stroke/halo -- unlike renderLabelGroup's on-plan labels below, this
@@ -6094,9 +6112,34 @@
     // like a printed title block.
     var name = (state.fileBase || "").trim();
     if (name){
-      var titleSize = clamp(wmSize * 1.5, 13, 40);
+      var titleX = cb.x0 + pad;
+      var titleSize = clamp(wmSize * 1.5, 52, 160);
+      // The timestamp block above sits at a FIXED position on the right
+      // regardless of the title -- at 4x the old text size, a longer
+      // project/level(/room) name can run straight into it (this isn't a
+      // rare extreme-length case: a perfectly normal combined name did
+      // this at the old 1x-mapped-to-4x sizing). Shrink to fit first, down
+      // to a floor that keeps it legibly close to everything else in the
+      // bar; only a name that still doesn't fit even at that floor gets
+      // truncated with an ellipsis, rather than ever overlapping the
+      // timestamp.
+      var availableTitleWidth = (stampX - stampWidth - pad) - titleX;
+      var titleText = name;
+      if (availableTitleWidth > 0){
+        var natural = textWidth(titleText, titleSize, "sans");
+        if (natural > availableTitleWidth){
+          var floorSize = Math.max(wmSize * 0.9, 20);
+          titleSize = Math.max(floorSize, titleSize * (availableTitleWidth / natural));
+          if (textWidth(titleText, titleSize, "sans") > availableTitleWidth){
+            while (titleText.length > 1 && textWidth(titleText + "…", titleSize, "sans") > availableTitleWidth){
+              titleText = titleText.slice(0, -1);
+            }
+            titleText = titleText + "…";
+          }
+        }
+      }
       var titleEl = el("text", {
-        x: cb.x0 + pad, y: footerMidY,
+        x: titleX, y: footerMidY,
         "text-anchor": "start", "dominant-baseline": "middle",
         // font-weight 500, not 600 -- registerExportFonts() only registers
         // the app's one embedded weight (500) with jsPDF; svg2pdf.js can't
@@ -6110,7 +6153,7 @@
         "font-family": fontStack("sans"), "font-size": titleSize, "font-weight": 500,
         fill: "#1b2422"
       });
-      titleEl.textContent = name;
+      titleEl.textContent = titleText;
       clone.appendChild(titleEl);
     }
 
@@ -6123,15 +6166,12 @@
     // own. Kept on renderLabelGroup's halo technique (three passes, never
     // relying on paint-order, which svg2pdf.js doesn't honor for text) in
     // case a future layout ever lets this sit over non-white content again.
-    var wmImgSize = wmSize * 2.6;
-    var wmImgX = cb.x1 - pad - wmImgSize;
-    var wmImgY = footerMidY - wmImgSize / 2;
     clone.appendChild(el("image", {
       x: wmImgX, y: wmImgY, width: wmImgSize, height: wmImgSize,
       href: LOGO_WATERMARK_DATA_URL, preserveAspectRatio: "xMidYMid meet"
     }));
     clone.appendChild(renderLabelGroup({
-      text: formatSaveStamp(new Date()), x: wmImgX - wmSize * 0.6, y: footerMidY, rot: 0,
+      text: stampText, x: stampX, y: footerMidY, rot: 0,
       fontSize: wmSize, family: "sans", color: "#c8391c", anchor: "end"
     }, "export-watermark"));
   }
