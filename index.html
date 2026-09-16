@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v18">
+<link rel="manifest" href="./manifest.json?v=v19">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v18">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v18">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v19">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v19">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1025,7 +1025,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v18";
+  var APP_VERSION = "v19";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -2220,6 +2220,79 @@
     });
   }
 
+  // Double-clicking (or the right-click/long-press popover's "Open room"
+  // row) on a roomlink marker on the level's own plan. Only meaningful from
+  // that plan itself (activeLevelName set, activeRoomName not -- guarded
+  // here as a defensive no-op even though callers should never reach this
+  // otherwise, since a roomlink object can only ever exist ON a level's own
+  // plan, never inside a room's own canvas).
+  //
+  // Deleting a room via the Rooms list only ever touches that folder --
+  // it never reaches back onto the level's plan to remove the marker that
+  // pointed at it (confirmAndDeleteEntry has no idea a marker exists). And
+  // openRoom() always passes {create:true}, so navigating a stale marker
+  // would silently CREATE a brand-new, empty room under the old name
+  // instead of erroring -- exactly the kind of "successful" navigation
+  // that's actually a bug. Checking listExistingRooms() first catches
+  // that: if the room's gone, the marker gets removed (with an explanatory
+  // toast) instead of resurrecting it.
+  function openRoomFromMarker(obj){
+    if (!activeLevelName || activeRoomName) return;
+    listExistingRooms().then(function(existing){
+      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+      if (existingLower.indexOf(obj.roomName.toLowerCase()) === -1){
+        state.objects = state.objects.filter(function(o){ return o.id !== obj.id; });
+        if (state.selectedId === obj.id) state.selectedId = null;
+        pushHistory(); renderAll();
+        showToast("“" + obj.roomName + "” was deleted — removed this marker.");
+        return;
+      }
+      openRoom(obj.roomName).catch(function(err){
+        console.error("Open room failed:", err);
+        showToast("Couldn't open “" + obj.roomName + "” — try again.");
+      });
+    });
+  }
+
+  // The long-press ("Add a room here") flow, from the right-click/long-press
+  // popover on the level's own plan (see the contextmenu handler and
+  // showLockPopover). wx/wy are the world coordinates of the press -- where
+  // the new marker lands.
+  //
+  // Deliberately does NOT reuse createNewRoom() -- that function's own
+  // openRoom() call REPLACES state.objects in memory with the new room's
+  // blank canvas, which would silently discard the marker just pushed onto
+  // the LEVEL's plan (and any other unsaved change there) before it's ever
+  // written to disk. So this replicates createNewRoom's own name-dedup
+  // logic directly, places the marker, explicitly saves the level's plan
+  // first, and only THEN calls openRoom() to actually navigate in.
+  function promptAddRoomAt(wx, wy){
+    if (!activeLevelName || activeRoomName) return;
+    showConfirm("Add a new room here? This creates a separate annotated photo/drawing for just this room, with a marker at this spot on the floor plan linking to it.").then(function(ok){
+      if (!ok) return;
+      showRenameDialog("", "Name your new room:").then(function(value){
+        if (value === null) return; // cancelled
+        var clean = sanitizeFileBase(value);
+        listExistingRooms().then(function(existing){
+          var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+          var finalName = clean, n = 2;
+          while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
+            finalName = clean + " " + n; n++;
+          }
+          var marker = makeRoomLink(wx, wy, finalName);
+          state.objects.push(marker);
+          pushHistory(); renderAll();
+          return saveActiveLevelFile().then(function(){
+            return openRoom(finalName);
+          });
+        }).catch(function(err){
+          console.error("Add room failed:", err);
+          showToast("Couldn't add that room — try again.");
+        });
+      });
+    });
+  }
+
   // Writes the current plan's editable state straight into this level's own
   // saves/ folder as one continuously-overwritten canonical file (named
   // after the level, not timestamped) -- reopening a level always means
@@ -2545,7 +2618,7 @@
     return { x: Math.round(pt.x / g) * g, y: Math.round(pt.y / g) * g };
   }
   function objOpacity(obj){ return obj.opacity === undefined || obj.opacity === null ? 1 : obj.opacity; }
-  var TYPE_NAMES = { dimension: "Dimension", line: "Line", angle: "Angle", rect: "Rectangle", text: "Text", callout: "Callout", image: "Image" };
+  var TYPE_NAMES = { dimension: "Dimension", line: "Line", angle: "Angle", rect: "Rectangle", text: "Text", callout: "Callout", image: "Image", roomlink: "Room link" };
   var TYPE_ICON_PATHS = {
     dimension: '<path d="M3 5v10M17 5v10M3 10h14"/>',
     line: '<path d="M3 17L16 4M16 4h-5M16 4v5"/>',
@@ -2553,7 +2626,8 @@
     rect: '<rect x="3.5" y="4.5" width="13" height="11" rx="1"/>',
     text: '<path d="M4 5h12M10 5v10"/>',
     callout: '<circle cx="5" cy="15" r="1.4" fill="currentColor" stroke="none"/><path d="M5 15L11 7"/><rect x="10" y="2.5" width="7.5" height="6" rx="1.2"/>',
-    image: '<rect x="2.5" y="3.5" width="15" height="13" rx="1.3"/><circle cx="7" cy="8" r="1.4"/><path d="M3 14.5l4-4 3 3 3.5-3.5L17.5 14" stroke-linecap="round"/>'
+    image: '<rect x="2.5" y="3.5" width="15" height="13" rx="1.3"/><circle cx="7" cy="8" r="1.4"/><path d="M3 14.5l4-4 3 3 3.5-3.5L17.5 14" stroke-linecap="round"/>',
+    roomlink: '<circle cx="10" cy="10" r="6"/><circle cx="10" cy="10" r="1.5" fill="currentColor" stroke="none"/>'
   };
   function typeIconSvg(type){
     return '<svg class="layer-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">' + (TYPE_ICON_PATHS[type] || TYPE_ICON_PATHS.rect) + '</svg>';
@@ -2799,6 +2873,27 @@
     return {
       id: uid(), type: "callout", ax: ax, ay: ay, color: c, strokeWidth: defaultStroke(),
       label: { text: "", x: ax + defaultFontSize() * 3, y: ay - defaultFontSize() * 2, rot: 0, fontSize: defaultFontSize(), family: "sans", color: c }
+    };
+  }
+  // A clickable marker on a LEVEL's own main floor plan that links to one
+  // of that level's rooms -- double-click (or the right-click/long-press
+  // popover's own "Open room" row) jumps straight to that room's own
+  // separate annotated photo/drawing, same idea as a pin on a map. Deliberately
+  // simple compared to callout/text: fixed-size dot, no independent label
+  // drag/rotate/resize -- the room name IS the label, and renaming a room
+  // isn't supported anywhere else in the app either (projects/levels/rooms
+  // are create/delete only), so there's nothing to keep in sync by letting
+  // this text be edited separately. r/label.fontSize scale off the plan's
+  // own size (autoFontSize), same as every other new object's default size,
+  // so a marker looks reasonably sized whether the plan is a small sketch or
+  // a large photo.
+  function makeRoomLink(x, y, roomName, color){
+    var c = color || defaultColorFor("roomlink");
+    var fontSize = defaultFontSize();
+    var r = fontSize * 0.85;
+    return {
+      id: uid(), type: "roomlink", x: x, y: y, r: r, roomName: roomName, color: c,
+      label: { text: roomName, x: x, y: y + r + fontSize * 0.95, rot: 0, fontSize: fontSize, family: "sans", color: c, anchor: "middle" }
     };
   }
 
@@ -3102,6 +3197,17 @@
       g.appendChild(el("rect", { x: boxX, y: boxY, width: boxW, height: boxH, transform: boxRot, fill: "#ffffff", "fill-opacity": objOpacity(obj), stroke: "#000000", "stroke-width": haloW(boxSw) }));
       g.appendChild(el("rect", { x: boxX, y: boxY, width: boxW, height: boxH, transform: boxRot, fill: "none", stroke: obj.color, "stroke-width": boxSw }));
       g.appendChild(renderLabelGroup(lb, "label"));
+    } else if (obj.type === "roomlink"){
+      // Same white-ring/black-ring/color-fill halo pattern as every other
+      // marker in this app (see callout's anchor dot) so the dot stays
+      // legible over any background -- only the color fill fades with
+      // Opacity (the rings, like every other type's border/outline, stay
+      // fully opaque).
+      var rlR = obj.r, rlPad = Math.max(1.5, rlR * 0.14);
+      g.appendChild(el("circle", { cx: obj.x, cy: obj.y, r: rlR + rlPad * 2, fill: "#ffffff" }));
+      g.appendChild(el("circle", { cx: obj.x, cy: obj.y, r: rlR + rlPad, fill: "#000000" }));
+      g.appendChild(el("circle", { cx: obj.x, cy: obj.y, r: rlR, fill: obj.color, "fill-opacity": objOpacity(obj) }));
+      g.appendChild(renderLabelGroup(obj.label, "label"));
     }
     return g;
   }
@@ -3231,6 +3337,12 @@
     } else if (obj.type === "callout"){
       dot(obj.ax, obj.ay, "anchor");
       labelHandles(obj.label);
+    } else if (obj.type === "roomlink"){
+      // No resize/rotate handles -- a marker only ever moves as a whole
+      // (see applyMove); this dashed ring is purely a "this is selected"
+      // indicator, same spirit as the base-image pseudo-selection's dashed
+      // outline.
+      handlesLayer.appendChild(el("circle", { cx: obj.x, cy: obj.y, r: obj.r + hr() * 1.4, class: "ui-handle", fill: "none", stroke: "var(--focus)", "stroke-width": hr() * 0.3, "stroke-dasharray": (hr()*0.6)+","+(hr()*0.6) }));
     }
   }
   function labelHandles(label){
@@ -3356,6 +3468,8 @@
         var ix0 = Math.min(o.x, o.x + o.w), ix1 = Math.max(o.x, o.x + o.w);
         var iy0 = Math.min(o.y, o.y + o.h), iy1 = Math.max(o.y, o.y + o.h);
         if (worldPt.x >= ix0 - tol && worldPt.x <= ix1 + tol && worldPt.y >= iy0 - tol && worldPt.y <= iy1 + tol) return o;
+      } else if (o.type === "roomlink"){
+        if (Math.hypot(worldPt.x - o.x, worldPt.y - o.y) <= o.r + tol) return o;
       }
     }
     return null;
@@ -3381,14 +3495,27 @@
       showLockPopover(obj, e.clientX, e.clientY);
       return;
     }
+    if (state.tool !== "select"){ hideLockPopover(); return; }
     // Same as a plain click (see onPointerDown's "select" branch) -- a
     // right-click straight onto the base photo, with no prior left-click
     // needed first, should offer Mirror too.
-    if (state.tool === "select" && (state.imageDataURL || state.imageTiles) && !isBlankCanvasState() &&
-        wp.x >= 0 && wp.x <= state.imageW && wp.y >= 0 && wp.y <= state.imageH){
+    var overBaseImage = (state.imageDataURL || state.imageTiles) && !isBlankCanvasState() &&
+        wp.x >= 0 && wp.x <= state.imageW && wp.y >= 0 && wp.y <= state.imageH;
+    if (overBaseImage){
       state.selectedId = BASE_IMAGE_SELECT_ID;
       renderAll();
-      showLockPopover({ __isBaseImage: true }, e.clientX, e.clientY);
+    }
+    // Real report: link a room to a spot on the level's own floor plan via
+    // a long-press -- offered on this SAME right-click/long-press gesture
+    // (over the base photo, right alongside Mirror, or on genuinely empty
+    // canvas for a level with no photo yet) rather than a competing gesture,
+    // since a long-press almost always lands ON the base photo in practice.
+    // Only on a LEVEL's own main plan (never inside one of its rooms --
+    // rooms can't contain sub-rooms -- and never in the plain single-file
+    // fallback mode, which has no rooms concept at all).
+    var canAddRoom = !!activeLevelName && !activeRoomName;
+    if (overBaseImage || canAddRoom){
+      showLockPopover({ __isBaseImage: overBaseImage, __isEmptyCanvas: !overBaseImage, __atPoint: wp }, e.clientX, e.clientY);
       return;
     }
     hideLockPopover();
@@ -3749,6 +3876,9 @@
       o.vx = start.vx + dx; o.vy = start.vy + dy;
       o.x1 = start.x1 + dx; o.y1 = start.y1 + dy; o.x2 = start.x2 + dx; o.y2 = start.y2 + dy;
       o.label.x = start.label.x + dx; o.label.y = start.label.y + dy;
+    } else if (o.type === "roomlink"){
+      o.x = start.x + dx; o.y = start.y + dy;
+      o.label.x = start.label.x + dx; o.label.y = start.label.y + dy;
     }
   }
 
@@ -4086,6 +4216,11 @@
     if (!g) return;
     var obj = findObj(g.getAttribute("data-id"));
     if (!obj) return;
+    // Checked BEFORE the locked-branch below, deliberately: a room marker's
+    // whole point is navigation, so double-clicking it always jumps to that
+    // room even while locked -- locking a marker only protects it from
+    // being moved/deleted by accident, not from being used as a link.
+    if (obj.type === "roomlink"){ openRoomFromMarker(obj); return; }
     if (obj.locked){ showLockPopover(obj, e.clientX, e.clientY); return; }
     state.selectedId = obj.id; state.tool = "select"; setTool("select");
     renderAll();
@@ -4221,6 +4356,8 @@
   var DELETE_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M8 6V4.5A1 1 0 0 1 9 3.5h2A1 1 0 0 1 12 4.5V6M6 6l.6 9.5A1.5 1.5 0 0 0 8.1 17h3.8a1.5 1.5 0 0 0 1.5-1.5L14 6"/></svg>';
   var MIRROR_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5v15" stroke-dasharray="1.6 1.8"/><path d="M7 6.5L3.8 9l3.2 2.5"/><path d="M13 6.5L16.2 9l-3.2 2.5"/></svg>';
   var BRING_FRONT_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="9" height="9" rx="1"/><path d="M5.5 12.5H4A1 1 0 0 1 3 11.5V4A1 1 0 0 1 4 3h7.5a1 1 0 0 1 1 1v1.5"/></svg>';
+  var ROOM_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17V4.5a1 1 0 0 1 1-1h4l4 2v11.5"/><path d="M5 17h9"/><circle cx="11.3" cy="10.5" r="0.7" fill="currentColor" stroke="none"/></svg>';
+  var ADD_ROOM_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 17V4.5a1 1 0 0 1 1-1h3.5l3.5 2v11.5"/><path d="M4.5 17h8"/><path d="M14 10v3.6M12.2 11.8h3.6" stroke-width="1.8"/></svg>';
   function hideLockPopoverOnOutsideEvent(e){
     if (lockPopoverEl && !lockPopoverEl.contains(e.target)) hideLockPopover();
   }
@@ -4249,9 +4386,15 @@
 
     // The base site photo (see BASE_IMAGE_SELECT_ID) is a pseudo-selection,
     // never a real object -- it can't be deleted, locked, or edited like
-    // one, so it gets a menu of exactly one row (Mirror) rather than
-    // running the object-only rows below against a fake object.
+    // one. Genuinely empty canvas (a long-press that hit nothing at all,
+    // only offered so "Add a room here" below has somewhere to attach even
+    // off the base photo or on a level with no photo yet) is the same
+    // story -- no real object underneath either. Both get a menu built
+    // from only the rows below that explicitly opt in for them, rather
+    // than running the object-only rows against a fake object.
     var isBaseImage = !!obj.__isBaseImage;
+    var isEmptyCanvas = !!obj.__isEmptyCanvas;
+    var isRealObject = !isBaseImage && !isEmptyCanvas;
 
     // Delete sits at the top of the menu -- it's the row people reach for
     // most often, and putting it first means one same-spot tap instead of
@@ -4259,7 +4402,7 @@
     // rule as dragging or editing it: a locked item has to be freed first,
     // so it's never removed by an accidental right-click tap while it's
     // meant to be protected.
-    if (!isBaseImage && !obj.locked){
+    if (isRealObject && !obj.locked){
       popoverRow(wrap, DELETE_ICON + "<span>Delete</span>", function(){
         hideLockPopover();
         state.selectedId = obj.id;
@@ -4273,12 +4416,25 @@
     // text and callouts (whose whole point IS their text), plus dimension
     // ("measure") and angle labels, which still also open the same editor
     // via double-click as before -- this is just a second way in for
-    // whichever's easier in the moment.
-    if (!isBaseImage && !obj.locked && (obj.type === "text" || obj.type === "callout" || obj.type === "dimension" || obj.type === "angle")){
+    // whichever's easier in the moment. Deliberately excludes roomlink --
+    // its label is the linked room's own name, not free text (see
+    // makeRoomLink/renderPanel's labelObj).
+    if (isRealObject && !obj.locked && (obj.type === "text" || obj.type === "callout" || obj.type === "dimension" || obj.type === "angle")){
       popoverRow(wrap, EDIT_ICON + "<span>Edit text</span>", function(){
         hideLockPopover();
         state.selectedId = obj.id; setTool("select"); renderAll();
         beginInlineEdit(obj.id);
+      });
+    }
+
+    // A room marker's whole point is navigation -- offered here too (not
+    // just double-click) as a second, more discoverable way in, same
+    // reasoning as Edit text above. Works even while locked (see the
+    // dblclick handler's own comment on this).
+    if (isRealObject && obj.type === "roomlink"){
+      popoverRow(wrap, ROOM_ICON + "<span>Open room</span>", function(){
+        hideLockPopover();
+        openRoomFromMarker(obj);
       });
     }
 
@@ -4289,11 +4445,31 @@
     // correctly aligned with the now-flipped photo (see mirrorWholePlan).
     // Real image objects only offer this while unlocked, same as every
     // other action that changes one; the base photo has no lock concept.
-    if (isBaseImage || (obj.type === "image" && !obj.locked)){
+    if (isBaseImage || (isRealObject && obj.type === "image" && !obj.locked)){
       popoverRow(wrap, MIRROR_ICON + "<span>Mirror</span>", function(){
         hideLockPopover();
         if (isBaseImage) mirrorWholePlan();
         else mirrorImageObjectInPlace(obj);
+      });
+    }
+
+    // Real report: can a room link to a spot on the plan? A long-press
+    // right here (over the base photo, alongside Mirror, or on genuinely
+    // empty canvas) offers exactly that -- but only from a level's own main
+    // plan, never inside a room, never in single-file mode (which has no
+    // rooms concept at all). The contextmenu handler already skips opening
+    // this popover at all for the isEmptyCanvas case when that's not true
+    // (its own canAddRoom check), but it still opens it for Mirror whenever
+    // isBaseImage is true regardless -- so this row needs its own repeat of
+    // the same activeLevelName/activeRoomName check, or single-file mode
+    // (or a room's own canvas) would show a dead "Add a room here" row next
+    // to Mirror that silently does nothing when tapped (promptAddRoomAt
+    // itself no-ops in that case, but showing the row at all would be
+    // confusing).
+    if ((isBaseImage || isEmptyCanvas) && activeLevelName && !activeRoomName){
+      popoverRow(wrap, ADD_ROOM_ICON + "<span>Add a room here</span>", function(){
+        hideLockPopover();
+        promptAddRoomAt(obj.__atPoint.x, obj.__atPoint.y);
       });
     }
 
@@ -4306,7 +4482,7 @@
     // hatch. Only offered while there's actually somewhere higher to go --
     // an image already at the very top of the stack gets no row at all,
     // rather than a "Bring to front" that would visibly do nothing.
-    if (!isBaseImage && obj.type === "image" && !obj.locked && state.objects[state.objects.length - 1] !== obj){
+    if (isRealObject && obj.type === "image" && !obj.locked && state.objects[state.objects.length - 1] !== obj){
       popoverRow(wrap, BRING_FRONT_ICON + "<span>Bring to front</span>", function(){
         hideLockPopover();
         var idx = state.objects.indexOf(obj);
@@ -4322,7 +4498,7 @@
     // Icon+label reflect the CURRENT state (closed lock = currently
     // locked) and the label names the action a click performs, same as
     // the toolbar's own lock button.
-    if (!isBaseImage){
+    if (isRealObject){
       popoverRow(wrap, (obj.locked ? LOCK_ICON_CLOSED : LOCK_ICON_OPEN) + "<span>" + (obj.locked ? "Unlock" : "Lock") + "</span>", function(){
         obj.locked = !obj.locked;
         if (obj.locked){
@@ -4625,8 +4801,13 @@
       });
       sdRow.appendChild(sdGroup); panel.appendChild(sdRow);
     }
-    // font size (text-bearing)
-    var labelObj = obj ? (obj.type === "text" ? obj : obj.label) : null;
+    // font size (text-bearing) -- roomlink deliberately excluded: its label
+    // IS the linked room's name, and renaming a room isn't supported
+    // anywhere else in the app (projects/levels/rooms are create/delete
+    // only), so there's no free-text edit or independent size control for
+    // it here either -- keeps the marker's label always in sync with what
+    // it actually links to.
+    var labelObj = obj ? (obj.type === "text" ? obj : (obj.type === "roomlink" ? null : obj.label)) : null;
     var hasFont = labelObj || state.tool === "text" || state.tool === "callout" || state.tool === "dimension" || state.tool === "angle";
     if (hasFont){
       addStepper("Text size", function(){ return Math.round(labelObj ? labelObj.fontSize : defaultFontSize()); }, function(v){
@@ -6105,6 +6286,9 @@
       o.ax = mx(o.ax);
       o.label.x = mx(o.label.x);
       o.label.rot = -(o.label.rot || 0);
+    } else if (o.type === "roomlink"){
+      o.x = mx(o.x);
+      o.label.x = mx(o.label.x);
     }
   }
 
@@ -6519,6 +6703,10 @@
       b = unionBounds(b, labelBounds(obj.label, obj.label.fontSize * 0.35 + 4));
       pad = haloOuterW(obj.strokeWidth) + 4;
       return { x0: b.x0 - pad, y0: b.y0 - pad, x1: b.x1 + pad, y1: b.y1 + pad };
+    }
+    if (obj.type === "roomlink"){
+      b = { x0: obj.x - obj.r, y0: obj.y - obj.r, x1: obj.x + obj.r, y1: obj.y + obj.r };
+      return unionBounds(b, labelBounds(obj.label, obj.label.fontSize * 0.35 + 4));
     }
     return null;
   }

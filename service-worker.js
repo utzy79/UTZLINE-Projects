@@ -279,7 +279,21 @@
 // press-and-hold/right-click for the rarer case of wanting to reuse the
 // same level's folder. The plain single-file mode (no project/level system
 // in use) is unaffected.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v18";
+//
+// (v19: rooms can now link back to a spot on their level's own floor plan.
+// A small clickable circle marker can sit on the level's own plan; double-
+// clicking it (or its right-click/long-press popover's new "Open room" row)
+// jumps straight to that room's own separate canvas. Long-pressing (or
+// right-clicking) anywhere on the level's own plan -- over the base photo,
+// alongside the existing Mirror option, or on genuinely empty canvas --
+// now also offers "Add a room here": confirm, name the new room, and it's
+// created with a marker already placed at that exact spot, linking the two
+// together from the start. If a room is later deleted from the Rooms list,
+// its old marker is cleaned up (with a toast) the next time it's opened,
+// rather than silently creating a new empty room under the old name. Only
+// available from a level's own main plan -- not inside a room, and not in
+// the plain single-file mode, which has no rooms concept at all.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v19";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
