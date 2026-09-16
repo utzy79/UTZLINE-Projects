@@ -1,0 +1,84 @@
+// UTZLINE Viewer offline service worker.
+//
+// This is the SEPARATE, independently-installable read-only companion to
+// UTZLINE Site Measure -- own manifest, own icon, own taskbar/Start-menu
+// entry, own cache namespace ("utzline-viewer-cache-*", never sharing a
+// name with the editor's "utzline-sitemeasure-cache-*" even though both
+// can be installed side by side on the same machine). It shares the exact
+// same underlying app (source.html) as the editor -- see VIEW_ONLY_MODE's
+// own comment there -- via a mode flag read from the URL at load, which
+// this app's own manifest.json start_url ("./index.html?viewer=1") always
+// supplies. See redline-projects-pwa/service-worker.js for the full
+// version history of the shared app itself; this file's own history only
+// covers this separate packaging.
+//
+// Same cache-first app shell strategy as the editor: a small, fixed set of
+// local files, no CDN calls once installed. Bump CACHE_NAME whenever
+// index.html or any vendored asset changes (i.e. every time this is
+// rebuilt from a new source.html), so installed copies pick up the update
+// instead of serving stale files forever.
+//
+// (v20: first release -- packages the v20 read-only viewer mode (see
+// source.html's VIEW_ONLY_MODE) as its own standalone installable app.)
+var CACHE_NAME = "utzline-viewer-cache-v20";
+var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
+
+var PRECACHE_URLS = [
+  "./",
+  "./index.html",
+  "./index.html?viewer=1",
+  "./manifest.json?v=" + ICON_VERSION,
+  "./jspdf.umd.min.js",
+  "./svg2pdf.umd.min.js",
+  "./pdf.min.js",
+  "./pdf.worker.min.js",
+  "./sans.woff2",
+  "./mono.woff2",
+  "./icons/icon-192.png?v=" + ICON_VERSION,
+  "./icons/icon-512.png?v=" + ICON_VERSION,
+  "./icons/icon-192-maskable.png?v=" + ICON_VERSION,
+  "./icons/icon-512-maskable.png?v=" + ICON_VERSION
+];
+
+self.addEventListener("install", function(event){
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(function(cache){
+      return cache.addAll(PRECACHE_URLS);
+    }).then(function(){
+      return self.skipWaiting();
+    })
+  );
+});
+
+self.addEventListener("activate", function(event){
+  event.waitUntil(
+    caches.keys().then(function(names){
+      return Promise.all(
+        names.filter(function(n){ return n !== CACHE_NAME; })
+             .map(function(n){ return caches.delete(n); })
+      );
+    }).then(function(){
+      return self.clients.claim();
+    })
+  );
+});
+
+self.addEventListener("fetch", function(event){
+  if (event.request.method !== "GET") return;
+  event.respondWith(
+    caches.match(event.request).then(function(cached){
+      var networkFetch = fetch(event.request).then(function(response){
+        if (response && response.status === 200){
+          var copy = response.clone();
+          caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, copy); });
+        }
+        return response;
+      }).catch(function(){
+        return cached;
+      });
+      // Cache-first for instant offline loads; refresh the cache in the
+      // background whenever the network is available.
+      return cached || networkFetch;
+    })
+  );
+});
