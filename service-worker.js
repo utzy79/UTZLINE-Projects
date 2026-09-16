@@ -179,7 +179,15 @@
 // being split between a dark banner across the top -- which used to sit
 // on top of, and partially hide, the plan's own content -- and a small
 // watermark tucked in the bottom-right corner.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v12";
+// (v13: a level's own folder can now optionally hold ROOMS too -- project /
+// level / room -- each its own fully independent mini-plan (own markup, own
+// save file, own pdfs history), reached via a new "Rooms" toolbar button
+// that only appears once a level is open. A level always keeps hosting its
+// own main floor plan exactly as before regardless -- rooms are purely
+// additive, for when that single plan isn't enough on its own (a kitchen or
+// bathroom that needs its own detailed annotated photo/drawing), and a
+// level with no rooms works completely unchanged.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v13";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

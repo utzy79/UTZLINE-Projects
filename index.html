@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v12">
+<link rel="manifest" href="./manifest.json?v=v13">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v12">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v12">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v13">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v13">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -729,6 +729,14 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="6.4" height="6.4" rx="1"/><rect x="11.1" y="4" width="6.4" height="6.4" rx="1"/><rect x="2.5" y="12.4" width="6.4" height="6.4" rx="1"/><rect x="11.1" y="12.4" width="6.4" height="6.4" rx="1"/></svg>
       Switch project / level
     </button>
+    <!-- Only shown once a level is open (same as Switch project / level
+         above) -- opens this level's own optional room list. Most levels
+         will never have a room; this button is how you'd add or reach one
+         when a level's single main floor plan isn't enough on its own. -->
+    <button class="tbtn" id="roomsBtn" title="This level's rooms — each its own independent annotated photo or drawing alongside the main floor plan, for when one plan per level isn't enough" style="display:none;">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V6l7-3.2L17 6v11"/><path d="M3 17h14"/><path d="M8 17v-5h4v5"/></svg>
+      Rooms
+    </button>
     <button class="tbtn primary" id="saveBtn" title="Save everything in one go: a plan file (.utzline.json — reopen it later to keep adjusting) AND a flattened, timestamped PDF (labels and lines stay true vector, so they're never blurry no matter how far you zoom in, but it can't be reopened here for further editing). With a project/level open, this writes straight into that level's own folders.">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 3.5h9.6l3.4 3.4v9.1a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1v-11.5a1 1 0 0 1 1-1z"/><path d="M6 3.5v4.2h6v-4.2"/><rect x="6" y="11.3" width="8" height="5.2" rx="0.6"/></svg>
       Save
@@ -815,7 +823,7 @@
          As of v11 this app IS UTZLINE Site Measure going forward -- the
          old single-plan version is retired, and this per-project system is
          just how the app works now, not a fork-specific feature anymore.
-         Exactly one of the four states below is
+         Exactly one of the five states below is
          visible at a time, toggled in script via each section's [hidden]
          attribute: gateSetup (no Projects folder chosen yet), gateReconnect
          (a folder was chosen before but its permission has lapsed -- browser
@@ -824,7 +832,12 @@
          existing level of whichever project was just opened, or start a new
          one -- a project is a folder of levels, e.g. "Level 1"/"Level 2",
          each its own independent plan with its own save file and pdfs
-         history). Positioned the same way as the confirm/rename
+         history), and gateRooms (one folder deeper again, reached only via
+         the toolbar's "Rooms" button once a level is open: a level's own
+         folder can optionally hold rooms too, each its own independent
+         mini-plan with its own save file and pdfs history, for a level whose
+         single main floor plan isn't enough on its own -- most levels will
+         never have one). Positioned the same way as the confirm/rename
          modal-backdrops just below (position:absolute, covering .app), just
          opaque and BELOW them (z-index 30 vs 40) -- New Project/New Level
          and Switch Level all open the rename/confirm dialog from a click
@@ -866,6 +879,23 @@
           <div class="project-list" id="levelListItems"></div>
           <div class="project-gate-actions">
             <button class="mbtn mbtn-accent" id="newLevelBtn">+ New Level</button>
+          </div>
+        </div>
+
+        <!-- One folder deeper again: rooms inside the currently open level.
+             Only ever reached via the "Rooms" toolbar button (see
+             openRoomsPicker() further down) -- a level's own main floor
+             plan is opened and used exactly as before if this screen is
+             never visited. -->
+        <div id="gateRooms" hidden>
+          <button type="button" class="project-gate-back" id="backToLevelsFromRoomsBtn">← All levels</button>
+          <p id="gateRoomsLabel"></p>
+          <div class="project-gate-actions">
+            <button class="mbtn" id="openLevelPlanBtn">Open this level's own main floor plan</button>
+          </div>
+          <div class="project-list" id="roomListItems"></div>
+          <div class="project-gate-actions">
+            <button class="mbtn mbtn-accent" id="newRoomBtn">+ New Room</button>
           </div>
         </div>
       </div>
@@ -934,7 +964,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v12";
+  var APP_VERSION = "v13";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1798,6 +1828,33 @@
   var activeLevelSavesHandle = null;
   var activeLevelPdfsHandle = null;
 
+  // A level's own folder can optionally hold ROOMS one folder deeper still --
+  // project / level / room -- each a fully independent mini-plan (its own
+  // markup, own saves/pdfs subfolders, opened/created/deleted exactly the
+  // same way a level is), for when a level's single main floor plan isn't
+  // enough on its own: a kitchen or bathroom that needs its own detailed
+  // annotated photo/drawing alongside the main plan, without cluttering it.
+  // The level itself always keeps hosting the main floor plan regardless --
+  // rooms are purely additive and only ever exist if you create one.
+  // activeLevel* above never changes meaning: it's always THIS level,
+  // whether its own plan or one of its rooms is what's actually open right
+  // now. activeRoom* is empty/null whenever the level's own plan is open.
+  var activeRoomName = "";
+  var activeRoomHandle = null;
+  var activeRoomSavesHandle = null;
+  var activeRoomPdfsHandle = null;
+
+  // Whichever of "this level's own plan" or "a room inside it" is actually
+  // open right now is what every Save/PDF/auto-backup/autosave call should
+  // act on -- a room's handles take priority whenever one is active, falling
+  // back to the level's own otherwise. Every one of those call sites reads
+  // through these three instead of the raw activeLevel*/activeRoom*
+  // variables directly, so adding rooms never required touching their
+  // internals beyond this.
+  function activeWorkSavesHandle(){ return activeRoomSavesHandle || activeLevelSavesHandle; }
+  function activeWorkPdfsHandle(){ return activeRoomPdfsHandle || activeLevelPdfsHandle; }
+  function activeWorkName(){ return activeRoomName || activeLevelName; }
+
   function projectSaveFilename(name){ return sanitizeFileBase(name) + ".utzline.json"; }
 
   function ensureWorkFolders(dirHandle){
@@ -1880,6 +1937,12 @@
   // existing save file if there is one, and leaves activeLevel* pointing at
   // it for every subsequent Save/PDF/auto-backup.
   function openLevel(name){
+    // Opening a level directly always means "the level's own main floor
+    // plan", never a room -- clear any room left active from a previous
+    // visit so a stray activeRoom* handle can't silently redirect this
+    // level's own Save/PDF/autosave into the wrong folder.
+    activeRoomName = ""; activeRoomHandle = null;
+    activeRoomSavesHandle = null; activeRoomPdfsHandle = null;
     return activeProjectHandle.getDirectoryHandle(name, { create: true }).then(function(dirH){
       activeLevelHandle = dirH;
       return ensureWorkFolders(dirH);
@@ -1919,6 +1982,7 @@
       updateUndoRedoButtons();
       hideProjectGate();
       if (switchProjectBtn) switchProjectBtn.style.display = "";
+      if (roomsBtn) roomsBtn.style.display = "";
       showToast("Opened “" + activeProjectName + " — " + name + "”.");
     });
   }
@@ -1937,6 +2001,80 @@
     });
   }
 
+  // Rooms live one folder deeper than levels, directly under the current
+  // level's own folder, alongside its "saves" and "pdfs" subfolders --
+  // exclude those two by name so they never show up mislabeled as rooms.
+  function listExistingRooms(){
+    return listSubdirNames(activeLevelHandle).then(function(names){
+      return names.filter(function(n){ return n !== "saves" && n !== "pdfs"; });
+    });
+  }
+
+  // Opens (creating if missing) a room folder inside the CURRENT level --
+  // same shape as openLevel one folder deeper, restoring its own save file
+  // if there is one. Leaves activeLevel* completely untouched (still this
+  // room's own level, for "back to this level's rooms"/"back to all
+  // levels" navigation and for the room's own "<Project>_<Level>_<Room>"
+  // identity below) -- only activeRoom* changes.
+  function openRoom(name){
+    return activeLevelHandle.getDirectoryHandle(name, { create: true }).then(function(dirH){
+      activeRoomHandle = dirH;
+      return ensureWorkFolders(dirH);
+    }).then(function(subs){
+      activeRoomName = name;
+      activeRoomSavesHandle = subs.savesHandle;
+      activeRoomPdfsHandle = subs.pdfsHandle;
+      return activeRoomSavesHandle.getFileHandle(projectSaveFilename(name)).then(function(fh){
+        return fh.getFile();
+      }).then(function(file){
+        return file.text();
+      }).then(function(text){
+        var saved = null;
+        try{ saved = JSON.parse(text); }catch(e){ saved = null; }
+        if (saved && (saved.utzlineProject || saved.redlineProject) && saved.imageDataURL){
+          applyRestoredState(saved);
+        } else {
+          startBlankPlan(name);
+        }
+      }, function(){
+        // No save file yet for this room (a brand-new folder, or one
+        // created outside this app) -- start it blank rather than treating
+        // a missing file as an error.
+        startBlankPlan(name);
+      });
+    }).then(function(){
+      // "<Project>_<Level>_<Room>" -- one more segment than a level's own
+      // plan, same reasoning as openLevel: set last, after
+      // applyRestoredState/startBlankPlan, so it's never clobbered by
+      // whatever they set fileBase to along the way.
+      state.fileBase = sanitizeFileBase(activeProjectName + "_" + activeLevelName + "_" + name);
+      updateFileNameBtn();
+      refreshBrandSubtitle();
+      history = [deepClone(state.objects)]; historyIndex = 0;
+      fitToView();
+      renderAll();
+      updateUndoRedoButtons();
+      hideProjectGate();
+      if (switchProjectBtn) switchProjectBtn.style.display = "";
+      if (roomsBtn) roomsBtn.style.display = "";
+      showToast("Opened “" + activeProjectName + " — " + activeLevelName + " — " + name + "”.");
+    });
+  }
+
+  // "New Room" mirrors "New Level" one folder deeper -- a name that
+  // collides with an existing room of THIS level gets a numbered suffix.
+  function createNewRoom(rawName){
+    var name = sanitizeFileBase(rawName);
+    return listExistingRooms().then(function(existing){
+      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+      var finalName = name, n = 2;
+      while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
+        finalName = name + " " + n; n++;
+      }
+      return openRoom(finalName);
+    });
+  }
+
   // Writes the current plan's editable state straight into this level's own
   // saves/ folder as one continuously-overwritten canonical file (named
   // after the level, not timestamped) -- reopening a level always means
@@ -1944,12 +2082,16 @@
   // timestamped saves". Same verifiedHandleWrite safety net (write, read
   // back, and a delayed re-check for a cloud-sync client hollowing the file
   // out afterward) as every other folder-write in this app.
+  // Writes to whichever of the level's own saves/ folder or a room's own
+  // saves/ folder is actually active right now (activeWorkSavesHandle/
+  // activeWorkName -- a room's, if one is open, else the level's own).
   function saveActiveLevelFile(){
-    if (!activeLevelSavesHandle) return Promise.reject({ code: "no_level" });
+    var savesHandle = activeWorkSavesHandle();
+    if (!savesHandle) return Promise.reject({ code: "no_level" });
     var blob;
     try{ blob = new Blob([JSON.stringify(projectPayload())], { type: "application/json" }); }
     catch(e){ return Promise.reject(e); }
-    return activeLevelSavesHandle.getFileHandle(projectSaveFilename(activeLevelName), { create: true }).then(function(fh){
+    return savesHandle.getFileHandle(projectSaveFilename(activeWorkName()), { create: true }).then(function(fh){
       return verifiedHandleWrite(fh, blob);
     });
   }
@@ -1968,10 +2110,10 @@
   // going quiet here specifically would be the one place an autosave
   // failure could hide.
   function autosaveLevelPlanIfActive(){
-    if (!(activeLevelSavesHandle && state.imageW)) return;
+    if (!(activeWorkSavesHandle() && state.imageW)) return;
     saveActiveLevelFile().catch(function(err){
       console.error("Autosave after import failed:", err);
-      showToast("Brought that in, but couldn't auto-save it to “" + activeLevelName + "” yet (" + describeError(err) + ") — hit Save as soon as you can.", 8000);
+      showToast("Brought that in, but couldn't auto-save it to “" + activeWorkName() + "” yet (" + describeError(err) + ") — hit Save as soon as you can.", 8000);
     });
   }
 
@@ -1981,12 +2123,13 @@
   // than overwrites -- a folder of "here's what got sent on each date" is
   // exactly what you want there.
   function exportBlobToActiveLevel(renderFn, ext, toastMsg){
-    if (!activeLevelPdfsHandle) return Promise.reject({ code: "no_level" });
+    var pdfsHandle = activeWorkPdfsHandle();
+    if (!pdfsHandle) return Promise.reject({ code: "no_level" });
     var filename = suggestFilename(ext, true);
     var theBlob;
     return renderFn().then(function(blob){
       theBlob = blob;
-      return activeLevelPdfsHandle.getFileHandle(filename, { create: true });
+      return pdfsHandle.getFileHandle(filename, { create: true });
     }).then(function(fh){
       return verifiedHandleWrite(fh, theBlob);
     }).then(function(){
@@ -2082,8 +2225,9 @@
     if (event && event.preventDefault) event.preventDefault();
   });
   function saveAllProjectAware(){
-    if (!(activeLevelSavesHandle && activeLevelPdfsHandle)){ saveAll(); return; }
+    if (!(activeWorkSavesHandle() && activeWorkPdfsHandle())){ saveAll(); return; }
     if (!state.imageW){ showToast("Open a plan or photo first."); return; }
+    var workName = activeWorkName();
     var jsonOK = false, pdfOK = false, pdfFilename = "", jsonErr = null, pdfErr = null;
     saveActiveLevelFile().then(function(){
       jsonOK = true;
@@ -2100,7 +2244,7 @@
       });
     }).then(function(){
       if (jsonOK && pdfOK){
-        showToast("Saved “" + activeLevelName + "” and exported " + pdfFilename + ".");
+        showToast("Saved “" + workName + "” and exported " + pdfFilename + ".");
       } else if (jsonOK && !pdfOK){
         showToast("Saved the plan file, but the PDF export failed (" + describeError(pdfErr) + ") — try Save again.", 8000);
       } else if (!jsonOK && pdfOK){
@@ -4274,6 +4418,17 @@
   var levelListItems = document.getElementById("levelListItems");
   var newLevelBtn = document.getElementById("newLevelBtn");
   var backToProjectsBtn = document.getElementById("backToProjectsBtn");
+  // Same shape one folder deeper still -- lists the rooms inside whichever
+  // level is currently open (activeLevelHandle). Reached via the toolbar's
+  // "Rooms" button, not automatically -- most levels will never have any,
+  // and nothing about opening/using a level changes if you never touch it.
+  var gateRooms = document.getElementById("gateRooms");
+  var gateRoomsLabel = document.getElementById("gateRoomsLabel");
+  var roomListItems = document.getElementById("roomListItems");
+  var newRoomBtn = document.getElementById("newRoomBtn");
+  var openLevelPlanBtn = document.getElementById("openLevelPlanBtn");
+  var backToLevelsFromRoomsBtn = document.getElementById("backToLevelsFromRoomsBtn");
+  var roomsBtn = document.getElementById("roomsBtn");
 
   function hideProjectGate(){ projectGate.hidden = true; }
   function showGateState(which){
@@ -4281,16 +4436,19 @@
     gateReconnect.hidden = which !== "reconnect";
     gateList.hidden = which !== "list";
     gateLevels.hidden = which !== "levels";
+    gateRooms.hidden = which !== "rooms";
     projectGate.hidden = false;
   }
-  // Shows "Project — Level" in place of the generic "plan markup" subtitle
-  // once a level is open -- purely cosmetic, but a real, constant reminder
-  // of which job (and which level of it) you're in given the app can now
-  // hold more than one of each.
+  // Shows "Project — Level" (or, with a room open, "Project — Level — Room")
+  // in place of the generic "plan markup" subtitle -- purely cosmetic, but a
+  // real, constant reminder of which job -- and which level and room of it
+  // -- you're in given the app can now hold more than one of each.
   function refreshBrandSubtitle(){
     var sub = document.getElementById("brandSubtitle");
     if (!sub) return;
-    if (activeLevelName){
+    if (activeRoomName){
+      sub.textContent = activeProjectName + " — " + activeLevelName + " — " + activeRoomName;
+    } else if (activeLevelName){
       sub.textContent = activeProjectName + " — " + activeLevelName;
     } else {
       sub.textContent = activeProjectName || "plan markup";
@@ -4432,12 +4590,13 @@
       });
     });
   }
-  // kind: "project" (removed from projectsRootHandle) or "level" (removed
-  // from activeProjectHandle). Two showConfirm()s in a row -- the second
-  // spelling out that it's permanent and, for a project, takes every level
-  // in it with it -- before anything is actually removed.
+  // kind: "project" (removed from projectsRootHandle), "level" (removed
+  // from activeProjectHandle), or "room" (removed from activeLevelHandle).
+  // Two showConfirm()s in a row -- the second spelling out that it's
+  // permanent and, for a project, takes every level in it with it -- before
+  // anything is actually removed.
   function confirmAndDeleteEntry(kind, name, onDeleted){
-    var what = kind === "project" ? "project" : "level";
+    var what = kind === "project" ? "project" : (kind === "room" ? "room" : "level");
     // Both showConfirm() chains below now end in their own .catch() -- belt
     // and suspenders alongside the withTimeout() chain further in. Neither
     // of these outer .then()s used to have one: if anything threw
@@ -4458,7 +4617,7 @@
         : "Are you sure? This permanently deletes “" + name + "”'s saved plan and all its exported PDFs. This cannot be undone.";
       showConfirm(warn).then(function(ok2){
         if (!ok2){ showToast("Delete cancelled."); return; }
-        var parentHandle = kind === "project" ? projectsRootHandle : activeProjectHandle;
+        var parentHandle = kind === "project" ? projectsRootHandle : (kind === "room" ? activeLevelHandle : activeProjectHandle);
         // 25s, not the old 10s: removeEntryDeep() makes one real
         // filesystem/SAF call per file and folder instead of a single
         // atomic recursive call, and a project with several levels' worth
@@ -4591,6 +4750,43 @@
       });
     });
   }
+  // Same shape again, one folder deeper still: lists the rooms inside
+  // whichever level is currently open (activeLevelHandle).
+  function populateRoomList(){
+    return listExistingRooms().then(function(names){
+      roomListItems.innerHTML = "";
+      if (!names.length){
+        var empty = document.createElement("div");
+        empty.className = "project-gate-empty";
+        empty.textContent = "No rooms yet — only add one if this level needs a separate annotated photo or drawing beyond its main floor plan.";
+        roomListItems.appendChild(empty);
+        return;
+      }
+      names.forEach(function(name){
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "project-row";
+        row.title = "Tap to open — press and hold to delete";
+        var label = document.createElement("span");
+        label.textContent = name;
+        var arrow = document.createElement("span");
+        arrow.className = "project-row-arrow";
+        arrow.textContent = "Open →";
+        row.appendChild(label);
+        row.appendChild(arrow);
+        row.addEventListener("click", function(){
+          openRoom(name).catch(function(err){
+            console.error("Open room failed:", err);
+            showToast("Couldn't open “" + name + "” — try again.");
+          });
+        });
+        wireLongPress(row, function(){
+          confirmAndDeleteEntry("room", name, function(){ populateRoomList(); });
+        });
+        roomListItems.appendChild(row);
+      });
+    });
+  }
   function pickProjectsRootFolder(){
     return window.showDirectoryPicker({ id: "utzline-projects-root", mode: "readwrite" }).then(function(handle){
       projectsRootHandle = handle; projectsRootPermissionOK = true; projectsRootName = handle.name;
@@ -4684,6 +4880,44 @@
       showGateState("list");
     });
   });
+  newRoomBtn.addEventListener("click", function(){
+    showRenameDialog("", "Name your new room:").then(function(value){
+      if (value === null) return; // cancelled
+      var clean = sanitizeFileBase(value);
+      createNewRoom(clean).catch(function(err){
+        console.error("Create room failed:", err);
+        showToast("Couldn't create that room — try again.");
+      });
+    });
+  });
+  // Opens THIS level's own main floor plan straight from its room list --
+  // the level's own plan isn't itself a "room" and so never appears as a
+  // row above, but it's still the thing most visits to this screen are
+  // really here to get back to (peeking at what rooms exist, then
+  // returning), so it gets its own direct one-tap way back in rather than
+  // requiring "← All levels" and reopening the level from its own gate.
+  openLevelPlanBtn.addEventListener("click", function(){
+    openLevel(activeLevelName).catch(function(err){
+      console.error("Open level failed:", err);
+      showToast("Couldn't open “" + activeLevelName + "” — try again.");
+    });
+  });
+  // Steps back out to this project's level list -- nothing left to lose
+  // here (openRoomsPicker() already cleared/confirmed on the way in,
+  // exactly the same reasoning backToProjectsBtn above already relies on).
+  backToLevelsFromRoomsBtn.addEventListener("click", function(){
+    activeLevelName = ""; activeLevelHandle = null;
+    activeLevelSavesHandle = null; activeLevelPdfsHandle = null;
+    activeRoomName = ""; activeRoomHandle = null;
+    activeRoomSavesHandle = null; activeRoomPdfsHandle = null;
+    refreshBrandSubtitle();
+    if (switchProjectBtn) switchProjectBtn.style.display = "none";
+    if (roomsBtn) roomsBtn.style.display = "none";
+    populateLevelList().then(function(){
+      gateLevelsLabel.textContent = "“" + activeProjectName + "” — choose a level, or start a new one.";
+      showGateState("levels");
+    });
+  });
   // Leaves the current level and returns to that project's level list --
   // guarded by the same "you have unsaved work" confirm as Open/New already
   // use, since switching clears activeLevel* without touching whatever's
@@ -4695,6 +4929,10 @@
     function goToGate(){
       activeLevelName = ""; activeLevelHandle = null;
       activeLevelSavesHandle = null; activeLevelPdfsHandle = null;
+      // Stepping all the way out to the project's level list leaves any
+      // open room behind too, same as leaving the level itself.
+      activeRoomName = ""; activeRoomHandle = null;
+      activeRoomSavesHandle = null; activeRoomPdfsHandle = null;
       refreshBrandSubtitle();
       // Purely cosmetic (the toolbar sits fully hidden behind the gate
       // either way), but leaving the old level's name showing in the
@@ -4704,13 +4942,38 @@
       state.fileBase = "plan";
       updateFileNameBtn();
       if (switchProjectBtn) switchProjectBtn.style.display = "none";
+      if (roomsBtn) roomsBtn.style.display = "none";
       populateLevelList().then(function(){
         gateLevelsLabel.textContent = "“" + activeProjectName + "” — choose a level, or start a new one.";
         showGateState("levels");
       });
     }
     if (!state.objects.length){ goToGate(); return; }
-    showConfirm("Switch project or level? Make sure this plan is saved first (Save writes straight into “" + activeLevelName + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
+    showConfirm("Switch project or level? Make sure this plan is saved first (Save writes straight into “" + activeWorkName() + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
+      if (ok) goToGate();
+    });
+  }
+  // One tier deeper than switchProject(): leaves whichever of the level's
+  // own plan or a room is currently open and shows THIS level's room list
+  // instead of stepping all the way out to the project's level list --
+  // "← All levels" inside that room list covers going further out, the
+  // same relationship gateLevels' own "← All projects" already has with
+  // gateList. Only ever reached via the "Rooms" toolbar button, which only
+  // ever shows once a level is open -- most levels will never have a room,
+  // and nothing about this changes how a level's own main floor plan works.
+  function openRoomsPicker(){
+    function goToGate(){
+      activeRoomName = ""; activeRoomHandle = null;
+      activeRoomSavesHandle = null; activeRoomPdfsHandle = null;
+      state.fileBase = "plan";
+      updateFileNameBtn();
+      populateRoomList().then(function(){
+        gateRoomsLabel.textContent = "“" + activeLevelName + "” — choose a room, or open its main floor plan.";
+        showGateState("rooms");
+      });
+    }
+    if (!state.objects.length){ goToGate(); return; }
+    showConfirm("Open this level's rooms? Make sure this plan is saved first (Save writes straight into “" + activeWorkName() + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
       if (ok) goToGate();
     });
   }
@@ -6373,6 +6636,7 @@
   document.getElementById("saveBtn").addEventListener("click", saveAllProjectAware);
   var switchProjectBtn = document.getElementById("switchProjectBtn");
   switchProjectBtn.addEventListener("click", switchProject);
+  roomsBtn.addEventListener("click", openRoomsPicker);
   var openProjectInput = document.getElementById("openProjectInput");
   document.getElementById("openProjectBtn").addEventListener("click", function(){
     if (!state.objects.length){ openProjectInput.click(); return; }
