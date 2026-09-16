@@ -187,7 +187,19 @@
 // additive, for when that single plan isn't enough on its own (a kitchen or
 // bathroom that needs its own detailed annotated photo/drawing), and a
 // level with no rooms works completely unchanged.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v13";
+// (v14: fixes a real large-format plan coming in blurry/unreadable. A big
+// PDF sheet (A1/A0 and similar) used to get downscaled to fit inside one
+// safety-capped canvas -- for a true A0 sheet that meant roughly 300dpi
+// dropping to around 125dpi, soft enough that a dimension or room label
+// zoomed in on turned to mush. Opening a plan now renders an oversized page
+// as a GRID OF TILES instead -- several modestly-sized images laid
+// edge-to-edge -- so every tile still renders at full, uncapped resolution;
+// nothing about placing/measuring/exporting a plan changes, it just looks
+// sharp now even on a full-size architectural sheet. Mirror and Save PDF
+// both updated to handle a tiled plan correctly too. "Insert image" (a
+// second reference photo/PDF placed as its own resizable object) is
+// unaffected -- it keeps its original behaviour exactly as before.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v14";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

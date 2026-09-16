@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v13">
+<link rel="manifest" href="./manifest.json?v=v14">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v13">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v13">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v14">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v14">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -781,6 +781,7 @@
     <svg id="svgRoot" xmlns="http://www.w3.org/2000/svg">
       <g id="world">
         <image id="baseImage" href=""></image>
+        <g id="baseImageTiles"></g>
         <g id="gridOverlay"></g>
         <g id="objectsLayer"></g>
         <g id="handlesLayer"></g>
@@ -964,7 +965,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v13";
+  var APP_VERSION = "v14";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1042,6 +1043,13 @@
   /* ============================== state ============================== */
   var state = {
     imageDataURL: null,
+    // Populated INSTEAD OF imageDataURL only for a base plan too large to
+    // safely rasterize as one single image/canvas (see renderPdfPageGrid
+    // below) -- an array of {dataUrl,x,y,w,h} tiles that together cover the
+    // full imageW x imageH area with no gaps or overlaps. null for every
+    // normal-sized photo/PDF, which is the vast majority of plans and keeps
+    // that whole path byte-for-byte unchanged.
+    imageTiles: null,
     imageW: 0, imageH: 0,
     fileBase: "plan",
     objects: [],
@@ -1214,6 +1222,7 @@
   var svgRoot = document.getElementById("svgRoot");
   var world = document.getElementById("world");
   var baseImage = document.getElementById("baseImage");
+  var baseImageTiles = document.getElementById("baseImageTiles");
   var gridOverlay = document.getElementById("gridOverlay");
   var objectsLayer = document.getElementById("objectsLayer");
   var handlesLayer = document.getElementById("handlesLayer");
@@ -1957,7 +1966,7 @@
       }).then(function(text){
         var saved = null;
         try{ saved = JSON.parse(text); }catch(e){ saved = null; }
-        if (saved && (saved.utzlineProject || saved.redlineProject) && saved.imageDataURL){
+        if (saved && (saved.utzlineProject || saved.redlineProject) && savedHasImage(saved)){
           applyRestoredState(saved);
         } else {
           startBlankPlan(name);
@@ -2031,7 +2040,7 @@
       }).then(function(text){
         var saved = null;
         try{ saved = JSON.parse(text); }catch(e){ saved = null; }
-        if (saved && (saved.utzlineProject || saved.redlineProject) && saved.imageDataURL){
+        if (saved && (saved.utzlineProject || saved.redlineProject) && savedHasImage(saved)){
           applyRestoredState(saved);
         } else {
           startBlankPlan(name);
@@ -2274,6 +2283,7 @@
       try{
         idbSet("current", {
           imageDataURL: state.imageDataURL, imageW: state.imageW, imageH: state.imageH,
+          imageTiles: state.imageTiles || null,
           fileBase: state.fileBase, objects: state.objects, style: defaultStyle()
         }).then(function(){
           autosaveWarned = false;
@@ -2939,7 +2949,7 @@
     // (there's nothing to resize; the only action it supports is Mirror,
     // via the right-click menu).
     if (state.selectedId === BASE_IMAGE_SELECT_ID){
-      if (!state.imageDataURL) return;
+      if (!(state.imageDataURL || state.imageTiles)) return;
       var br = hr();
       handlesLayer.appendChild(el("rect", {
         x: 0, y: 0, width: state.imageW, height: state.imageH,
@@ -3135,7 +3145,7 @@
     // Same as a plain click (see onPointerDown's "select" branch) -- a
     // right-click straight onto the base photo, with no prior left-click
     // needed first, should offer Mirror too.
-    if (state.tool === "select" && state.imageDataURL && !isBlankCanvasState() &&
+    if (state.tool === "select" && (state.imageDataURL || state.imageTiles) && !isBlankCanvasState() &&
         wp.x >= 0 && wp.x <= state.imageW && wp.y >= 0 && wp.y <= state.imageH){
       state.selectedId = BASE_IMAGE_SELECT_ID;
       renderAll();
@@ -3248,7 +3258,7 @@
       // generated blank "New" canvas -- there's no photo there to be
       // backwards, and selecting it would just be a confusing way to
       // accidentally flip every object's position for no visible reason.
-      if (state.imageDataURL && !isBlankCanvasState() &&
+      if ((state.imageDataURL || state.imageTiles) && !isBlankCanvasState() &&
           wp.x >= 0 && wp.x <= state.imageW && wp.y >= 0 && wp.y <= state.imageH){
         state.selectedId = BASE_IMAGE_SELECT_ID;
         renderAll();
@@ -5187,6 +5197,76 @@
       });
     });
   }
+  // Renders one page as a grid of tiles instead of one oversized canvas.
+  // viewport is the FULL page's viewport at the target scale (already
+  // clamped to PDF_IMPORT_MAX_DIM by the caller) -- each tile renders that
+  // SAME viewport, just shifted by a transform so only its own slice lands
+  // on the (much smaller) tile canvas at 0,0. This is pdf.js's own
+  // documented mechanism for tiled rendering: `transform` composes BEFORE
+  // the viewport's own transform, so it crops/shifts without touching scale
+  // or resolution at all -- every tile comes out at exactly the same pixels-
+  // per-page-point density the untiled path would have used.
+  // Sequential, not Promise.all -- each tile's canvas is created, rendered,
+  // encoded and released before the next one starts, so peak memory stays
+  // roughly one tile's worth rather than the whole sheet's, the same reason
+  // showPdfPagePicker's thumbnails are rendered one after another below.
+  function renderPdfPageGrid(page, viewport, fullW, fullH, cols, rows){
+    var tileW = Math.ceil(fullW / cols), tileH = Math.ceil(fullH / rows);
+    var jobs = [];
+    for (var row = 0; row < rows; row++){
+      for (var col = 0; col < cols; col++){
+        var x = col * tileW, y = row * tileH;
+        var w = Math.min(tileW, fullW - x), h = Math.min(tileH, fullH - y);
+        jobs.push({ x: x, y: y, w: w, h: h });
+      }
+    }
+    var tiles = [];
+    return jobs.reduce(function(chain, job){
+      return chain.then(function(){
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(job.w));
+        canvas.height = Math.max(1, Math.round(job.h));
+        var ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+          transform: [1, 0, 0, 1, -job.x, -job.y]
+        }).promise.then(function(){
+          var dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+          var w = canvas.width, h = canvas.height;
+          canvas.width = 0; canvas.height = 0;
+          tiles.push({ dataUrl: dataUrl, x: job.x, y: job.y, w: w, h: h });
+        });
+      });
+    }, Promise.resolve()).then(function(){ return tiles; });
+  }
+  // Decides untiled vs tiled and returns EITHER shape a caller already
+  // knows how to handle: { dataUrl, w, h } for anything that fits in one
+  // canvas (every normal-sized sheet -- A4 up through a generously large
+  // A1/A0 -- takes this exact path, byte-for-byte the same as before this
+  // existed), or { tiles, w, h } only once a page's native render would
+  // genuinely exceed PDF_TILE_MAX_DIM on either side.
+  function renderPdfPageMaybeTiled(pdfDoc, pageNum, scale){
+    return pdfDoc.getPage(pageNum).then(function(page){
+      var viewport = page.getViewport({ scale: scale });
+      var longest = Math.max(viewport.width, viewport.height);
+      if (longest > PDF_IMPORT_MAX_DIM){
+        viewport = page.getViewport({ scale: scale * (PDF_IMPORT_MAX_DIM / longest) });
+      }
+      var fullW = Math.max(1, Math.round(viewport.width));
+      var fullH = Math.max(1, Math.round(viewport.height));
+      var cols = Math.ceil(fullW / PDF_TILE_MAX_DIM);
+      var rows = Math.ceil(fullH / PDF_TILE_MAX_DIM);
+      if (cols <= 1 && rows <= 1){
+        return renderPdfPage(pdfDoc, pageNum, scale, PDF_IMPORT_MAX_DIM);
+      }
+      return renderPdfPageGrid(page, viewport, fullW, fullH, cols, rows).then(function(tiles){
+        return { tiles: tiles, w: fullW, h: fullH };
+      });
+    });
+  }
   function ensurePdfWorker(){
     if (!ensurePdfWorker._set){
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
@@ -5206,10 +5286,33 @@
   // Very large sheets/photos can still land on a canvas size that silently
   // fails in a lot of real browsers -- iPad Safari's canvas limit in
   // particular is well under what a big construction photo needs -- so
-  // PDF_IMPORT_MAX_DIM caps the longest side as a safety net; that cap is
-  // the one case where a reopened export won't come back at full native
-  // resolution, same tradeoff Save PDF itself would eventually hit.
-  var PDF_IMPORT_MAX_DIM = 6000;
+  // PDF_IMPORT_MAX_DIM caps the longest side as a safety net -- below, it's
+  // the outer ceiling renderPdfPageMaybeTiled clamps the whole page's
+  // native render to before even considering how to tile it. Real drawing
+  // sheets (even a big A0) never get near it; it only protects against a
+  // genuinely pathological page (a site plan spanning hundreds of metres)
+  // turning into an unmanageable number of tiles.
+  var PDF_IMPORT_MAX_DIM = 20000;
+  // Real fix for a large but ORDINARY sheet (A1/A0 and similar): instead of
+  // downscaling the whole page to fit one canvas -- which is what silently
+  // softened every big architectural sheet before this existed -- split it
+  // into a grid of tiles, each its own modest canvas, and render EVERY tile
+  // at the SAME full resolution the single-canvas path would use for a
+  // normal-sized sheet. Nothing is traded away for safety here; the sheet
+  // just arrives as several images laid edge-to-edge instead of one, which
+  // looks and measures identically once placed (see applyImageToDom).
+  // 4000px comfortably clears every real browser/GPU's single-canvas or
+  // single-texture ceiling this app has actually run into (see
+  // PDF_IMPORT_MAX_DIM's history above for iPad Safari specifically), with
+  // real headroom to spare -- the goal is a tile that is never anywhere
+  // close to a device's own limit, not one that just barely fits under it.
+  var PDF_TILE_MAX_DIM = 4000;
+  // The ORIGINAL cap (before tiling existed), kept unchanged and used only
+  // by "Insert image"'s PDF branch below -- an inserted page becomes a
+  // single resizable image OBJECT (one src, one w/h), which has no way to
+  // hold multiple tiles, so that path still downscales-to-fit exactly as it
+  // always has rather than tiling.
+  var PDF_INSERT_MAX_DIM = 6000;
   // Loads a PDF and renders ONE page of it. A single-page PDF just uses
   // page 1; a multi-page one shows a thumbnail picker first and waits for
   // the person to choose -- real drawing sets are very often handed over as
@@ -5239,7 +5342,17 @@
       }, step);
     });
   }
-  function pdfFileToImage(file){
+  // Only the "Open" path (a PDF becoming the base plan, via loadImageFile)
+  // is allowed to tile -- allowTiling defaults true for that. "Insert
+  // image" (a PDF becoming a resizable image OBJECT alongside the base
+  // plan) always passes allowTiling=false and keeps the exact old
+  // single-canvas/downscale-to-fit behaviour: an object has one src, one
+  // w/h, and stretches/rotates as one image, so it has nowhere to put
+  // multiple tiles even if it wanted to. Inserted reference photos/PDF
+  // pages are also typically much smaller than a full drawing sheet, so
+  // this was never the case the blur report was actually about.
+  function pdfFileToImage(file, allowTiling){
+    var tiling = allowTiling !== false;
     function proceed(){
       ensurePdfWorker();
       // Computed per-call (not hoisted to a top-level constant) because
@@ -5248,17 +5361,21 @@
       // running and PX_TO_PT already has its real value, but evaluating
       // this at parse time would see it as undefined.
       var importScale = 1 / PX_TO_PT;
+      function renderOnePage(pdfDoc, pageNum){
+        return tiling ? renderPdfPageMaybeTiled(pdfDoc, pageNum, importScale)
+                      : renderPdfPage(pdfDoc, pageNum, importScale, PDF_INSERT_MAX_DIM);
+      }
       return file.arrayBuffer().then(function(buf){
         return window.pdfjsLib.getDocument({ data: buf }).promise;
       }).then(function(pdfDoc){
         if (pdfDoc.numPages <= 1){
-          return renderPdfPage(pdfDoc, 1, importScale, PDF_IMPORT_MAX_DIM).then(function(res){
+          return renderOnePage(pdfDoc, 1).then(function(res){
             res.pageCount = 1; res.pageNum = 1; return res;
           });
         }
         return showPdfPagePicker(pdfDoc).then(function(pageNum){
           if (!pageNum) return Promise.reject({ code: "pdf_import_cancelled" });
-          return renderPdfPage(pdfDoc, pageNum, importScale, PDF_IMPORT_MAX_DIM).then(function(res){
+          return renderOnePage(pdfDoc, pageNum).then(function(res){
             res.pageCount = pdfDoc.numPages; res.pageNum = pageNum; return res;
           });
         });
@@ -5436,14 +5553,29 @@
   function mirrorWholePlan(){
     var W = state.imageW;
     var imageObjs = state.objects.filter(function(o){ return o.type === "image"; });
-    var basePromise = mirrorImageDataUrl(state.imageDataURL, state.imageW, state.imageH);
+    // A tiled base plan (see renderPdfPageGrid) has no single imageDataURL
+    // to flip -- each tile's own pixels get mirrored individually, and each
+    // tile's X position gets reflected within the shared imageW space the
+    // exact same way mirrorObjectGeometry already reflects a "rect"/"image"
+    // object's x (W - x - w) -- its Y and size never change, only where its
+    // left edge now sits.
+    var baseTiles = state.imageTiles && state.imageTiles.length ? state.imageTiles : null;
+    var basePromise = baseTiles
+      ? Promise.all(baseTiles.map(function(t){ return mirrorImageDataUrl(t.dataUrl, t.w, t.h); }))
+      : mirrorImageDataUrl(state.imageDataURL, state.imageW, state.imageH);
     var objPromises = imageObjs.map(function(o){
       return loadImageBitmap(o.src).then(function(img){
         return mirrorImageDataUrl(o.src, img.naturalWidth, img.naturalHeight);
       });
     });
     return Promise.all([basePromise].concat(objPromises)).then(function(results){
-      state.imageDataURL = results[0];
+      if (baseTiles){
+        state.imageTiles = baseTiles.map(function(t, i){
+          return { dataUrl: results[0][i], x: W - t.x - t.w, y: t.y, w: t.w, h: t.h };
+        });
+      } else {
+        state.imageDataURL = results[0];
+      }
       imageObjs.forEach(function(o, i){ o.src = results[i + 1]; });
       state.objects.forEach(function(o){ mirrorObjectGeometry(o, W); });
       applyImageToDom();
@@ -5510,7 +5642,7 @@
     if (isPdfFile(file)){
       showToast("Opening PDF…");
       pdfFileToImage(file).then(function(res){
-        applyLoadedImage(res.dataUrl, res.w, res.h, file.name);
+        applyLoadedImage(res.dataUrl, res.w, res.h, file.name, res.tiles);
         autosaveLevelPlanIfActive();
         showToast(res.pageCount > 1 ? "Loaded page " + res.pageNum + " of " + res.pageCount + "." : "Loaded " + file.name);
       }).catch(function(err){ if (err && err.code === "pdf_import_cancelled") return; showToast(pdfImportErrorToast(err)); });
@@ -5524,8 +5656,13 @@
       showToast(imageReadErrorToast(err));
     });
   }
-  function applyLoadedImage(dataUrl, w, h, fileName){
-    state.imageDataURL = dataUrl;
+  // tiles (optional) is the array a too-large PDF import comes back as
+  // instead of a single dataUrl -- see renderPdfPageMaybeTiled. Passing it
+  // mutually replaces dataUrl (null/ignored whenever tiles is given) rather
+  // than the two ever being used together.
+  function applyLoadedImage(dataUrl, w, h, fileName, tiles){
+    state.imageDataURL = tiles ? null : dataUrl;
+    state.imageTiles = tiles || null;
     state.imageW = w; state.imageH = h;
     // While a level is open, its plan name is always "<Project>_<Level>"
     // (set once by openLevel) -- bringing in a new photo/PDF replaces the
@@ -5546,9 +5683,28 @@
     updateFileNameBtn();
   }
   function applyImageToDom(){
-    baseImage.setAttribute("href", state.imageDataURL);
-    baseImage.setAttribute("width", state.imageW);
-    baseImage.setAttribute("height", state.imageH);
+    while (baseImageTiles.firstChild) baseImageTiles.removeChild(baseImageTiles.firstChild);
+    if (state.imageTiles && state.imageTiles.length){
+      // Tiled base plan: no single href on baseImage itself (left empty so
+      // it never shows stale content underneath), one <image> per tile
+      // instead, each positioned at its own offset within the same
+      // imageW x imageH world space every object's coordinates already
+      // assume -- nothing about how objects are placed/measured changes,
+      // only how the backdrop underneath them gets drawn.
+      baseImage.setAttribute("href", "");
+      baseImage.removeAttribute("width"); baseImage.removeAttribute("height");
+      state.imageTiles.forEach(function(t){
+        var img = document.createElementNS(SVG_NS, "image");
+        img.setAttribute("href", t.dataUrl);
+        img.setAttribute("x", t.x); img.setAttribute("y", t.y);
+        img.setAttribute("width", t.w); img.setAttribute("height", t.h);
+        baseImageTiles.appendChild(img);
+      });
+    } else {
+      baseImage.setAttribute("href", state.imageDataURL);
+      baseImage.setAttribute("width", state.imageW);
+      baseImage.setAttribute("height", state.imageH);
+    }
   }
 
   /* ============================== insert a second image ============================== */
@@ -5588,7 +5744,7 @@
   function insertImageFile(file){
     if (isPdfFile(file)){
       showToast("Inserting PDF page…");
-      pdfFileToImage(file).then(function(res){
+      pdfFileToImage(file, false).then(function(res){
         placeInsertedImage(res.dataUrl, res.w, res.h);
         autosaveLevelPlanIfActive();
         showToast(res.pageCount > 1 ? "Inserted page " + res.pageNum + " of " + res.pageCount + " — drag a corner to resize, or drag it to move." : "Image inserted — drag a corner to resize/stretch, or drag it to move.");
@@ -6119,6 +6275,13 @@
   function pdfLibsReady(){
     return !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && typeof window.jspdf.jsPDF.API.svg === "function");
   }
+  // Safety cap on the PDF export's composited photo-backdrop canvas (see
+  // renderExportPdfBlob) -- same reasoning and the same figure as the PNG
+  // export's own cap just below (the largest size modern browsers reliably
+  // support). Only ever downscales, never enlarges, and only affects the
+  // embedded photo's pixel density -- every annotation is added afterward
+  // as real vector paths via svg2pdf, completely unaffected by this.
+  var PDF_EXPORT_RASTER_MAX_DIM = 16000;
   // Loads state.imageDataURL into a fresh <img> and waits for it to decode —
   // separate from the on-screen baseImage (an SVG <image>, which most
   // browsers refuse as a canvas drawImage() source) so it can be drawn to a
@@ -6182,10 +6345,29 @@
     //     as a single JPEG; only the vector annotation overlay (no <image>
     //     at all) goes through svg2pdf.js, which is exactly the part that
     //     needs to be real vector.
-    var toLoad = [state.imageDataURL].concat(imageObjs.map(function(o){ return o.src; }));
+    // A tiled base plan (see renderPdfPageGrid) has no single imageDataURL --
+    // fall back to a one-item "tile" covering the whole photo so every line
+    // below (loading, drawing, counting) treats a normal untiled plan and a
+    // tiled one identically, just with one tile instead of several.
+    var baseTiles = state.imageTiles && state.imageTiles.length ? state.imageTiles
+      : [{ dataUrl: state.imageDataURL, x: 0, y: 0, w: state.imageW, h: state.imageH }];
+    var toLoad = baseTiles.map(function(t){ return t.dataUrl; }).concat(imageObjs.map(function(o){ return o.src; }));
+    // The composited raster canvas below embeds as one JPEG scaled to fill
+    // the page -- it's the photo backdrop only, never the annotations (those
+    // go in separately as real vector paths via svg2pdf, just below), so
+    // downscaling it costs photo detail but never touches how sharp a
+    // dimension/label/line looks. That makes it safe to cap here exactly
+    // the way the on-screen PNG export already caps its own output size (see
+    // renderExportBlob) -- a composition big enough to need this is rare
+    // (it takes many large tiles/photos spread far apart), but without a
+    // cap here a big enough one could still ask for a single canvas beyond
+    // what a real device can allocate, the exact failure tiling was
+    // introduced to get away from.
+    var rasterMaxDim = Math.max(contentW, contentH);
+    var rasterScale = Math.min(1, PDF_EXPORT_RASTER_MAX_DIM / rasterMaxDim);
     return Promise.all(toLoad.map(loadImageBitmap)).then(function(imgs){
       var canvas = document.createElement("canvas");
-      canvas.width = Math.round(contentW); canvas.height = Math.round(contentH);
+      canvas.width = Math.round(contentW * rasterScale); canvas.height = Math.round(contentH * rasterScale);
       var ctx = canvas.getContext("2d");
       // JPEG has no alpha channel, and an untouched canvas defaults to
       // transparent black -- which JPEG encoding turns solid black. That's
@@ -6196,12 +6378,19 @@
       // matching the app's own light background.
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      // Base photo sits at world [0,0,imageW,imageH]; offset into the
-      // (possibly larger) content-bounds canvas by the bounds' own origin.
-      ctx.drawImage(imgs[0], -cb.x0, -cb.y0, state.imageW, state.imageH);
+      // Each base tile sits at its own [x,y,w,h] within world [0,0,imageW,
+      // imageH] (a single tile at [0,0,imageW,imageH] for a normal untiled
+      // plan); offset into the (possibly larger) content-bounds canvas by
+      // the bounds' own origin, then scale everything down by rasterScale
+      // together so the tiles still line up edge-to-edge with no seams.
+      baseTiles.forEach(function(t, i){
+        var ix = (t.x - cb.x0) * rasterScale, iy = (t.y - cb.y0) * rasterScale;
+        ctx.drawImage(imgs[i], ix, iy, t.w * rasterScale, t.h * rasterScale);
+      });
       imageObjs.forEach(function(o, i){
-        var ix = Math.min(o.x, o.x + o.w) - cb.x0, iy = Math.min(o.y, o.y + o.h) - cb.y0;
-        ctx.drawImage(imgs[i + 1], ix, iy, Math.abs(o.w), Math.abs(o.h));
+        var idx = baseTiles.length + i;
+        var ix = (Math.min(o.x, o.x + o.w) - cb.x0) * rasterScale, iy = (Math.min(o.y, o.y + o.h) - cb.y0) * rasterScale;
+        ctx.drawImage(imgs[idx], ix, iy, Math.abs(o.w) * rasterScale, Math.abs(o.h) * rasterScale);
       });
 
       var pageW = contentW * PX_TO_PT, pageH = contentH * PX_TO_PT;
@@ -6528,8 +6717,17 @@
   // {imageDataURL, imageW, imageH, fileBase, objects, style}. Keeping the
   // migration logic in one place means a project file saved years from now
   // gets exactly the same one-time field cleanup an autosave restore would.
+  // A saved file has real plan content if it carries either a plain
+  // imageDataURL OR a non-empty imageTiles array -- the two are mutually
+  // exclusive (see applyLoadedImage), so checking only imageDataURL (as
+  // every one of these checks did before tiling existed) would wrongly
+  // treat a saved level/room whose main plan is a big tiled PDF as blank.
+  function savedHasImage(saved){
+    return !!(saved && (saved.imageDataURL || (saved.imageTiles && saved.imageTiles.length)));
+  }
   function applyRestoredState(saved){
     state.imageDataURL = saved.imageDataURL; state.imageW = saved.imageW; state.imageH = saved.imageH;
+    state.imageTiles = saved.imageTiles || null;
     state.fileBase = sanitizeFileBase(saved.fileBase || "plan"); state.objects = saved.objects || [];
     if (saved.style) state.style = saved.style;
     // migrate objects saved before each delimiter arm got its own
@@ -6572,6 +6770,7 @@
       // become unopenable just because the app was renamed.
       utzlineProject: 1,
       imageDataURL: state.imageDataURL, imageW: state.imageW, imageH: state.imageH,
+      imageTiles: state.imageTiles || null,
       fileBase: state.fileBase, objects: state.objects, style: defaultStyle()
     };
   }
@@ -6601,7 +6800,7 @@
       // Accept files saved under either marker: the current one, and the
       // old one from before the app was renamed (was "Redline") -- so a
       // project someone saved months ago still opens today.
-      if (!saved || !(saved.utzlineProject || saved.redlineProject) || !saved.imageDataURL){
+      if (!saved || !(saved.utzlineProject || saved.redlineProject) || !savedHasImage(saved)){
         showToast("That doesn't look like a UTZLINE Site Measure project file.");
         return;
       }
@@ -6685,12 +6884,12 @@
       return;
     }
     idbGet("current").then(function(saved){
-      if (saved && saved.imageDataURL){
+      if (savedHasImage(saved)){
         applyRestoredState(saved);
         setTimeout(function(){ fitToView(); renderAll(); updateUndoRedoButtons(); }, 0);
       } else {
         var sample = generateSample();
-        state.imageDataURL = sample.dataURL; state.imageW = sample.w; state.imageH = sample.h;
+        state.imageDataURL = sample.dataURL; state.imageTiles = null; state.imageW = sample.w; state.imageH = sample.h;
         applyImageToDom();
         loadSampleAnnotations();
         history = [deepClone(state.objects)]; historyIndex = 0;
@@ -6698,7 +6897,7 @@
       }
     }).catch(function(){
       var sample = generateSample();
-      state.imageDataURL = sample.dataURL; state.imageW = sample.w; state.imageH = sample.h;
+      state.imageDataURL = sample.dataURL; state.imageTiles = null; state.imageW = sample.w; state.imageH = sample.h;
       applyImageToDom();
       loadSampleAnnotations();
       history = [deepClone(state.objects)]; historyIndex = 0;
