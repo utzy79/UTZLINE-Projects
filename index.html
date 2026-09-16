@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v11">
+<link rel="manifest" href="./manifest.json?v=v12">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v11">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v11">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v12">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v12">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -934,7 +934,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v11";
+  var APP_VERSION = "v12";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1951,6 +1951,27 @@
     catch(e){ return Promise.reject(e); }
     return activeLevelSavesHandle.getFileHandle(projectSaveFilename(activeLevelName), { create: true }).then(function(fh){
       return verifiedHandleWrite(fh, blob);
+    });
+  }
+
+  // Bringing a real plan/photo into an open level (Open, drag-drop, or
+  // Insert image) puts something worth keeping on the canvas that would
+  // otherwise only ever reach this level's own saves/ folder once you
+  // remember to hit Save yourself, or whenever the periodic auto-backup
+  // timer (several minutes by default) next happens to fire. Backing out
+  // of the app, or switching level/project, in that gap loses the import
+  // entirely -- openLevel() only restores from the saves/ file, and one
+  // was never written. Writing it immediately closes that gap without
+  // waiting on either of those. Silent on success (this fires on every
+  // import, including ones nobody will ever look back at); a failure
+  // still gets a toast, same as every other folder write in this app --
+  // going quiet here specifically would be the one place an autosave
+  // failure could hide.
+  function autosaveLevelPlanIfActive(){
+    if (!(activeLevelSavesHandle && state.imageW)) return;
+    saveActiveLevelFile().catch(function(err){
+      console.error("Autosave after import failed:", err);
+      showToast("Brought that in, but couldn't auto-save it to “" + activeLevelName + "” yet (" + describeError(err) + ") — hit Save as soon as you can.", 8000);
     });
   }
 
@@ -5227,12 +5248,14 @@
       showToast("Opening PDF…");
       pdfFileToImage(file).then(function(res){
         applyLoadedImage(res.dataUrl, res.w, res.h, file.name);
+        autosaveLevelPlanIfActive();
         showToast(res.pageCount > 1 ? "Loaded page " + res.pageNum + " of " + res.pageCount + "." : "Loaded " + file.name);
       }).catch(function(err){ if (err && err.code === "pdf_import_cancelled") return; showToast(pdfImportErrorToast(err)); });
       return;
     }
     readImageFile(file).then(function(res){
       applyLoadedImage(res.dataUrl, res.w, res.h, file.name);
+      autosaveLevelPlanIfActive();
       showToast("Loaded " + file.name);
     }).catch(function(err){
       showToast(imageReadErrorToast(err));
@@ -5304,12 +5327,14 @@
       showToast("Inserting PDF page…");
       pdfFileToImage(file).then(function(res){
         placeInsertedImage(res.dataUrl, res.w, res.h);
+        autosaveLevelPlanIfActive();
         showToast(res.pageCount > 1 ? "Inserted page " + res.pageNum + " of " + res.pageCount + " — drag a corner to resize, or drag it to move." : "Image inserted — drag a corner to resize/stretch, or drag it to move.");
       }).catch(function(err){ if (err && err.code === "pdf_import_cancelled") return; showToast(pdfImportErrorToast(err)); });
       return;
     }
     readImageFile(file).then(function(res){
       placeInsertedImage(res.dataUrl, res.w, res.h);
+      autosaveLevelPlanIfActive();
       showToast("Image inserted — drag a corner to resize/stretch, or drag it to move.");
     }).catch(function(err){
       showToast(imageReadErrorToast(err));
@@ -5603,67 +5628,82 @@
   }
   // Stamps identification onto the SAVED OUTPUT only (Save PDF, Save PNG,
   // and folder/downloads-api auto-backup all funnel through
-  // renderExportBlob/renderExportPdfBlob) -- a title banner across the top
-  // with the plan's own name, and a small watermark in the bottom-right
-  // corner naming the app and exactly when this copy was saved. Requested
+  // renderExportBlob/renderExportPdfBlob) -- a single white title-block bar
+  // across the bottom of the page, the plan's own name on the left, the
+  // app's logo and exactly when this copy was saved on the right. Requested
   // so a plan handed off to the manufacture team -- as a printed sheet, a
   // forwarded PDF, or just a phone photo of one -- still carries its own
   // identification once it's away from the app, rather than relying on a
   // filename that can get renamed or stripped by whatever it travels
-  // through (email, a shared drive, a phone's own photo app).
+  // through (email, a shared drive, a phone's own photo app). Used to be
+  // split across two places -- a dark translucent banner across the TOP
+  // for the title, a separate watermark in the bottom-right corner for the
+  // logo/timestamp -- consolidated here into one bottom bar, the same
+  // convention a real printed drawing's title block follows, and it no
+  // longer sits on top of (partially hiding) the plan's own content the
+  // way the old top banner did.
   //
   // Appended straight onto the export CLONE, never onto state.objects --
   // so this never appears on the live canvas, can't be selected, dragged
   // or deleted by accident, and never gets written into the reopenable
   // .utzline.json project file (reopening a backup should show exactly
   // what was drawn, not a stamp from whenever it happened to be saved).
-  // The title banner's white-on-dark-band text has no stroke at all, so a
-  // plain filled <text> renders it correctly everywhere. The watermark
-  // used to be a single stroked <text> relying on paint-order:"stroke fill"
-  // to keep its fill on top of its own outline -- fine on screen and in the
-  // rasterized PNG path, but a real exported PDF showed it coming out
-  // mostly solid black with only a thin light rim: svg2pdf.js doesn't honor
-  // paint-order for text, so it painted the (thick, near-opaque) stroke
-  // OVER the fill instead of under it. renderLabelGroup's three-separate-
-  // element halo technique (already proven correct through svg2pdf.js for
-  // every dimension/callout/text label) never depends on paint-order at
-  // all -- each pass is simply drawn after the last -- so the watermark now
-  // reuses it directly instead of its own fragile one-element version.
   function addExportOverlays(clone, cb){
     var contentW = cb.x1 - cb.x0;
 
+    // Sits in the reserved strip below the plan's own content (see
+    // computeExportBounds) -- never on top of an actual measurement,
+    // however the plan happens to be laid out. contentY1 is where the
+    // plan's real content ends and the reserved strip begins; fall back to
+    // cb.y1 itself for a caller that didn't reserve one. Filled explicitly
+    // rather than relying on whatever's behind it defaulting to white, with
+    // a thin top border so it reads as a deliberate bar rather than just
+    // empty page margin.
+    var wmSize = cb.wmSize || clamp(contentW * 0.011, 11, 32);
+    var pad = wmSize * 0.8;
+    var footerTop = cb.contentY1 != null ? cb.contentY1 : cb.y1;
+    var footerH = cb.y1 - footerTop;
+    var footerMidY = (footerTop + cb.y1) / 2;
+    clone.appendChild(el("rect", { x: cb.x0, y: footerTop, width: contentW, height: footerH, fill: "#ffffff" }));
+    clone.appendChild(el("line", { x1: cb.x0, y1: footerTop, x2: cb.x1, y2: footerTop, stroke: "#c5ccc9", "stroke-width": Math.max(1, wmSize * 0.05) }));
+
+    // Plan title, bottom-left of the bar. Plain filled text with no
+    // stroke/halo -- unlike renderLabelGroup's on-plan labels below, this
+    // bar's background is guaranteed flat white (just filled above), never
+    // a photo, so there's nothing a halo would need to protect legibility
+    // against, and plain text reads cleaner for something meant to look
+    // like a printed title block.
     var name = (state.fileBase || "").trim();
     if (name){
-      var titleSize = clamp(contentW * 0.02, 16, 72);
-      var bannerH = Math.round(titleSize * 2.2);
-      clone.appendChild(el("rect", { x: cb.x0, y: cb.y0, width: contentW, height: bannerH, fill: "rgba(0,0,0,0.55)" }));
+      var titleSize = clamp(wmSize * 1.5, 13, 40);
       var titleEl = el("text", {
-        x: cb.x0 + contentW / 2, y: cb.y0 + bannerH / 2,
-        "text-anchor": "middle", "dominant-baseline": "middle",
+        x: cb.x0 + pad, y: footerMidY,
+        "text-anchor": "start", "dominant-baseline": "middle",
+        // font-weight 500, not 600 -- registerExportFonts() only registers
+        // the app's one embedded weight (500) with jsPDF; svg2pdf.js can't
+        // match anything else against it and silently falls back to a
+        // built-in PDF font (helvetica) instead, which both looks
+        // inconsistent with every other label on the page and isn't
+        // guaranteed to have real IBM Plex Sans glyph metrics. Distinguishing
+        // the title from the timestamp is done with size alone (already
+        // larger, from titleSize above), the same way the rest of this app
+        // never varies font-weight either.
         "font-family": fontStack("sans"), "font-size": titleSize, "font-weight": 500,
-        fill: "#ffffff"
+        fill: "#1b2422"
       });
       titleEl.textContent = name;
       clone.appendChild(titleEl);
     }
 
-    // Sits in the reserved footer strip below the plan's own content (see
-    // computeExportBounds) -- never on top of an actual measurement,
-    // however the plan happens to be laid out. contentY1 is where the
-    // plan's real content ends and the reserved strip begins; fall back to
-    // cb.y1 itself for a caller that didn't reserve one.
-    //
-    // Used to be a plain text label spelling out "UTZLINE Site Measure" --
-    // replaced with the actual logo (see LOGO_WATERMARK_DATA_URL above) now
-    // that there is one, so the watermark carries the real brand mark
-    // instead of a stand-in. The save timestamp stays as its own text next
-    // to it -- that's the part a handed-off plan actually needs read off
-    // it (exactly when this copy was saved), which a static logo image
-    // can't carry on its own.
-    var wmSize = cb.wmSize || clamp(contentW * 0.011, 11, 32);
-    var pad = wmSize * 0.8;
-    var footerTop = cb.contentY1 != null ? cb.contentY1 : cb.y1;
-    var footerMidY = (footerTop + cb.y1) / 2;
+    // Logo + save timestamp, bottom-right of the same bar. Used to be a
+    // plain text label spelling out "UTZLINE Site Measure" -- replaced with
+    // the actual logo (see LOGO_WATERMARK_DATA_URL above) now that there is
+    // one. The save timestamp stays as its own text next to it -- that's
+    // the part a handed-off plan actually needs read off it (exactly when
+    // this copy was saved), which a static logo image can't carry on its
+    // own. Kept on renderLabelGroup's halo technique (three passes, never
+    // relying on paint-order, which svg2pdf.js doesn't honor for text) in
+    // case a future layout ever lets this sit over non-white content again.
     var wmImgSize = wmSize * 2.6;
     var wmImgX = cb.x1 - pad - wmImgSize;
     var wmImgY = footerMidY - wmImgSize / 2;

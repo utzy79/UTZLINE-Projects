@@ -167,7 +167,19 @@
 // just for a rename, and the app already carries one legacy extension
 // (.redline.json) for backward compatibility -- a third would be
 // unnecessary churn for zero benefit.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v11";
+// (v12: two fixes. First, bringing a plan/photo into an open level (Open,
+// drag-drop, Insert image, or paste) now writes straight into that level's
+// own saves/ folder immediately, instead of only ever getting saved once
+// you hit Save yourself or whenever the periodic auto-backup timer next
+// happens to fire -- closes a real gap where an imported plan could be
+// lost entirely if you backed out (or switched level/project) in that
+// window. Second, the exported PDF/PNG's identification moved into a
+// single white title-block bar across the BOTTOM of the page (plan name
+// on the left, the app's logo and save date/time on the right) instead of
+// being split between a dark banner across the top -- which used to sit
+// on top of, and partially hide, the plan's own content -- and a small
+// watermark tucked in the bottom-right corner.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v12";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
