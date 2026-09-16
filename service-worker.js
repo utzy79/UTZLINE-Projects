@@ -293,7 +293,28 @@
 // rather than silently creating a new empty room under the old name. Only
 // available from a level's own main plan -- not inside a room, and not in
 // the plain single-file mode, which has no rooms concept at all.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v19";
+//
+// (v20: fixes a real reported bug -- the "current view" share snapshot's
+// title-block bar badly over-truncated the plan title while leaving a large
+// empty gap before the timestamp, because it sized itself off content
+// dimensions that vary with zoom instead of the physical, zoom-invariant
+// viewport size (see computeViewSnapshotBounds's own comment); an extreme
+// zoom-in that leaves no room at all for a title now omits it instead of
+// ever overlapping the timestamp. Adds a read-only "viewer" mode -- see
+// VIEW_ONLY_MODE's own comment -- packaged as its own separately
+// installable app (UTZLINE Viewer, own icon/manifest/cache, see
+// redline-viewer-pwa/) for the drafting office to browse projects/levels/
+// rooms, pan/zoom, and Share/print, with every mutation path (drawing,
+// delete/lock/mirror/edit, New/Save/Insert image, auto-backup) defensively
+// blocked at its actual chokepoint, plus the OS-level folder permission
+// itself requested as read-only rather than read-write. Both this app's own
+// folder picker and the viewer's now also detect when a picked folder is
+// actually a single project's or single level's own folder (rather than a
+// root folder of projects) and land directly on that level's canvas or
+// project's level list instead of an empty/confusing project list --
+// handles the real limitation that a folder handle can't identify its own
+// parent, so this only works looking at what's INSIDE the picked folder.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v20";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

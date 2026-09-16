@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v19">
+<link rel="manifest" href="./manifest.json?v=v20">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v19">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v19">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v20">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v20">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -661,6 +661,31 @@
     .autobk-stepper button{width:24px; height:24px;}
     #fileNameBtnLabel{max-width:90px;}
   }
+
+  /* ---- Viewer mode (read-only build for the drafting office) ----
+     Hides every mutating control -- New/Open/Open project/Insert image/
+     rename/Save, the drawing tools, undo/redo (there's never any history to
+     step through), Lock-all and the snap toggles (drawing aids for tools
+     that aren't here), and Auto-backup (nothing to back up). Left fully in
+     place: Select/Pan/Zoom-to-rectangle, zoom in/out/fit, Switch project /
+     level, Rooms, the Layers list, Share (this is how printing/exporting
+     works here), and the appearance/help/exit controls. The body class is
+     set once at boot from VIEW_ONLY_MODE and never toggled at runtime --
+     see that flag's own comment for why. */
+  body.viewer-mode #newBtn, body.viewer-mode #openBtn,
+  body.viewer-mode #openProjectBtn, body.viewer-mode #insertImageBtn,
+  body.viewer-mode #fileNameBtn, body.viewer-mode #saveBtn,
+  body.viewer-mode #autoBackupGroup, body.viewer-mode #lockAllBtn,
+  body.viewer-mode #snapGridBtn, body.viewer-mode #snapHVBtn,
+  body.viewer-mode #undoBtn, body.viewer-mode #redoBtn,
+  body.viewer-mode #toolButtons [data-tool="dimension"],
+  body.viewer-mode #toolButtons [data-tool="line"],
+  body.viewer-mode #toolButtons [data-tool="angle"],
+  body.viewer-mode #toolButtons [data-tool="rect"],
+  body.viewer-mode #toolButtons [data-tool="text"],
+  body.viewer-mode #toolButtons [data-tool="callout"]{
+    display: none !important;
+  }
 </style>
 
 <div class="app" id="app">
@@ -675,7 +700,7 @@
          at tablet/desktop sizes -- children lay out exactly as if they
          were still direct children of .toolbar. -->
     <div class="toolbar-row" id="toolbarRow1">
-    <div class="brand"><img class="brand-icon" id="brandIcon" src="" alt="" aria-hidden="true"><span>UTZLINE Site Measure<small id="brandSubtitle">plan markup</small></span></div>
+    <div class="brand"><img class="brand-icon" id="brandIcon" src="" alt="" aria-hidden="true"><span><span id="brandName">UTZLINE Site Measure</span><small id="brandSubtitle">plan markup</small></span></div>
     <div class="sep"></div>
 
     <div class="tgroup" id="toolButtons">
@@ -1025,7 +1050,23 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v19";
+  var APP_VERSION = "v20";
+  // Read-only "viewer" mode -- a distinct standalone build (own manifest,
+  // own icon/name -- see the viewer PWA's start_url) for the drafting
+  // office to browse projects/levels/rooms without any ability to edit,
+  // sharing this exact same source rather than forking it (every future
+  // feature -- e.g. v19's room markers -- would otherwise need building
+  // twice). Detected once at load from the URL the PWA was launched with,
+  // never toggled from inside the app itself -- so an installed "UTZLINE
+  // Viewer" icon is always read-only and an installed "UTZLINE Site
+  // Measure" icon always has full editing, with no in-app switch a person
+  // could flip by accident either way. Every mutating entry point (drawing,
+  // delete/lock/mirror/edit-text/bring-to-front, New, Save, Insert image,
+  // auto-backup, and the folder/file writes those lead to) checks this flag
+  // and no-ops; navigation (open project/level/room, pan/zoom/fit, room-
+  // marker double-click, Share/current-view export for printing) is left
+  // completely untouched.
+  var VIEW_ONLY_MODE = /[?&]viewer=1(&|$)/.test(location.search);
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1741,6 +1782,11 @@
     showToast("Auto-backup failed and will keep retrying — if it keeps happening, check that the backup folder still exists and isn't a cloud-sync \"online-only\" location (Dropbox Smart Sync, OneDrive Files On-Demand, etc).", 6000);
   }
   function maybeAutoBackup(){
+    // Viewer mode never writes anything to disk -- there's nothing to back
+    // up (nothing can have changed) and no Auto-backup control is shown,
+    // but this is the actual folder-write chokepoint, so it's guarded here
+    // too rather than trusting every caller to have already checked.
+    if (VIEW_ONLY_MODE) return;
     var canDownloadsApi = !!downloadsApi;
     // NOTE: this used to also require (canDownloadsApi || canFolder) here
     // and just quietly do nothing at all otherwise -- which meant
@@ -1897,6 +1943,7 @@
   // (a plain error, or {code:"no_level"} if nothing's open) so
   // maybeAutoBackup's existing retry/warning handling covers it unchanged.
   function writeLevelBackupSnapshot(){
+    if (VIEW_ONLY_MODE) return Promise.reject({ code: "view_only" });
     var backupsHandle = activeWorkBackupsHandle();
     if (!backupsHandle) return Promise.reject({ code: "no_level" });
     var stem = backupSnapshotStem();
@@ -1999,9 +2046,16 @@
   function projectSaveFilename(name){ return sanitizeFileBase(name) + ".utzline.json"; }
 
   function ensureWorkFolders(dirHandle){
-    return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
-      return dirHandle.getDirectoryHandle("pdfs", { create: true }).then(function(pdfsH){
-        return dirHandle.getDirectoryHandle("backup", { create: true }).then(function(backupH){
+    // Viewer mode never creates a folder, even an empty one -- a level/room
+    // it navigates to is only ever reached because shape-detection already
+    // confirmed all three reserved subfolders exist (see detectFolderShape),
+    // so {create:false} here should always succeed; if it doesn't (a
+    // genuinely malformed folder), this fails cleanly instead of silently
+    // creating the missing piece.
+    var create = !VIEW_ONLY_MODE;
+    return dirHandle.getDirectoryHandle("saves", { create: create }).then(function(savesH){
+      return dirHandle.getDirectoryHandle("pdfs", { create: create }).then(function(pdfsH){
+        return dirHandle.getDirectoryHandle("backup", { create: create }).then(function(backupH){
           return { savesHandle: savesH, pdfsHandle: pdfsH, backupsHandle: backupH };
         });
       });
@@ -2029,6 +2083,77 @@
       return list;
     });
   }
+  // ---- Shape detection: what folder did someone actually pick? ----
+  // The viewer's "Choose Projects Folder" (and, generally, anyone pointing
+  // it one level off from where they meant to) shouldn't require picking
+  // the exact right depth -- a project's own folder, or even a single
+  // level's own folder, should open straight into the right screen instead
+  // of showing a confusing or empty list. Detection works by SHAPE alone,
+  // reusing the same reserved saves/pdfs/backup convention every level and
+  // room folder already has: a folder that itself has all three IS a
+  // level's (or a room's -- the two are identical by shape, see below)
+  // own work folder; a folder with no reserved subfolders but at least one
+  // child that does is a PROJECT; a folder two levels removed from one is
+  // the ROOT. Never creates anything -- pure directory listings only.
+  //
+  // Level vs. room: a room folder and a level folder are genuinely
+  // indistinguishable by shape alone (both are just "saves"+"pdfs"+
+  // "backup", wherever they happen to sit) -- the app's own existing code
+  // only tells them apart by DEPTH/CONTEXT (a room is simply whatever's one
+  // folder under an already-open level), which isn't available when
+  // someone hands over a bare folder with no known parent. Opening either
+  // directly this way just means "show me this one annotated plan" either
+  // way, which is exactly what both amount to functionally -- so this
+  // treats any bare reserved-subfolder folder as a single work folder to
+  // open directly, without asserting which of the two it "really" is.
+  function hasReservedWorkSubfolders(names){
+    return names.indexOf("saves") !== -1 && names.indexOf("pdfs") !== -1 && names.indexOf("backup") !== -1;
+  }
+  function isLevelShaped(dirHandle){
+    return listSubdirNames(dirHandle).then(hasReservedWorkSubfolders);
+  }
+  // True as soon as ANY named child of dirHandle satisfies predicate(childHandle)
+  // -- short-circuits on the first match. A child that errors out getting its
+  // own handle or listing (permission hiccup, or something deleted out from
+  // under this exact moment) is just skipped rather than failing the whole
+  // check, since one bad child shouldn't prevent detecting a good sibling.
+  function anySubfolderMatches(dirHandle, names, predicate, i){
+    i = i || 0;
+    if (i >= names.length) return Promise.resolve(false);
+    return dirHandle.getDirectoryHandle(names[i]).then(function(childHandle){
+      return predicate(childHandle);
+    }).catch(function(){ return false; }).then(function(matched){
+      if (matched) return true;
+      return anySubfolderMatches(dirHandle, names, predicate, i + 1);
+    });
+  }
+  // Resolves to "level" | "project" | "root" | "empty" | "unknown". "empty"
+  // (no subfolders at all -- a brand new folder) and "unknown" (subfolders
+  // exist but neither they nor their own children look level-shaped, e.g. a
+  // folder that has nothing to do with this app) both fall back to being
+  // treated as a root by the caller -- the most permissive read, and the
+  // same thing picking a genuinely-empty root folder for the first time
+  // has always done.
+  function detectFolderShape(dirHandle){
+    return listSubdirNames(dirHandle).then(function(names){
+      if (hasReservedWorkSubfolders(names)) return "level";
+      if (!names.length) return "empty";
+      return anySubfolderMatches(dirHandle, names, isLevelShaped).then(function(hasLevelChild){
+        if (hasLevelChild) return "project";
+        // Neither this folder nor any direct child is level-shaped -- check
+        // one layer deeper (grandchildren) for a PROJECT-shaped child,
+        // which would make this folder the ROOT.
+        return anySubfolderMatches(dirHandle, names, function(childHandle){
+          return listSubdirNames(childHandle).then(function(grandNames){
+            if (!grandNames.length) return false;
+            return anySubfolderMatches(childHandle, grandNames, isLevelShaped);
+          });
+        }).then(function(hasProjectChild){
+          return hasProjectChild ? "root" : "unknown";
+        });
+      });
+    });
+  }
   function listExistingProjects(){ return listSubdirNames(projectsRootHandle); }
   function listExistingLevels(){ return listSubdirNames(activeProjectHandle); }
 
@@ -2045,12 +2170,23 @@
   // project's folder vanished since the list was built" without a separate
   // existence check racing the real open.
   function openProjectLevels(name){
-    return projectsRootHandle.getDirectoryHandle(name, { create: true }).then(function(dirH){
-      activeProjectName = name;
-      activeProjectHandle = dirH;
-      return populateLevelList();
-    }).then(function(){
+    return projectsRootHandle.getDirectoryHandle(name, { create: !VIEW_ONLY_MODE }).then(function(dirH){
+      return openProjectFromHandle(dirH, name);
+    });
+  }
+  // The part of openProjectLevels() that doesn't need to look the handle up
+  // by name from a known projects root -- factored out so the viewer's
+  // shape-detection folder-opening can open a project folder handed to it
+  // directly (no known root at all -- see detectFolderShape/pickProjects-
+  // RootFolder). "← All projects" (backToProjectsBtn) is hidden whenever
+  // there's no known projectsRootHandle to list, the same reasoning
+  // openLevelFromHandle applies to "Switch project / level".
+  function openProjectFromHandle(dirH, name){
+    activeProjectName = name;
+    activeProjectHandle = dirH;
+    return populateLevelList().then(function(){
       gateLevelsLabel.textContent = "“" + activeProjectName + "” — choose a level, or start a new one.";
+      if (backToProjectsBtn) backToProjectsBtn.style.display = projectsRootHandle ? "" : "none";
       showGateState("levels");
     });
   }
@@ -2064,6 +2200,12 @@
   // level too, keeps this the same shape as the root project list's own
   // empty state.
   function createNewProject(rawName){
+    // Defensive -- there's no "New project" UI in viewer mode and the
+    // shape-detection folder-opening it uses to open a picked folder never
+    // calls this, but guarding the function itself means a future caller
+    // can't accidentally create something a read-only build should never
+    // be able to.
+    if (VIEW_ONLY_MODE) return Promise.reject({ code: "view_only" });
     var name = sanitizeFileBase(rawName);
     return listExistingProjects().then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
@@ -2086,10 +2228,24 @@
     // level's own Save/PDF/autosave into the wrong folder.
     activeRoomName = ""; activeRoomHandle = null;
     activeRoomSavesHandle = null; activeRoomPdfsHandle = null; activeRoomBackupsHandle = null;
-    return activeProjectHandle.getDirectoryHandle(name, { create: true }).then(function(dirH){
-      activeLevelHandle = dirH;
-      return ensureWorkFolders(dirH);
-    }).then(function(subs){
+    return activeProjectHandle.getDirectoryHandle(name, { create: !VIEW_ONLY_MODE }).then(function(dirH){
+      return openLevelFromHandle(dirH, name);
+    });
+  }
+  // The part of openLevel() that doesn't need to look the handle up by name
+  // from a known parent project -- factored out so the viewer's shape-
+  // detection folder-opening (detectFolderShape) can open a bare level
+  // folder handed to it directly, with no known parent project at all (see
+  // that function's own comment on why a level and a room are otherwise
+  // indistinguishable by shape). activeProjectName/activeProjectHandle are
+  // whatever the caller already left them as -- openLevel() above leaves
+  // the current project in place; a direct viewer pick clears them first
+  // (see openViewerPickedLevel) so state.fileBase/refreshBrandSubtitle/the
+  // "Opened ..." toast all fall back to the level's own bare name instead
+  // of a stale or missing project name.
+  function openLevelFromHandle(dirH, name){
+    activeLevelHandle = dirH;
+    return ensureWorkFolders(dirH).then(function(subs){
       activeLevelName = name;
       activeLevelSavesHandle = subs.savesHandle;
       activeLevelPdfsHandle = subs.pdfsHandle;
@@ -2116,8 +2272,10 @@
       // The plan name always reflects "<Project>_<Level>" once a level is
       // open, regardless of what applyRestoredState/startBlankPlan set it
       // to above -- this is the single source of truth for a level's
-      // identity, so it's set last, after everything else has settled.
-      state.fileBase = sanitizeFileBase(activeProjectName + "_" + name);
+      // identity, so it's set last, after everything else has settled. No
+      // known project (a bare level folder opened directly) falls back to
+      // just the level's own name, rather than a leading "_" or "— ".
+      state.fileBase = sanitizeFileBase((activeProjectName ? activeProjectName + "_" : "") + name);
       updateFileNameBtn();
       refreshBrandSubtitle();
       history = [deepClone(state.objects)]; historyIndex = 0;
@@ -2125,15 +2283,20 @@
       renderAll();
       updateUndoRedoButtons();
       hideProjectGate();
-      if (switchProjectBtn) switchProjectBtn.style.display = "";
+      // "Switch project / level" has nowhere useful to go back to without a
+      // known project handle (see switchProject()'s own level-list reload) --
+      // hidden rather than shown broken/confusing in that case. Rooms works
+      // fine regardless, since it only ever needs THIS level's own handle.
+      if (switchProjectBtn) switchProjectBtn.style.display = activeProjectHandle ? "" : "none";
       if (roomsBtn) roomsBtn.style.display = "";
-      showToast("Opened “" + activeProjectName + " — " + name + "”.");
+      showToast("Opened “" + (activeProjectName ? activeProjectName + " — " : "") + name + "”.");
     });
   }
 
   // "New Level" mirrors "New Project" one folder deeper -- a name that
   // collides with an existing level of THIS project gets a numbered suffix.
   function createNewLevel(rawName){
+    if (VIEW_ONLY_MODE) return Promise.reject({ code: "view_only" }); // see createNewProject's own comment
     var name = sanitizeFileBase(rawName);
     return listExistingLevels().then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
@@ -2161,7 +2324,7 @@
   // levels" navigation and for the room's own "<Project>_<Level>_<Room>"
   // identity below) -- only activeRoom* changes.
   function openRoom(name){
-    return activeLevelHandle.getDirectoryHandle(name, { create: true }).then(function(dirH){
+    return activeLevelHandle.getDirectoryHandle(name, { create: !VIEW_ONLY_MODE }).then(function(dirH){
       activeRoomHandle = dirH;
       return ensureWorkFolders(dirH);
     }).then(function(subs){
@@ -2209,6 +2372,7 @@
   // "New Room" mirrors "New Level" one folder deeper -- a name that
   // collides with an existing room of THIS level gets a numbered suffix.
   function createNewRoom(rawName){
+    if (VIEW_ONLY_MODE) return Promise.reject({ code: "view_only" }); // see createNewProject's own comment
     var name = sanitizeFileBase(rawName);
     return listExistingRooms().then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
@@ -2267,6 +2431,7 @@
   // logic directly, places the marker, explicitly saves the level's plan
   // first, and only THEN calls openRoom() to actually navigate in.
   function promptAddRoomAt(wx, wy){
+    if (VIEW_ONLY_MODE) return; // defensive -- the popover row that calls this is hidden in viewer mode
     if (!activeLevelName || activeRoomName) return;
     showConfirm("Add a new room here? This creates a separate annotated photo/drawing for just this room, with a marker at this spot on the floor plan linking to it.").then(function(ok){
       if (!ok) return;
@@ -2304,6 +2469,12 @@
   // saves/ folder is actually active right now (activeWorkSavesHandle/
   // activeWorkName -- a room's, if one is open, else the level's own).
   function saveActiveLevelFile(){
+    // The single chokepoint every write of the level's own canonical
+    // project file funnels through (the Save button, and the
+    // after-import/autosave path below) -- guarding here means a viewer
+    // build can never overwrite a real project file, regardless of what
+    // triggered the call.
+    if (VIEW_ONLY_MODE) return Promise.reject({ code: "view_only" });
     var savesHandle = activeWorkSavesHandle();
     if (!savesHandle) return Promise.reject({ code: "no_level" });
     var blob;
@@ -2341,6 +2512,13 @@
   // than overwrites -- a folder of "here's what got sent on each date" is
   // exactly what you want there.
   function exportBlobToActiveLevel(renderFn, ext, toastMsg){
+    // This is the Save button's own PDF-into-the-level's-pdfs-folder half
+    // (see saveAllProjectAware) -- distinct from Share, which renders the
+    // exact same kind of stamped PDF/PNG but only ever hands it to the OS
+    // share sheet or a plain download, never writes it into the project
+    // folder. Viewer mode keeps Share fully working (it's how printing
+    // works there) and blocks only this folder-writing half.
+    if (VIEW_ONLY_MODE) return Promise.reject({ code: "view_only" });
     var pdfsHandle = activeWorkPdfsHandle();
     if (!pdfsHandle) return Promise.reject({ code: "no_level" });
     var filename = suggestFilename(ext, true);
@@ -2443,6 +2621,12 @@
     if (event && event.preventDefault) event.preventDefault();
   });
   function saveAllProjectAware(){
+    // Defensive -- the Save button itself is hidden in viewer mode, and
+    // saveActiveLevelFile()/exportBlobToActiveLevel() below already refuse
+    // to write anything either way, but bailing right here also skips the
+    // no-op single-file saveAll() fallback and its own file-picker/download
+    // prompts, which viewer mode should never show at all.
+    if (VIEW_ONLY_MODE) return;
     if (!(activeWorkSavesHandle() && activeWorkPdfsHandle())){ saveAll(); return; }
     if (!state.imageW){ showToast("Open a plan or photo first."); return; }
     var workName = activeWorkName();
@@ -2859,7 +3043,13 @@
   // busy plan or another photo behind it, it just isn't stuck as neutral
   // white/black anymore.
   function makeImage(x, y, w, h, src){
-    return { id: uid(), type: "image", x: x, y: y, w: w, h: h, src: src, strokeWidth: defaultStroke(), borderColor: null };
+    // rot: 0/90/180/270 only -- set exclusively via the popover's Rotate
+    // CW/CCW rows (rotateImageObject), never a free-drag angle the way a
+    // text/label's own .rot is. See renderObject's image branch for how
+    // this becomes an SVG transform, and the hit-testing/handle functions
+    // for the local-space (rotatePoint(...,-obj.rot)) trick every one of
+    // them uses to work in the image's own unrotated coordinate frame.
+    return { id: uid(), type: "image", x: x, y: y, w: w, h: h, src: src, strokeWidth: defaultStroke(), borderColor: null, rot: 0 };
   }
   // box (off by default) is the real report's "border and background like
   // Callout" -- optional here rather than forced on the way it is for a
@@ -3116,6 +3306,20 @@
       g.appendChild(el("rect", { x: rx, y: ry, width: rw, height: rh, stroke: obj.color, "stroke-width": obj.strokeWidth, fill: "none" }));
     } else if (obj.type === "image"){
       var imx = Math.min(obj.x, obj.x + obj.w), imy = Math.min(obj.y, obj.y + obj.h), imw = Math.abs(obj.w), imh = Math.abs(obj.h);
+      // Rotate CW/CCW (obj.rot, 0/90/180/270 -- see makeImage's own comment)
+      // is applied as a single SVG transform on the whole group, around the
+      // image's own center -- every child element below stays in the same
+      // plain axis-aligned local coordinates it always used, exactly as if
+      // rot were still 0; the transform is what makes it appear rotated on
+      // screen. hitObject/hitHandle/renderHandles/objectBounds all have to
+      // independently know about this same rotation (there's no single
+      // choke point that reads a rendered element's transform back out),
+      // so each one applies the same rotatePoint(...,-obj.rot) local-space
+      // trick label/text rotation already uses, rather than this transform
+      // alone doing all the work.
+      if (obj.rot){
+        g.setAttribute("transform", "rotate(" + obj.rot + " " + (imx + imw / 2) + " " + (imy + imh / 2) + ")");
+      }
       // The photo itself is this object's "fill" -- Opacity fades the image
       // pixels only, never the border below (halo or the optional colored
       // one), so a dimmed reference photo still keeps a crisp, fully
@@ -3329,9 +3533,23 @@
       handlesLayer.appendChild(el("line", { x1: obj.vx, y1: obj.vy, x2: obj.x2, y2: obj.y2, class: "ui-handle", stroke: "var(--focus)", "stroke-width": R * 0.3, "stroke-dasharray": (R*0.6)+","+(R*0.6) }));
       dot(obj.vx, obj.vy, "v"); dot(obj.x1, obj.y1, "a1"); dot(obj.x2, obj.y2, "a2");
       labelHandles(obj.label);
-    } else if (obj.type === "rect" || obj.type === "image"){
+    } else if (obj.type === "rect"){
       var x0 = obj.x, y0 = obj.y, x1 = obj.x + obj.w, y1 = obj.y + obj.h;
       sq(x0, y0, "tl"); sq(x1, y0, "tr"); sq(x0, y1, "bl"); sq(x1, y1, "br");
+    } else if (obj.type === "image"){
+      // Each corner handle is drawn at its own rotated screen position
+      // (rotatePoint(...,obj.rot), the forward direction this time -- the
+      // exact inverse of hitHandle's own -obj.rot test) so the visible
+      // handles always sit right on the image's actual rotated corners,
+      // never floating off at its unrotated positions.
+      var iix0 = obj.x, iiy0 = obj.y, iix1 = obj.x + obj.w, iiy1 = obj.y + obj.h;
+      var iicx = obj.x + obj.w / 2, iicy = obj.y + obj.h / 2;
+      var irot = obj.rot || 0;
+      var htl = irot ? rotatePoint(iix0, iiy0, iicx, iicy, irot) : { x: iix0, y: iiy0 };
+      var htr = irot ? rotatePoint(iix1, iiy0, iicx, iicy, irot) : { x: iix1, y: iiy0 };
+      var hbl = irot ? rotatePoint(iix0, iiy1, iicx, iicy, irot) : { x: iix0, y: iiy1 };
+      var hbr = irot ? rotatePoint(iix1, iiy1, iicx, iicy, irot) : { x: iix1, y: iiy1 };
+      sq(htl.x, htl.y, "tl"); sq(htr.x, htr.y, "tr"); sq(hbl.x, hbl.y, "bl"); sq(hbr.x, hbr.y, "br");
     } else if (obj.type === "text"){
       labelHandles(obj);
     } else if (obj.type === "callout"){
@@ -3390,11 +3608,29 @@
       var alh = hitLabelHandle(worldPt, obj.label); if (alh) return alh;
       return null;
     }
-    if (obj.type === "rect" || obj.type === "image"){
+    if (obj.type === "rect"){
       if (near(obj.x, obj.y)) return "tl";
       if (near(obj.x + obj.w, obj.y)) return "tr";
       if (near(obj.x, obj.y + obj.h)) return "bl";
       if (near(obj.x + obj.w, obj.y + obj.h)) return "br";
+      return null;
+    }
+    if (obj.type === "image"){
+      // Same corner-handle test as "rect" above, just run against the
+      // pointer's position in the image's own LOCAL (unrotated) coordinate
+      // frame instead of world space directly -- rotatePoint(...,-obj.rot)
+      // undoes exactly the rotation renderObject's image branch applies at
+      // render time, so "tl"/"tr"/"bl"/"br" always mean the same thing
+      // applyHandleDrag's resizeFromCorner already expects regardless of
+      // rot. An unrotated image (rot 0, every image before this feature
+      // existed) takes the identity shortcut and behaves exactly as before.
+      var icx = obj.x + obj.w / 2, icy = obj.y + obj.h / 2;
+      var ipt = obj.rot ? rotatePoint(worldPt.x, worldPt.y, icx, icy, -obj.rot) : worldPt;
+      function nearLocal(x, y){ return Math.hypot(ipt.x - x, ipt.y - y) <= R; }
+      if (nearLocal(obj.x, obj.y)) return "tl";
+      if (nearLocal(obj.x + obj.w, obj.y)) return "tr";
+      if (nearLocal(obj.x, obj.y + obj.h)) return "bl";
+      if (nearLocal(obj.x + obj.w, obj.y + obj.h)) return "br";
       return null;
     }
     if (obj.type === "text") return hitLabelHandle(worldPt, obj);
@@ -3467,7 +3703,15 @@
         // should fall through to whatever's underneath.
         var ix0 = Math.min(o.x, o.x + o.w), ix1 = Math.max(o.x, o.x + o.w);
         var iy0 = Math.min(o.y, o.y + o.h), iy1 = Math.max(o.y, o.y + o.h);
-        if (worldPt.x >= ix0 - tol && worldPt.x <= ix1 + tol && worldPt.y >= iy0 - tol && worldPt.y <= iy1 + tol) return o;
+        // Same local-space trick as hitHandle's own image branch -- test
+        // the pointer's position in the image's unrotated frame, since
+        // ix0/ix1/iy0/iy1 above are always in that same local frame.
+        var hitPt = worldPt;
+        if (o.rot){
+          var hicx = o.x + o.w / 2, hicy = o.y + o.h / 2;
+          hitPt = rotatePoint(worldPt.x, worldPt.y, hicx, hicy, -o.rot);
+        }
+        if (hitPt.x >= ix0 - tol && hitPt.x <= ix1 + tol && hitPt.y >= iy0 - tol && hitPt.y <= iy1 + tol) return o;
       } else if (o.type === "roomlink"){
         if (Math.hypot(worldPt.x - o.x, worldPt.y - o.y) <= o.r + tol) return o;
       }
@@ -3563,7 +3807,10 @@
 
     if (state.tool === "select"){
       var obj = state.selectedId ? findObj(state.selectedId) : null;
-      var handle = obj ? hitHandle(wp, obj) : null;
+      // Handle-dragging (resize/reshape) never starts in viewer mode --
+      // selecting still works (harmless, never persisted), but there's
+      // nothing to grab hold of and reshape.
+      var handle = (obj && !VIEW_ONLY_MODE) ? hitHandle(wp, obj) : null;
       if (handle){
         dragMode = { kind: "handle", which: handle, id: obj.id, start: deepClone(obj), startWorld: wp };
         return;
@@ -3608,10 +3855,15 @@
         // motion" from the field report: it slides the visible line/label
         // away from the true measured points rather than moving the whole
         // object, so the delimiters stay exactly where they were measured.
-        if (hitO.type === "dimension"){
-          dragMode = { kind: "dimOffset", id: hitO.id, start: deepClone(hitO), startWorld: dragWp };
-        } else {
-          dragMode = { kind: "move", id: hitO.id, start: deepClone(hitO), startWorld: dragWp };
+        // Same as the handle-drag guard above -- selecting/tapping an
+        // object still works in viewer mode, only the subsequent drag
+        // that would reposition it is skipped.
+        if (!VIEW_ONLY_MODE){
+          if (hitO.type === "dimension"){
+            dragMode = { kind: "dimOffset", id: hitO.id, start: deepClone(hitO), startWorld: dragWp };
+          } else {
+            dragMode = { kind: "move", id: hitO.id, start: deepClone(hitO), startWorld: dragWp };
+          }
         }
         return;
       }
@@ -3963,7 +4215,27 @@
     }
     if (dm.which === "anchor"){ o.ax = wp.x; o.ay = wp.y; return; }
     if (dm.which === "tl" || dm.which === "tr" || dm.which === "bl" || dm.which === "br"){
-      resizeFromCorner(o, dm, wp, shiftKey, dm.which);
+      // resizeFromCorner works entirely in the object's own LOCAL
+      // (unrotated) coordinates -- dm.start.x/y/w/h are already in that
+      // space, untouched by rotation. A rotated image's corner-drag pointer
+      // therefore has to be converted into that same local frame first
+      // (rotatePoint(...,-dm.start.rot), the same trick every other
+      // rotation-aware hit-test/handle function here uses), or dragging
+      // e.g. its visually-top-left handle on a 90°-rotated image would
+      // stretch the wrong local edge. The pivot used is the object's
+      // center AT DRAG START, held fixed for the whole gesture rather than
+      // recomputed every frame from the (still-changing) live w/h -- simple
+      // and jitter-free, at the minor cost of the image's on-screen center
+      // drifting slightly during the drag itself (rendering always rotates
+      // around the CURRENT center); it lands exactly on the intended shape
+      // the instant the drag ends. Rect never has a rot field, so this is a
+      // no-op for it either way.
+      var resizeWp = wp;
+      if (o.type === "image" && dm.start.rot){
+        var startCx = dm.start.x + dm.start.w / 2, startCy = dm.start.y + dm.start.h / 2;
+        resizeWp = rotatePoint(wp.x, wp.y, startCx, startCy, -dm.start.rot);
+      }
+      resizeFromCorner(o, dm, resizeWp, shiftKey, dm.which);
       return;
     }
     var hasOwnLabel = o.type === "dimension" || o.type === "callout" || o.type === "angle";
@@ -4119,6 +4391,7 @@
     return obj.label;
   }
   function beginInlineEdit(id){
+    if (VIEW_ONLY_MODE) return; // defensive -- the popover's Edit text row is hidden in viewer mode
     var obj = findObj(id);
     if (!obj) return;
     editingId = id;
@@ -4228,7 +4501,15 @@
   });
 
   /* ============================== toolbar / tools ============================== */
+  var VIEW_ONLY_ALLOWED_TOOLS = { select: true, pan: true, zoomrect: true };
   function setTool(tool){
+    // Viewer mode never draws anything -- every drawing tool button is
+    // hidden (see the .viewer-mode CSS), but this same function is also
+    // reachable via keyboard shortcuts (D/L/A/R/T/C), so the block belongs
+    // here too, not just in the UI. Select/pan/zoom-rect all stay available
+    // -- they only move the view or highlight something, never create or
+    // change a mark on the plan.
+    if (VIEW_ONLY_MODE && !VIEW_ONLY_ALLOWED_TOOLS[tool]) return;
     // Switching tools mid-way through an angle's two-phase draw (leg 1
     // placed, waiting on leg 2) needs to properly abandon it — angle is
     // the one tool that stays "drawing" across a pointerup, so a plain
@@ -4306,6 +4587,7 @@
     if (e.code === "Space"){ spaceDown = false; updateCursor(); }
   });
   function deleteSelected(){
+    if (VIEW_ONLY_MODE) return;
     state.objects = state.objects.filter(function(o){ return o.id !== state.selectedId; });
     state.selectedId = null;
     pushHistory(); renderAll();
@@ -4324,6 +4606,7 @@
     return state.objects.some(function(o){ return !o.locked; });
   }
   function lockAll(){
+    if (VIEW_ONLY_MODE) return; // defensive -- the toolbar's Lock-all button is hidden in viewer mode
     if (!hasUnlockedObject()) return; // button should already be disabled
     state.objects.forEach(function(o){ o.locked = true; });
     if (state.selectedId){
@@ -4358,6 +4641,12 @@
   var BRING_FRONT_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="9" height="9" rx="1"/><path d="M5.5 12.5H4A1 1 0 0 1 3 11.5V4A1 1 0 0 1 4 3h7.5a1 1 0 0 1 1 1v1.5"/></svg>';
   var ROOM_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17V4.5a1 1 0 0 1 1-1h4l4 2v11.5"/><path d="M5 17h9"/><circle cx="11.3" cy="10.5" r="0.7" fill="currentColor" stroke="none"/></svg>';
   var ADD_ROOM_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 17V4.5a1 1 0 0 1 1-1h3.5l3.5 2v11.5"/><path d="M4.5 17h8"/><path d="M14 10v3.6M12.2 11.8h3.6" stroke-width="1.8"/></svg>';
+  // Same curved-arrow language (and literal paths) as the toolbar's own
+  // Undo/Redo icons -- CCW curves left like Undo, CW curves right like
+  // Redo, so "which way does this arrow turn" already reads consistently
+  // with what those two buttons taught every user of this app already.
+  var ROTATE_CCW_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8H4V3"/><path d="M4.3 13.5A7 7 0 1 0 6 6l-2 2"/></svg>';
+  var ROTATE_CW_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8h2V3"/><path d="M15.7 13.5A7 7 0 1 1 14 6l2 2"/></svg>';
   function hideLockPopoverOnOutsideEvent(e){
     if (lockPopoverEl && !lockPopoverEl.contains(e.target)) hideLockPopover();
   }
@@ -4402,7 +4691,7 @@
     // rule as dragging or editing it: a locked item has to be freed first,
     // so it's never removed by an accidental right-click tap while it's
     // meant to be protected.
-    if (isRealObject && !obj.locked){
+    if (isRealObject && !obj.locked && !VIEW_ONLY_MODE){
       popoverRow(wrap, DELETE_ICON + "<span>Delete</span>", function(){
         hideLockPopover();
         state.selectedId = obj.id;
@@ -4419,7 +4708,7 @@
     // whichever's easier in the moment. Deliberately excludes roomlink --
     // its label is the linked room's own name, not free text (see
     // makeRoomLink/renderPanel's labelObj).
-    if (isRealObject && !obj.locked && (obj.type === "text" || obj.type === "callout" || obj.type === "dimension" || obj.type === "angle")){
+    if (isRealObject && !obj.locked && !VIEW_ONLY_MODE && (obj.type === "text" || obj.type === "callout" || obj.type === "dimension" || obj.type === "angle")){
       popoverRow(wrap, EDIT_ICON + "<span>Edit text</span>", function(){
         hideLockPopover();
         state.selectedId = obj.id; setTool("select"); renderAll();
@@ -4445,7 +4734,7 @@
     // correctly aligned with the now-flipped photo (see mirrorWholePlan).
     // Real image objects only offer this while unlocked, same as every
     // other action that changes one; the base photo has no lock concept.
-    if (isBaseImage || (isRealObject && obj.type === "image" && !obj.locked)){
+    if (!VIEW_ONLY_MODE && (isBaseImage || (isRealObject && obj.type === "image" && !obj.locked))){
       popoverRow(wrap, MIRROR_ICON + "<span>Mirror</span>", function(){
         hideLockPopover();
         if (isBaseImage) mirrorWholePlan();
@@ -4466,7 +4755,7 @@
     // to Mirror that silently does nothing when tapped (promptAddRoomAt
     // itself no-ops in that case, but showing the row at all would be
     // confusing).
-    if ((isBaseImage || isEmptyCanvas) && activeLevelName && !activeRoomName){
+    if (!VIEW_ONLY_MODE && (isBaseImage || isEmptyCanvas) && activeLevelName && !activeRoomName){
       popoverRow(wrap, ADD_ROOM_ICON + "<span>Add a room here</span>", function(){
         hideLockPopover();
         promptAddRoomAt(obj.__atPoint.x, obj.__atPoint.y);
@@ -4482,7 +4771,7 @@
     // hatch. Only offered while there's actually somewhere higher to go --
     // an image already at the very top of the stack gets no row at all,
     // rather than a "Bring to front" that would visibly do nothing.
-    if (isRealObject && obj.type === "image" && !obj.locked && state.objects[state.objects.length - 1] !== obj){
+    if (isRealObject && obj.type === "image" && !obj.locked && !VIEW_ONLY_MODE && state.objects[state.objects.length - 1] !== obj){
       popoverRow(wrap, BRING_FRONT_ICON + "<span>Bring to front</span>", function(){
         hideLockPopover();
         var idx = state.objects.indexOf(obj);
@@ -4495,10 +4784,27 @@
       });
     }
 
+    // Rotate CW/CCW -- same gating as Bring to front (a real, unlocked
+    // image object, never in viewer mode): turns the image 90° in place
+    // about its own center, any number of times, in either direction.
+    // Always offered regardless of the current angle -- unlike Bring to
+    // front there's no "already there" state that would make a row do
+    // nothing, a rotated image can always rotate further.
+    if (isRealObject && obj.type === "image" && !obj.locked && !VIEW_ONLY_MODE){
+      popoverRow(wrap, ROTATE_CW_ICON + "<span>Rotate CW</span>", function(){
+        hideLockPopover();
+        rotateImageObject(obj, 1);
+      });
+      popoverRow(wrap, ROTATE_CCW_ICON + "<span>Rotate CCW</span>", function(){
+        hideLockPopover();
+        rotateImageObject(obj, -1);
+      });
+    }
+
     // Icon+label reflect the CURRENT state (closed lock = currently
     // locked) and the label names the action a click performs, same as
     // the toolbar's own lock button.
-    if (isRealObject){
+    if (isRealObject && !VIEW_ONLY_MODE){
       popoverRow(wrap, (obj.locked ? LOCK_ICON_CLOSED : LOCK_ICON_OPEN) + "<span>" + (obj.locked ? "Unlock" : "Lock") + "</span>", function(){
         obj.locked = !obj.locked;
         if (obj.locked){
@@ -5043,10 +5349,16 @@
   function refreshBrandSubtitle(){
     var sub = document.getElementById("brandSubtitle");
     if (!sub) return;
+    // "activeProjectName — " is only prefixed when there actually IS a
+    // known project -- a level opened directly by the viewer's shape-
+    // detection folder-opening (no known parent, see openLevelFromHandle)
+    // leaves activeProjectName empty, and this should read as just the
+    // level's own name rather than a stray leading "— ".
+    var prefix = activeProjectName ? activeProjectName + " — " : "";
     if (activeRoomName){
-      sub.textContent = activeProjectName + " — " + activeLevelName + " — " + activeRoomName;
+      sub.textContent = prefix + activeLevelName + " — " + activeRoomName;
     } else if (activeLevelName){
-      sub.textContent = activeProjectName + " — " + activeLevelName;
+      sub.textContent = prefix + activeLevelName;
     } else {
       sub.textContent = activeProjectName || "plan markup";
     }
@@ -5384,14 +5696,41 @@
       });
     });
   }
+  // Viewer mode asks for "read" permission, never "readwrite" -- on top of
+  // every mutating function already refusing to run (see VIEW_ONLY_MODE),
+  // this means the browser itself would refuse any write attempt that
+  // somehow slipped past those checks, rather than silently allowing one.
   function pickProjectsRootFolder(){
-    return window.showDirectoryPicker({ id: "utzline-projects-root", mode: "readwrite" }).then(function(handle){
-      projectsRootHandle = handle; projectsRootPermissionOK = true; projectsRootName = handle.name;
-      idbSet("projectsRootHandle", handle).catch(function(){});
-      return populateProjectList();
-    }).then(function(){
-      gateListFolderLabel.textContent = "Projects folder: “" + projectsRootName + "”";
-      showGateState("list");
+    return window.showDirectoryPicker({ id: "utzline-projects-root", mode: VIEW_ONLY_MODE ? "read" : "readwrite" }).then(function(handle){
+      // Shape detection: the picked folder doesn't have to actually BE a
+      // projects root -- someone (a drafting-office viewer especially, per
+      // "select that UTZLINE folder to bring in that project") can point
+      // this straight at a single project's own folder, or even one
+      // level's own folder, and land in the right place either way instead
+      // of a confusing or empty list. See detectFolderShape's own comment.
+      return detectFolderShape(handle).then(function(shape){
+        if (shape === "level"){
+          // No known parent project for this pick -- clear both, and any
+          // previously-remembered root too, so the "back to..." buttons
+          // correctly hide rather than pointing at an unrelated project/
+          // root from an earlier pick this session (see openLevelFromHandle
+          // and openProjectFromHandle's own display-toggle comments).
+          projectsRootHandle = null; activeProjectName = ""; activeProjectHandle = null;
+          return openLevelFromHandle(handle, handle.name);
+        }
+        if (shape === "project"){
+          projectsRootHandle = null;
+          return openProjectFromHandle(handle, handle.name);
+        }
+        // "root", "empty", or "unknown" -- the original, most permissive
+        // behavior: treat the picked folder as the projects root itself.
+        projectsRootHandle = handle; projectsRootPermissionOK = true; projectsRootName = handle.name;
+        idbSet("projectsRootHandle", handle).catch(function(){});
+        return populateProjectList().then(function(){
+          gateListFolderLabel.textContent = "Projects folder: “" + projectsRootName + "”";
+          showGateState("list");
+        });
+      });
     });
   }
   /* Chrome only allows showDirectoryPicker() from a same-origin top-level
@@ -5542,10 +5881,15 @@
       if (roomsBtn) roomsBtn.style.display = "none";
       populateLevelList().then(function(){
         gateLevelsLabel.textContent = "“" + activeProjectName + "” — choose a level, or start a new one.";
+        if (backToProjectsBtn) backToProjectsBtn.style.display = projectsRootHandle ? "" : "none";
         showGateState("levels");
       });
     }
-    if (!state.objects.length){ goToGate(); return; }
+    // Nothing can ever be unsaved in viewer mode (Save is unreachable, and
+    // every mutation is already blocked at its own source -- see
+    // VIEW_ONLY_MODE), so the "make sure it's saved first" confirm below
+    // would just be a pointless extra tap on every single navigation.
+    if (VIEW_ONLY_MODE || !state.objects.length){ goToGate(); return; }
     showConfirm("Switch project or level? Make sure this plan is saved first (Save writes straight into “" + activeWorkName() + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
       if (ok) goToGate();
     });
@@ -5569,7 +5913,7 @@
         showGateState("rooms");
       });
     }
-    if (!state.objects.length){ goToGate(); return; }
+    if (VIEW_ONLY_MODE || !state.objects.length){ goToGate(); return; } // see switchProject()'s own comment
     showConfirm("Open this level's rooms? Make sure this plan is saved first (Save writes straight into “" + activeWorkName() + "”'s own folder) if you want to keep your latest changes.").then(function(ok){
       if (ok) goToGate();
     });
@@ -6228,6 +6572,7 @@
   // -- flipping at native resolution never re-encodes it at a distorted
   // aspect ratio.
   function mirrorImageObjectInPlace(obj){
+    if (VIEW_ONLY_MODE) return; // defensive -- the popover's Mirror row is hidden in viewer mode
     loadImageBitmap(obj.src).then(function(img){
       return mirrorImageDataUrl(obj.src, img.naturalWidth, img.naturalHeight);
     }).then(function(flipped){
@@ -6238,6 +6583,22 @@
     }).catch(function(){
       showToast("Couldn't mirror that image — try again.");
     });
+  }
+  // Rotates a single image object 90° clockwise (dir 1) or counterclockwise
+  // (dir -1) in place, about its own center -- the box's on-screen footprint
+  // swaps width/height at 90°/270° (objectBounds handles this generically,
+  // see its own comment) but obj.x/obj.y/obj.w/obj.h themselves are NEVER
+  // touched here, only obj.rot -- every hit-test/handle/render function
+  // that cares about rotation reads obj.rot itself, so this is the only
+  // state that needs to change. Purely synchronous (unlike Mirror, which
+  // has to round-trip the image's pixels through a canvas) and its own
+  // undo step, same as every other popover action.
+  function rotateImageObject(obj, dir){
+    if (VIEW_ONLY_MODE) return; // defensive -- the popover's Rotate rows are hidden in viewer mode
+    if (!obj || obj.type !== "image" || obj.locked) return;
+    obj.rot = ((obj.rot || 0) + (dir > 0 ? 90 : -90) + 360) % 360;
+    pushHistory();
+    renderAll();
   }
 
   // The coordinate-space half of mirrorWholePlan (below) -- reflects one
@@ -6280,6 +6641,17 @@
       else { o.label.x = mx(o.label.x); o.label.rot = -(o.label.rot || 0); }
     } else if (o.type === "rect" || o.type === "image"){
       o.x = W - o.x - o.w;
+      // Deliberately NOT touching a rotated image's own obj.rot here.
+      // Mirroring reflects the plan across a vertical screen axis while
+      // Rotate CW/CCW turns an image about its own center -- composing the
+      // two so a mirror always reads as a clean screen-space left-right
+      // flip of whatever's currently on screen (rotation included) would
+      // need obj.rot adjusted too (reflection and rotation don't commute),
+      // and there's no single obviously-correct adjustment the way negating
+      // a free-angle label's own .rot is for text/callouts above. Left as a
+      // known open question rather than guessed at; an unrotated image
+      // (rot 0, every image before this feature existed) is completely
+      // unaffected either way.
     } else if (o.type === "text"){
       o.x = mx(o.x); o.rot = -(o.rot || 0);
     } else if (o.type === "callout"){
@@ -6304,6 +6676,7 @@
   // all of it together rather than leaving the photo and the objects out
   // of sync partway through.
   function mirrorWholePlan(){
+    if (VIEW_ONLY_MODE) return; // defensive -- the popover's Mirror row is hidden in viewer mode
     var W = state.imageW;
     var imageObjs = state.objects.filter(function(o){ return o.type === "image"; });
     // A tiled base plan (see renderPdfPageGrid) has no single imageDataURL
@@ -6392,6 +6765,7 @@
   pdfPickerBackdrop.addEventListener("click", function(e){ if (e.target === pdfPickerBackdrop) closePdfPicker(null); });
 
   function loadImageFile(file){
+    if (VIEW_ONLY_MODE) return; // defensive -- the Open button is hidden in viewer mode
     if (isPdfFile(file)){
       showToast("Opening PDF…");
       pdfFileToImage(file).then(function(res){
@@ -6497,6 +6871,7 @@
     }
   });
   function insertImageFile(file){
+    if (VIEW_ONLY_MODE) return; // defensive -- Insert image (button and Ctrl+V paste) is hidden/blocked in viewer mode
     if (isPdfFile(file)){
       showToast("Inserting PDF page…");
       pdfFileToImage(file, false).then(function(res){
@@ -6658,6 +7033,21 @@
       var x0 = Math.min(obj.x, obj.x + obj.w), x1 = Math.max(obj.x, obj.x + obj.w);
       var y0 = Math.min(obj.y, obj.y + obj.h), y1 = Math.max(obj.y, obj.y + obj.h);
       pad = haloOuterW(obj.strokeWidth);
+      // A rotated image's on-screen box is its 4 LOCAL corners each rotated
+      // about the center, re-bounded -- at 90/270 this is exactly a width/
+      // height swap, and at 0/180 exactly the unrotated box, but computing
+      // it via the actual corners (rather than special-casing which of
+      // those it is) needs no assumption that rot is always a multiple of
+      // 90 to still be correct.
+      if (obj.type === "image" && obj.rot){
+        var bcx = (x0 + x1) / 2, bcy = (y0 + y1) / 2;
+        var rc = [
+          rotatePoint(x0, y0, bcx, bcy, obj.rot), rotatePoint(x1, y0, bcx, bcy, obj.rot),
+          rotatePoint(x0, y1, bcx, bcy, obj.rot), rotatePoint(x1, y1, bcx, bcy, obj.rot)
+        ];
+        x0 = Math.min(rc[0].x, rc[1].x, rc[2].x, rc[3].x); x1 = Math.max(rc[0].x, rc[1].x, rc[2].x, rc[3].x);
+        y0 = Math.min(rc[0].y, rc[1].y, rc[2].y, rc[3].y); y1 = Math.max(rc[0].y, rc[1].y, rc[2].y, rc[3].y);
+      }
       return { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
     }
     if (obj.type === "line" || obj.type === "dimension"){
@@ -6849,24 +7239,34 @@
             titleText = titleText + "…";
           }
         }
+      } else {
+        // An extremely tight crop (e.g. "current view" zoomed in past the
+        // point where even the floor-sized timestamp/logo block fits
+        // alongside it) leaves no room for a title at all. Omitting it is
+        // far better than the old behavior here, which skipped the whole
+        // shrink/truncate block and rendered the full name at full size --
+        // guaranteed to overlap the timestamp once there's truly no space.
+        titleText = "";
       }
-      var titleEl = el("text", {
-        x: titleX, y: footerMidY,
-        "text-anchor": "start", "dominant-baseline": "middle",
-        // font-weight 500, not 600 -- registerExportFonts() only registers
-        // the app's one embedded weight (500) with jsPDF; svg2pdf.js can't
-        // match anything else against it and silently falls back to a
-        // built-in PDF font (helvetica) instead, which both looks
-        // inconsistent with every other label on the page and isn't
-        // guaranteed to have real IBM Plex Sans glyph metrics. Distinguishing
-        // the title from the timestamp is done with size alone (already
-        // larger, from titleSize above), the same way the rest of this app
-        // never varies font-weight either.
-        "font-family": fontStack("sans"), "font-size": titleSize, "font-weight": 500,
-        fill: "#1b2422"
-      });
-      titleEl.textContent = titleText;
-      clone.appendChild(titleEl);
+      if (titleText){
+        var titleEl = el("text", {
+          x: titleX, y: footerMidY,
+          "text-anchor": "start", "dominant-baseline": "middle",
+          // font-weight 500, not 600 -- registerExportFonts() only registers
+          // the app's one embedded weight (500) with jsPDF; svg2pdf.js can't
+          // match anything else against it and silently falls back to a
+          // built-in PDF font (helvetica) instead, which both looks
+          // inconsistent with every other label on the page and isn't
+          // guaranteed to have real IBM Plex Sans glyph metrics. Distinguishing
+          // the title from the timestamp is done with size alone (already
+          // larger, from titleSize above), the same way the rest of this app
+          // never varies font-weight either.
+          "font-family": fontStack("sans"), "font-size": titleSize, "font-weight": 500,
+          fill: "#1b2422"
+        });
+        titleEl.textContent = titleText;
+        clone.appendChild(titleEl);
+      }
     }
 
     // Logo + save timestamp, bottom-right of the same bar. Used to be a
@@ -7416,16 +7816,36 @@
       x1: (r.width - state.view.tx) / s, y1: (r.height - state.view.ty) / s
     };
   }
-  // Same reserved-footer-strip idea as computeExportBounds, but sized off
-  // this VIEWPORT crop's own width rather than the whole plan's, so the
-  // watermark bar this feeds into addExportOverlays scales sensibly whether
-  // the current view is zoomed in tight on one corner or showing the whole
-  // plan -- see the "current view" share note this was built to fix (it
-  // used to carry no branding/name/timestamp at all).
+  // Same reserved-footer-strip idea as computeExportBounds, but this one
+  // must NOT reuse that function's contentW-proportional sizing (wmSize =
+  // clamp(contentW * 0.044, 44, 128)) -- that ratio only looks right for
+  // computeExportBounds because a whole plan is always big enough (many
+  // thousands of world units wide) to land on the 128 ceiling, so the 0.044
+  // ratio never actually drives the result there. A "current view" crop is
+  // usually just an ordinary screen/window width at typical zoom (a few
+  // hundred to a couple thousand world units) -- nowhere near that ceiling
+  // -- so the same ratio let the fixed-length save-timestamp text swallow
+  // most of the bar and left almost nothing for the title: exactly the
+  // over-truncated-title-with-a-large-empty-gap bug reported against this
+  // path (confirmed by reproducing it -- at a plain 1:1 view the title
+  // truncated to a couple of characters while roughly 60% of the bar's
+  // width sat empty). Sizing instead off the PHYSICAL viewport's own
+  // width (svgRoot's on-screen CSS width * device pixel ratio) -- which
+  // does NOT change as the user zooms/pans the plan, only if they resize
+  // their window -- and converting that fixed pixel target back into this
+  // crop's world units via density (world-units-per-pixel = 1/(dpr*scale))
+  // keeps the bar reading at a constant, sensible size in the shared image
+  // regardless of how zoomed in the current view happens to be. Clamped to
+  // the same 44-128 world-unit range addExportOverlays' own internal
+  // sizing (titleSize, floorSize) already assumes.
   function computeViewSnapshotBounds(){
     var cb = computeViewportWorldBounds();
     var contentW = cb.x1 - cb.x0;
-    var wmSize = clamp(contentW * 0.044, 44, 128);
+    var r = svgRoot.getBoundingClientRect();
+    var dpr = clamp(window.devicePixelRatio || 1, 1, 3);
+    var density = contentW > 0 ? (r.width * dpr) / contentW : dpr; // = dpr * state.view.scale
+    var desiredPxSize = clamp(r.width * dpr * 0.028, 28, 64);
+    var wmSize = clamp(density > 0 ? desiredPxSize / density : 44, 44, 128);
     var footerH = Math.round(wmSize * 3.6);
     return { x0: cb.x0, y0: cb.y0, x1: cb.x1, y1: cb.y1 + footerH, wmSize: wmSize, contentY1: cb.y1 };
   }
@@ -7600,6 +8020,10 @@
         delete o.d1; delete o.d2; delete o.d1Auto; delete o.d2Auto;
         delete o.capLen1; delete o.capLen2;
       }
+      // migrate images saved before Rotate CW/CCW existed -- every image
+      // from here on always has a real numeric .rot, so nothing downstream
+      // needs its own "|| 0" fallback for a field that might not exist yet.
+      if (o.type === "image" && typeof o.rot !== "number") o.rot = 0;
     });
     state.nextId = 1 + state.objects.reduce(function(m, o){ return Math.max(m, parseInt((o.id||"o0").slice(1), 10) || 0); }, 0);
     state.selectedId = null;
@@ -7701,7 +8125,22 @@
     openProjectInput.value = "";
   });
 
+  // Viewer mode's own visible marker -- the body class does the actual
+  // work (see the .viewer-mode CSS above), this just makes it obvious at a
+  // glance (brand name in the toolbar, and the browser/PWA tab/window
+  // title) which build is running, since it's otherwise the exact same app
+  // either way. Pulled out of boot() so the test-only setViewOnlyModeForTest
+  // hook can apply the exact same visible effects as a real launch when it
+  // flips the flag mid-session, instead of the two ways of entering viewer
+  // mode silently drifting apart.
+  function applyViewOnlyModeUI(){
+    document.body.classList.toggle("viewer-mode", VIEW_ONLY_MODE);
+    var brandNameEl = document.getElementById("brandName");
+    if (brandNameEl) brandNameEl.textContent = VIEW_ONLY_MODE ? "UTZLINE Viewer" : "UTZLINE Site Measure";
+    document.title = VIEW_ONLY_MODE ? "UTZLINE Viewer" : document.title;
+  }
   function boot(){
+    applyViewOnlyModeUI();
     // Tag the version onto the quick-help tip (reachable on every screen
     // size via the "?" button, unlike the .brand subtitle which is hidden
     // on phone widths) so it's always possible to eyeball which build is
