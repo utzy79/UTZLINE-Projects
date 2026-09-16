@@ -39,14 +39,14 @@ convention as the editor's).
 
 ## Getting this installed as its own Windows app
 
-The simplest way to make this genuinely a *separate* installable app —
-without standing up a whole second GitHub repo — is to host it as a
-**subfolder of the same GitHub Pages site** the editor already uses:
+Settled (2026-09-16): this lives as a **subfolder of the same GitHub
+Pages site** the editor uses — one repo, two separately-installable
+apps — rather than a second repo:
 
-1. In the existing `UTZLINE-Projects` repo (the one
-   `redline-projects-pwa/` is uploaded to), add everything from *this*
-   folder under a new subfolder, e.g. `viewer/` — so it ends up live at
-   `https://utzy79.github.io/UTZLINE-Projects/viewer/`. Keep the
+1. In the `UTZLINE-Site-Measure` repo (the one `redline-projects-pwa/`
+   is uploaded to, at its root), add everything from *this* folder
+   under a `viewer/` subfolder — so it ends up live at
+   `https://utzy79.github.io/UTZLINE-Site-Measure/viewer/`. Keep the
    `icons/` folder structure intact, same as the main app.
 2. Open that URL once in a normal browser tab while online (to let the
    service worker cache it for offline use).
@@ -56,12 +56,6 @@ without standing up a whole second GitHub repo — is to host it as a
    own `manifest.json` (different `name`/`start_url`/icons), Chrome and
    Windows treat it as a wholly separate app from "UTZLINE Site
    Measure" — its own tile/shortcut, its own icon, its own window.
-
-A different subpath is enough for this; it doesn't need its own domain
-or its own GitHub repo. (It *could* live in its own repo instead, the
-same way the main app's own README describes setting one up from
-scratch, if that's ever preferred — nothing here depends on which one
-you pick.)
 
 ## Updating this app
 

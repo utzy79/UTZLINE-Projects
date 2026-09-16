@@ -16,10 +16,19 @@ on the Windows taskbar/Start menu/desktop -- a drafting-office viewer who
 should never be able to edit a plan installs ONLY this one and never even
 sees the main app's editing toolbar.
 
-The only functional difference this build script's OUTPUT has from the main
-app's is manifest.json's start_url carrying "?viewer=1" -- that's what
-switches VIEW_ONLY_MODE on at boot for every launch of this installed app.
-Everything else below mirrors redline-projects-pwa/build.py step for step;
+This build hard-codes `VIEW_ONLY_MODE = true` in its OUTPUT (step 1a below)
+-- it does NOT rely on manifest.json's start_url "?viewer=1" query string
+alone. That query string still matters for a *installed* launch (Windows
+passes it straight through), but a bare visit to this app's URL in an
+ordinary browser tab -- exactly what step 2 of this app's own README asks
+you to do once, to let the service worker cache it -- has no query string
+at all, so relying only on the URL flag left that bare visit rendering the
+FULL EDITABLE APP (same toolbar, same orange branding) with no read-only
+lock whatsoever. Hard-coding the flag in this bundle's own index.html means
+every possible way of reaching this app -- the bare URL, a bookmark, a
+shared link, the installed PWA's start_url, anything -- is read-only,
+because it's now a property of the bundle, not of how it happened to be
+opened. Everything else below mirrors redline-projects-pwa/build.py step for step;
 see that script's own top-of-file comment for the full rationale behind
 each step (vendoring CDN scripts, local fonts, wrapping in a full document,
 the icon/manifest cache-busting query strings).
@@ -38,6 +47,10 @@ OUT = Path(__file__).parent / "index.html"
 MANIFEST = Path(__file__).parent / "manifest.json"
 
 APP_VERSION_RE = re.compile(r'var APP_VERSION = "(v\d+)"')
+
+VIEW_ONLY_MODE_RE = re.compile(
+    r'var VIEW_ONLY_MODE = /\[\?&\]viewer=1\(&\|\$\)/\.test\(location\.search\);'
+)
 
 CDN_REPLACEMENTS = [
     (
@@ -118,6 +131,18 @@ def build():
         if remote not in html:
             sys.exit(f"Expected CDN URL not found in source.html: {remote}")
         html = html.replace(remote, local)
+
+    # 1a. Force read-only mode unconditionally in THIS bundle -- see the
+    #     top-of-file comment for why this can't be left to the URL's query
+    #     string alone. Only this build does this; the editor's build.py
+    #     leaves the shared source's own line untouched.
+    if not VIEW_ONLY_MODE_RE.search(html):
+        sys.exit(
+            "Could not find the expected `var VIEW_ONLY_MODE = ...` line in "
+            "source.html -- it may have changed shape; check this script's "
+            "assumptions before proceeding."
+        )
+    html = VIEW_ONLY_MODE_RE.sub("var VIEW_ONLY_MODE = true;", html, count=1)
 
     # 2. Swap the Google Fonts <link> for local @font-face rules.
     if not GOOGLE_FONTS_LINK_RE.search(html):
