@@ -208,7 +208,45 @@
 // timestamp and shrinks to fit, only truncating with an ellipsis as a last
 // resort for a name that still wouldn't fit even then -- it no longer
 // overlaps anything.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v15";
+// (v16: fixes "images are unreadable" in an exported PDF -- a pasted-in
+// reference photo used to be flattened into the same shared page-wide
+// canvas as the base plan, so it only ever got as many pixels as its tiny
+// printed footprint at the page's overall resolution, no matter how many
+// megapixels the original camera photo had. Each reference photo is now
+// embedded as its own separate image at its real native resolution
+// (capped generously just for file size), so zooming into one in a PDF
+// viewer now shows genuine extra detail instead of the same blur no matter
+// how far you zoom. The base plan itself is unaffected.)
+//
+// (v17: a batch of smaller fixes/requests. Enter in a text/dimension/
+// callout label now always inserts a newline (no modifier needed) instead
+// of committing -- Shift+Enter already did this but is impossible to
+// trigger on a touch keyboard, which is exactly why it "didn't work" on a
+// tablet; Escape/tapping away still commits. Inserting or pasting in a
+// photo now opens a quick crop step first (drag to adjust, or skip for the
+// full photo), and a fresh photo now lands one layer below existing
+// annotations by default, with a "Bring to front" option in its
+// lock/mirror popover if you need it on top. The Layers panel's Delete
+// button is gone (Delete still works from the properties panel, the
+// popover, or the Delete/Backspace key) so an accidental tap there can't
+// remove something by mistake. A dimension's "Label side" control is now a
+// one-tap Top/Bottom (or Left/Right) button instead of a dropdown.
+// Imported photos can now have an optional coloured border (a swatch row
+// in the properties panel, off by default) layered on top of the existing
+// white/black halo, and plain Text objects can now optionally get the same
+// border-and-background box a Callout always has (also off by default).
+// Manually dragging a dimension's label off its default spot and then
+// later stretching the line no longer strands the label in its old
+// position -- it now follows the line's centre by a fixed offset, without
+// rotating or resizing with it. A new toolbar toggle snaps new/stretched
+// dimension, line and angle legs to level/plumb without needing to hold
+// Shift, for tablet/mobile use. Auto-backup for an open project/level now
+// writes real rolling timestamped snapshots into that level's own new
+// "backup" folder (a sibling of its saves/pdfs folders), capped to the 10
+// most recent, instead of just re-saving the same file with no history --
+// and the auto-backup toggle's tooltip now shows the last backup's date
+// and time on hover.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v17";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

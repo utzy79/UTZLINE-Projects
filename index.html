@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v15">
+<link rel="manifest" href="./manifest.json?v=v17">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v15">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v15">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v17">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v17">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -323,6 +323,19 @@
     font-family:inherit; font-size:11.5px; padding:3px 4px; border-radius:5px;
     border:1px solid var(--border-strong); background:var(--surface-0); color:var(--text-primary);
   }
+  /* ---------- 2-way segmented button (replaces a plain <select> wherever
+     there are only ever two mutually-exclusive choices -- one tap picks it
+     directly instead of opening a dropdown first) ---------- */
+  .seg-group{
+    display:flex; border:1px solid var(--border-strong); border-radius:5px; overflow:hidden;
+  }
+  .seg-btn{
+    font:inherit; font-family:inherit; font-size:11.5px; padding:3px 9px;
+    border:none; background:var(--surface-0); color:var(--text-primary); cursor:pointer;
+  }
+  .seg-btn + .seg-btn{ border-left:1px solid var(--border-strong); }
+  .seg-btn:hover{ background:var(--surface-2); }
+  .seg-btn.active{ background:var(--accent); color:#fff; }
   .panel-actions{display:flex; gap:6px; margin-top:2px;}
   .panel-actions .ibtn{border:1px solid var(--border-strong); background:var(--surface-0);}
   .panel-actions .ibtn.danger:hover{background:var(--accent-soft); color:var(--accent-ink); border-color:var(--accent);}
@@ -437,6 +450,26 @@
     background:var(--surface-0); color:var(--text-primary);
   }
   .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
+  /* ---------- crop-before-insert dialog ---------- */
+  .crop-box{ max-width:min(92vw, 600px); }
+  .crop-stage{
+    position:relative; display:flex; align-items:center; justify-content:center;
+    max-height:60vh; margin-bottom:16px; background:#000; border-radius:6px; overflow:hidden;
+    touch-action:none; user-select:none;
+  }
+  .crop-stage img{ display:block; max-width:100%; max-height:60vh; width:auto; height:auto; }
+  .crop-rect{
+    position:absolute; border:2px dashed #fff; box-sizing:border-box; cursor:move;
+    box-shadow:0 0 0 2000px rgba(0,0,0,.5);
+  }
+  .crop-handle{
+    position:absolute; width:18px; height:18px; margin:-9px; background:#fff;
+    border:2px solid var(--focus); border-radius:50%; touch-action:none;
+  }
+  .crop-handle[data-corner="nw"]{ left:0; top:0; cursor:nwse-resize; }
+  .crop-handle[data-corner="ne"]{ left:100%; top:0; cursor:nesw-resize; }
+  .crop-handle[data-corner="sw"]{ left:0; top:100%; cursor:nesw-resize; }
+  .crop-handle[data-corner="se"]{ left:100%; top:100%; cursor:nwse-resize; }
   .mbtn{
     font:inherit; font-size:12.5px; padding:7px 13px; border-radius:6px; cursor:pointer;
     border:1px solid var(--border-strong); background:var(--surface-2); color:var(--text-primary);
@@ -682,6 +715,9 @@
       <button class="ibtn" id="snapGridBtn" title="Snap to grid — new points, moved endpoints and corners snap to an evenly spaced grid" aria-label="Toggle snap to grid">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3h4.7v4.7H3zM7.7 3v0M12.3 3h4.7v4.7h-4.7zM3 7.7v4.6M3 12.3h4.7V17H3zM7.7 12.3V17M12.3 12.3h4.7V17h-4.7zM12.3 7.7V17M3 7.7h14M7.7 3v14"/></svg>
       </button>
+      <button class="ibtn" id="snapHVBtn" title="Snap to horizontal / vertical — new and stretched dimension, line and angle legs lock to perfectly level or plumb, same as holding Shift" aria-label="Toggle snap to horizontal or vertical">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 10h14M10 3v14"/></svg>
+      </button>
       <button class="ibtn" id="layersBtn" title="Show all objects on this plan" aria-label="Toggle layers list">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M10 3l7 4-7 4-7-4z"/><path d="M3 11l7 4 7-4"/></svg>
       </button>
@@ -912,6 +948,25 @@
       </div>
     </div>
 
+    <div class="modal-backdrop" id="cropBackdrop" hidden>
+      <div class="modal-box crop-box" role="dialog" aria-modal="true" aria-labelledby="cropLabel">
+        <p id="cropLabel">Crop this photo before it's added — drag the corners or edges, or skip to use it as-is:</p>
+        <div class="crop-stage" id="cropStage">
+          <img id="cropImg" alt="">
+          <div class="crop-rect" id="cropRectEl">
+            <div class="crop-handle" data-corner="nw"></div>
+            <div class="crop-handle" data-corner="ne"></div>
+            <div class="crop-handle" data-corner="sw"></div>
+            <div class="crop-handle" data-corner="se"></div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="mbtn" id="cropSkipBtn">Use full photo</button>
+          <button class="mbtn mbtn-accent" id="cropApplyBtn">Crop</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-backdrop" id="renameBackdrop" hidden>
       <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="renameLabel">
         <p id="renameLabel">Name this plan — used for Save, Save PDF, Share and auto-backup:</p>
@@ -965,7 +1020,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v15";
+  var APP_VERSION = "v17";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1548,6 +1603,32 @@
   try{ var storedInt = parseInt(localStorage.getItem("redline_autobackup_interval"), 10); if (storedInt) autoBackupIntervalMin = clamp(storedInt, AUTOBACKUP_MIN_INTERVAL_MIN, AUTOBACKUP_MAX_INTERVAL_MIN); }catch(e){}
   var backupDirty = false;
   var lastBackupAt = 0;
+  // Distinct from lastBackupAt above (which marks the start of an ATTEMPT,
+  // purely to throttle how often maybeAutoBackup fires again) -- this is
+  // only ever set once a backup has actually, verifiably finished, and is
+  // what the auto-backup toggle's own tooltip (see updateAutoBackupTooltip)
+  // reports as "last backup". Persisted so the tooltip still shows the real
+  // last backup time after a reload, rather than resetting to "never".
+  var lastBackupSuccessAt = 0;
+  try{ var storedLBS = parseInt(localStorage.getItem("redline_last_backup_success_at"), 10); if (storedLBS) lastBackupSuccessAt = storedLBS; }catch(e){}
+  function markBackupSucceeded(){
+    lastBackupSuccessAt = Date.now();
+    try{ localStorage.setItem("redline_last_backup_success_at", String(lastBackupSuccessAt)); }catch(e){}
+    updateAutoBackupTooltip();
+  }
+  // Deterministic, locale-independent formatting (same zero-padded style
+  // autoBackupFilename already uses) rather than toLocaleString -- keeps
+  // this readable and testable without depending on the browser/OS locale.
+  function formatBackupTimestamp(ts){
+    var d = new Date(ts);
+    var pad = function(n){ return String(n).padStart(2, "0"); };
+    return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+  function updateAutoBackupTooltip(){
+    if (!autoBackupLabel) return;
+    var suffix = lastBackupSuccessAt ? ("Last backup: " + formatBackupTimestamp(lastBackupSuccessAt)) : "No backups yet.";
+    autoBackupLabel.title = autoBackupLabelBaseTitle + " — " + suffix;
+  }
   var autoBackupOn = true;
   try{ var storedAB = localStorage.getItem("redline_autobackup"); if (storedAB !== null) autoBackupOn = storedAB === "1"; }catch(e){}
   // Locking just disables the checkbox/interval controls so a stray tap on
@@ -1696,17 +1777,20 @@
     lastBackupAt = Date.now();
     // A level being open (see the per-project-folders section further down)
     // always wins over the generic destinations below -- there's a
-    // specific, already-known-good place for this plan's own file, so
-    // auto-backup just keeps THAT file current instead of also scattering
-    // timestamped copies into a claude.ai downloads bridge or a separately-
-    // chosen generic backup folder. Deliberately JSON-only here (unlike a
-    // manual Save, which also drops a PDF) -- this fires as often as every
-    // 30 seconds, and a fresh PDF render on every tick would both be
-    // wasteful and flood the pdfs folder with near-duplicates.
+    // specific, already-known-good place for this plan's backups, so
+    // auto-backup writes a real rolling snapshot into that level/room's own
+    // backup/ folder (see writeLevelBackupSnapshot) instead of also
+    // scattering copies into a claude.ai downloads bridge or a separately-
+    // chosen generic backup folder. The level's own canonical save file is
+    // kept fresh alongside it, same as before, so "resume where I left off"
+    // and "a real history of snapshots to fall back to" both stay covered.
     if (activeLevelSavesHandle){
       saveActiveLevelFile().then(function(){
+        return writeLevelBackupSnapshot();
+      }).then(function(){
         showToast("Backed up.");
         autoBackupFailWarned = false;
+        markBackupSucceeded();
       }).catch(function(err){
         backupDirty = true; // retry on the next tick
         warnAutoBackupFail();
@@ -1717,7 +1801,7 @@
       renderExportBlob().then(function(blob){
         return downloadsApi.save({ filename: autoBackupFilename(), data: blob });
       }).then(function(res){
-        if (res && res.status === "saved"){ showToast("Backed up."); autoBackupFailWarned = false; }
+        if (res && res.status === "saved"){ showToast("Backed up."); autoBackupFailWarned = false; markBackupSucceeded(); }
       }).catch(function(){
         backupDirty = true; // retry on the next tick
         warnAutoBackupFail();
@@ -1748,6 +1832,7 @@
       }).then(function(){
         showToast("Backed up.");
         autoBackupFailWarned = false;
+        markBackupSucceeded();
       }).catch(function(err){
         backupDirty = true; // retry on the next tick
         if (err && err.code === "permission_lost"){
@@ -1780,12 +1865,113 @@
       browserDownloadBlob(jsonBlob2, autoBackupProjectFilename());
       showToast("Backed up.");
       autoBackupFailWarned = false;
+      markBackupSucceeded();
     }).catch(function(){
       backupDirty = true; // retry on the next tick
       warnAutoBackupFail();
     });
   }
   setInterval(maybeAutoBackup, 30 * 1000);
+
+  /* ============================== per-level backup snapshots ==============================
+     Redesign of the per-level auto-backup path above: that branch used to
+     just re-save the level's OWN save file on every tick -- functionally
+     identical to a plain Save, with no history at all, so a bad edit
+     overwriting good work was never actually recoverable from auto-backup
+     once a project/level was in use (only the generic downloads-api/folder/
+     plain-download paths, for someone NOT using a level, ever produced a
+     real point-in-time copy). This gives every level (and room) its own
+     "backup" folder, a sibling of its existing "saves" and "pdfs" folders
+     (see ensureWorkFolders), and writes a real timestamped PNG+project-file
+     snapshot into it -- capped to the most recent LEVEL_BACKUP_MAX_SNAPSHOTS,
+     so the folder never grows without bound. */
+  var LEVEL_BACKUP_MAX_SNAPSHOTS = 10;
+  // A shared stem for one snapshot's PNG+JSON pair -- the same zero-padded
+  // date/time shape as autoBackupFilename, so pairs sort chronologically as
+  // plain strings and pruning can tell "this level's own snapshots" apart
+  // from anything else someone might drop into that folder by hand.
+  function backupSnapshotStem(){
+    var d = new Date();
+    var pad = function(n){ return String(n).padStart(2, "0"); };
+    var datePart = d.getFullYear() + "_" + pad(d.getMonth() + 1) + "_" + pad(d.getDate());
+    // Milliseconds too (pad3), not just h/m/s -- auto-backup itself only
+    // ever fires minutes apart, but this keeps two snapshots from ever
+    // silently colliding on the same stem (and overwriting one another)
+    // if writeLevelBackupSnapshot is ever called more than once inside the
+    // same second, e.g. from a script or a test.
+    var pad3 = function(n){ return String(n).padStart(3, "0"); };
+    var timePart = pad(d.getHours()) + "-" + pad(d.getMinutes()) + "-" + pad(d.getSeconds()) + "-" + pad3(d.getMilliseconds());
+    return sanitizeFileBase(state.fileBase || "plan") + "_backup_" + datePart + "_" + timePart;
+  }
+  // Same shape as listSubdirNames further down, but for FILES rather than
+  // subdirectories -- used only for pruning a backup folder's own contents.
+  function listFileNames(dirHandle){
+    if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
+    var names = [];
+    var iter = dirHandle.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return names;
+        if (res.value && res.value.kind === "file") names.push(res.value.name);
+        return step();
+      });
+    }
+    return step();
+  }
+  // Prunes a level/room's backup/ folder down to the most recent N
+  // snapshots. Groups files by their shared stem (see backupSnapshotStem)
+  // rather than just counting files, so a prune never leaves an orphaned
+  // PNG with no matching project file (or vice versa) -- the two always go
+  // together. Stems sort correctly as plain strings because the embedded
+  // date/time is already zero-padded, so the lexically-last N stems really
+  // are the N most recent snapshots. Anything in the folder that doesn't
+  // match this app's own naming (a file someone dropped in by hand) is left
+  // alone rather than risk deleting something that isn't ours.
+  function pruneLevelBackups(backupsHandle){
+    return listFileNames(backupsHandle).then(function(names){
+      var stems = {};
+      names.forEach(function(n){
+        var stem = n.replace(/\.(png|utzline\.json)$/i, "");
+        if (stem === n) return;
+        (stems[stem] = stems[stem] || []).push(n);
+      });
+      var stemList = Object.keys(stems).sort();
+      var excess = stemList.length - LEVEL_BACKUP_MAX_SNAPSHOTS;
+      if (excess <= 0) return;
+      var removals = [];
+      stemList.slice(0, excess).forEach(function(stem){
+        stems[stem].forEach(function(fn){
+          removals.push(backupsHandle.removeEntry(fn).catch(function(){}));
+        });
+      });
+      return Promise.all(removals);
+    });
+  }
+  // Writes one rolling snapshot (flattened PNG + the actual editable project
+  // file, same pairing the generic canFolder path below already uses) into
+  // the active level/room's OWN backup/ folder, then prunes it back down to
+  // the cap. Rejects the same way writeBlobToBackupDir's callers expect
+  // (a plain error, or {code:"no_level"} if nothing's open) so
+  // maybeAutoBackup's existing retry/warning handling covers it unchanged.
+  function writeLevelBackupSnapshot(){
+    var backupsHandle = activeWorkBackupsHandle();
+    if (!backupsHandle) return Promise.reject({ code: "no_level" });
+    var stem = backupSnapshotStem();
+    var jsonBlob;
+    try{ jsonBlob = new Blob([JSON.stringify(projectPayload())], { type: "application/json" }); }
+    catch(e){ return Promise.reject(e); }
+    return renderExportBlob().then(function(pngBlob){
+      return backupsHandle.getFileHandle(stem + ".png", { create: true }).then(function(fh){
+        return verifiedHandleWrite(fh, pngBlob);
+      });
+    }).then(function(){
+      return backupsHandle.getFileHandle(stem + ".utzline.json", { create: true });
+    }).then(function(fh){
+      return verifiedHandleWrite(fh, jsonBlob);
+    }).then(function(){
+      return pruneLevelBackups(backupsHandle);
+    });
+  }
 
   /* ============================== per-project folders ==============================
      The per-project folder system (formerly the thing that set the
@@ -1836,6 +2022,7 @@
   var activeLevelHandle = null;
   var activeLevelSavesHandle = null;
   var activeLevelPdfsHandle = null;
+  var activeLevelBackupsHandle = null;
 
   // A level's own folder can optionally hold ROOMS one folder deeper still --
   // project / level / room -- each a fully independent mini-plan (its own
@@ -1852,6 +2039,7 @@
   var activeRoomHandle = null;
   var activeRoomSavesHandle = null;
   var activeRoomPdfsHandle = null;
+  var activeRoomBackupsHandle = null;
 
   // Whichever of "this level's own plan" or "a room inside it" is actually
   // open right now is what every Save/PDF/auto-backup/autosave call should
@@ -1862,6 +2050,7 @@
   // internals beyond this.
   function activeWorkSavesHandle(){ return activeRoomSavesHandle || activeLevelSavesHandle; }
   function activeWorkPdfsHandle(){ return activeRoomPdfsHandle || activeLevelPdfsHandle; }
+  function activeWorkBackupsHandle(){ return activeRoomBackupsHandle || activeLevelBackupsHandle; }
   function activeWorkName(){ return activeRoomName || activeLevelName; }
 
   function projectSaveFilename(name){ return sanitizeFileBase(name) + ".utzline.json"; }
@@ -1869,7 +2058,9 @@
   function ensureWorkFolders(dirHandle){
     return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
       return dirHandle.getDirectoryHandle("pdfs", { create: true }).then(function(pdfsH){
-        return { savesHandle: savesH, pdfsHandle: pdfsH };
+        return dirHandle.getDirectoryHandle("backup", { create: true }).then(function(backupH){
+          return { savesHandle: savesH, pdfsHandle: pdfsH, backupsHandle: backupH };
+        });
       });
     });
   }
@@ -1951,7 +2142,7 @@
     // visit so a stray activeRoom* handle can't silently redirect this
     // level's own Save/PDF/autosave into the wrong folder.
     activeRoomName = ""; activeRoomHandle = null;
-    activeRoomSavesHandle = null; activeRoomPdfsHandle = null;
+    activeRoomSavesHandle = null; activeRoomPdfsHandle = null; activeRoomBackupsHandle = null;
     return activeProjectHandle.getDirectoryHandle(name, { create: true }).then(function(dirH){
       activeLevelHandle = dirH;
       return ensureWorkFolders(dirH);
@@ -1959,6 +2150,7 @@
       activeLevelName = name;
       activeLevelSavesHandle = subs.savesHandle;
       activeLevelPdfsHandle = subs.pdfsHandle;
+      activeLevelBackupsHandle = subs.backupsHandle;
       return activeLevelSavesHandle.getFileHandle(projectSaveFilename(name)).then(function(fh){
         return fh.getFile();
       }).then(function(file){
@@ -2015,7 +2207,7 @@
   // exclude those two by name so they never show up mislabeled as rooms.
   function listExistingRooms(){
     return listSubdirNames(activeLevelHandle).then(function(names){
-      return names.filter(function(n){ return n !== "saves" && n !== "pdfs"; });
+      return names.filter(function(n){ return n !== "saves" && n !== "pdfs" && n !== "backup"; });
     });
   }
 
@@ -2033,6 +2225,7 @@
       activeRoomName = name;
       activeRoomSavesHandle = subs.savesHandle;
       activeRoomPdfsHandle = subs.pdfsHandle;
+      activeRoomBackupsHandle = subs.backupsHandle;
       return activeRoomSavesHandle.getFileHandle(projectSaveFilename(name)).then(function(fh){
         return fh.getFile();
       }).then(function(file){
@@ -2388,6 +2581,7 @@
       delete state.style.color;
     }
     if (state.style.snapToGrid === undefined) state.style.snapToGrid = false;
+    if (state.style.hvSnap === undefined) state.style.hvSnap = false;
     return state.style;
   }
   // A "nice" grid spacing (1/2/5 x a power of ten, same rounding a chart's
@@ -2499,6 +2693,33 @@
       return end === 1 ? dop.p1 : dop.p2;
     }
     return end === 1 ? { x: obj.x1, y: obj.y1 } : { x: obj.x2, y: obj.y2 };
+  }
+  // The visible line's own midpoint (accounting for lineOffset, same as
+  // repositionDimensionLabel) -- the fixed reference point a manually
+  // positioned label's offset is measured from. Takes any object shaped
+  // like a dimension (x1/y1/x2/y2[/lineOffset]), including a drag-start
+  // snapshot clone, not just a live object.
+  function dimensionMidpoint(obj){
+    var dop = dimensionOffsetPoints(obj);
+    return { x: (dop.p1.x + dop.p2.x) / 2, y: (dop.p1.y + dop.p2.y) / 2 };
+  }
+  // When a dimension's label has been manually dragged off its default spot
+  // (label.autoPos false) and the line is then stretched via one of its
+  // endpoint handles, the label should stay put RELATIVE to the line --
+  // tracking its centre by a fixed x/y offset -- rather than being left
+  // stranded at its old absolute position. `startSnapshot` is the object as
+  // it was at the start of this drag gesture (dm.start): since only the
+  // dragged endpoint has moved since then, the offset the user actually set
+  // is simply (old label position) minus (old midpoint), and reapplying that
+  // same offset to the new midpoint keeps the label locked to the line
+  // without rotating or scaling with it.
+  function keepDimensionLabelOffset(obj, startSnapshot){
+    var startMid = dimensionMidpoint(startSnapshot);
+    var offX = startSnapshot.label.x - startMid.x;
+    var offY = startSnapshot.label.y - startMid.y;
+    var newMid = dimensionMidpoint(obj);
+    obj.label.x = newMid.x + offX;
+    obj.label.y = newMid.y + offY;
   }
   function repositionDimensionLabel(obj){
     var label = obj.label;
@@ -2612,11 +2833,23 @@
   // freely moved/resized like a rect. strokeWidth here only sizes its thin
   // border, same idea as every other object's halo outline; there's no
   // "color" since there's nothing to tint, the image IS the content.
+  // borderColor is separate and optional (null by default, meaning "just
+  // the neutral halo, same as before this existed") -- real report: the
+  // border on an imported image's colour should be changeable. Layered ON
+  // TOP of the halo rather than replacing it (see the image branch of
+  // renderObject), the same way a rect's own colored stroke already sits
+  // on top of ITS halo -- so a colour choice still reads clearly over a
+  // busy plan or another photo behind it, it just isn't stuck as neutral
+  // white/black anymore.
   function makeImage(x, y, w, h, src){
-    return { id: uid(), type: "image", x: x, y: y, w: w, h: h, src: src, strokeWidth: defaultStroke() };
+    return { id: uid(), type: "image", x: x, y: y, w: w, h: h, src: src, strokeWidth: defaultStroke(), borderColor: null };
   }
+  // box (off by default) is the real report's "border and background like
+  // Callout" -- optional here rather than forced on the way it is for a
+  // callout, since plain text is just as often a bare floating label as a
+  // boxed note (see the obj.box branch of renderObject/objectBounds).
   function makeText(x, y, color){
-    return { id: uid(), type: "text", x: x, y: y, rot: 0, fontSize: defaultFontSize(), text: "", color: color || defaultColorFor("text"), family: "sans" };
+    return { id: uid(), type: "text", x: x, y: y, rot: 0, fontSize: defaultFontSize(), text: "", color: color || defaultColorFor("text"), family: "sans", box: false };
   }
   function makeCallout(ax, ay, color){
     var c = color || defaultColorFor("callout");
@@ -2833,7 +3066,35 @@
       var imgBorderSw = Math.max(1, obj.strokeWidth * 0.5);
       g.appendChild(el("rect", { x: imx, y: imy, width: imw, height: imh, fill: "none", stroke: "#ffffff", "stroke-width": haloOuterW(imgBorderSw) }));
       g.appendChild(el("rect", { x: imx, y: imy, width: imw, height: imh, fill: "none", stroke: "#000000", "stroke-width": haloW(imgBorderSw) }));
+      // Optional colored border, layered on top of the halo above -- off
+      // (no extra rect at all) unless the user has actually picked one.
+      if (obj.borderColor){
+        g.appendChild(el("rect", { x: imx, y: imy, width: imw, height: imh, fill: "none", stroke: obj.borderColor, "stroke-width": imgBorderSw }));
+      }
     } else if (obj.type === "text"){
+      // Real report: Text objects should be able to have a border and
+      // background, the same way Callout labels already do -- optional
+      // (obj.box, off by default -- see makeText) rather than forced on
+      // every text object the way it is for a callout, since a callout's
+      // whole visual language IS a boxed note pointing at something, while
+      // plain text is just as often a bare label floating over the plan.
+      // Same box-around-the-text geometry and halo-then-color layering as
+      // the callout box just below, minus the leader line/anchor dot a
+      // callout also has (a plain text object was never anchored to a
+      // point the way a callout is).
+      if (obj.box){
+        var tw = textWidth(obj.text, obj.fontSize, obj.family), th = textHeight(obj.text, obj.fontSize);
+        var thbw = tw / 2 + obj.fontSize * 0.35, thbh = th / 2 + obj.fontSize * 0.35;
+        // Text objects have no strokeWidth of their own (there's never been
+        // a line to weight) -- scaled from fontSize instead, same relative
+        // thickness a callout's own box border ends up at in practice.
+        var tBoxSw = Math.max(1, obj.fontSize * 0.09);
+        var tBoxX = obj.x - thbw, tBoxY = obj.y - thbh, tBoxW = thbw * 2, tBoxH = thbh * 2;
+        var tBoxRot = "rotate(" + obj.rot + " " + obj.x + " " + obj.y + ")";
+        g.appendChild(el("rect", { x: tBoxX, y: tBoxY, width: tBoxW, height: tBoxH, transform: tBoxRot, fill: "none", stroke: "#ffffff", "stroke-width": haloOuterW(tBoxSw) }));
+        g.appendChild(el("rect", { x: tBoxX, y: tBoxY, width: tBoxW, height: tBoxH, transform: tBoxRot, fill: "#ffffff", stroke: "#000000", "stroke-width": haloW(tBoxSw) }));
+        g.appendChild(el("rect", { x: tBoxX, y: tBoxY, width: tBoxW, height: tBoxH, transform: tBoxRot, fill: "none", stroke: obj.color, "stroke-width": tBoxSw }));
+      }
       g.appendChild(renderLabelGroup({ text: obj.text, x: obj.x, y: obj.y, rot: obj.rot, fontSize: obj.fontSize, family: obj.family, color: obj.color }, "label"));
     } else if (obj.type === "callout"){
       var lb = obj.label;
@@ -3377,7 +3638,7 @@
         return;
       }
       var gwp = snapWorldPoint(wp);
-      if (e.shiftKey && (dp.type === "dimension" || dp.type === "line" || dp.type === "angle")){
+      if (hvSnapActive(e.shiftKey) && (dp.type === "dimension" || dp.type === "line" || dp.type === "angle")){
         var snapped = snapAxis({ x: dp.x0, y: dp.y0 }, gwp);
         dp.x1 = snapped.x; dp.y1 = snapped.y;
       } else {
@@ -3546,15 +3807,21 @@
     var snappableHandles = ["p1", "p2", "v", "a1", "a2", "tl", "tr", "bl", "br", "anchor"];
     if (snappableHandles.indexOf(dm.which) !== -1) wp = snapWorldPoint(wp);
     if (dm.which === "p1"){
-      var s1 = shiftKey ? snapAxis({ x: o.x2, y: o.y2 }, wp) : wp;
+      var s1 = hvSnapActive(shiftKey) ? snapAxis({ x: o.x2, y: o.y2 }, wp) : wp;
       o.x1 = s1.x; o.y1 = s1.y;
-      if (o.type === "dimension" && o.label.autoPos) repositionDimensionLabel(o);
+      if (o.type === "dimension"){
+        if (o.label.autoPos) repositionDimensionLabel(o);
+        else keepDimensionLabelOffset(o, dm.start);
+      }
       return;
     }
     if (dm.which === "p2"){
-      var s2 = shiftKey ? snapAxis({ x: o.x1, y: o.y1 }, wp) : wp;
+      var s2 = hvSnapActive(shiftKey) ? snapAxis({ x: o.x1, y: o.y1 }, wp) : wp;
       o.x2 = s2.x; o.y2 = s2.y;
-      if (o.type === "dimension" && o.label.autoPos) repositionDimensionLabel(o);
+      if (o.type === "dimension"){
+        if (o.label.autoPos) repositionDimensionLabel(o);
+        else keepDimensionLabelOffset(o, dm.start);
+      }
       return;
     }
     if (dm.which && dm.which.slice(0, 3) === "cap"){
@@ -3779,8 +4046,19 @@
       // keydown would then bubble up to the global shortcut handler, which
       // no longer sees editingId set and would treat Escape as "deselect
       // everything" right after the commit it was meant to just close.
+      //
+      // Enter used to commit (close the editor) unless Shift was held, which
+      // is where Shift+Enter's multiline came from. Real report: "shift +
+      // enter is what I want, but didn't work" -- and on a phone/tablet's
+      // on-screen keyboard, it genuinely can't: there's no way to hold a
+      // modifier down while tapping the return key, so the old plain-Enter-
+      // commits behaviour meant tapping return always closed the editor
+      // instead, with literally no way to add a second line by touch at
+      // all. Enter now just does what it does in any normal multi-line
+      // field (a notes app, a chat message box) -- it always inserts a line
+      // break, on every platform, no modifier needed -- and Escape or
+      // tapping/clicking away (blur, just below) finishes editing instead.
       if (ev.key === "Escape"){ ev.preventDefault(); ev.stopPropagation(); commitInlineEdit(); }
-      else if (ev.key === "Enter" && !ev.shiftKey){ ev.preventDefault(); ev.stopPropagation(); commitInlineEdit(); }
     });
     editorEl.addEventListener("blur", function(){ commitInlineEdit(); });
     renderAll();
@@ -3962,6 +4240,7 @@
   var EDIT_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 3.7l3.5 3.5L6 17.5H2.5V14z"/></svg>';
   var DELETE_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M8 6V4.5A1 1 0 0 1 9 3.5h2A1 1 0 0 1 12 4.5V6M6 6l.6 9.5A1.5 1.5 0 0 0 8.1 17h3.8a1.5 1.5 0 0 0 1.5-1.5L14 6"/></svg>';
   var MIRROR_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5v15" stroke-dasharray="1.6 1.8"/><path d="M7 6.5L3.8 9l3.2 2.5"/><path d="M13 6.5L16.2 9l-3.2 2.5"/></svg>';
+  var BRING_FRONT_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="9" height="9" rx="1"/><path d="M5.5 12.5H4A1 1 0 0 1 3 11.5V4A1 1 0 0 1 4 3h7.5a1 1 0 0 1 1 1v1.5"/></svg>';
   function hideLockPopoverOnOutsideEvent(e){
     if (lockPopoverEl && !lockPopoverEl.contains(e.target)) hideLockPopover();
   }
@@ -4035,6 +4314,28 @@
         hideLockPopover();
         if (isBaseImage) mirrorWholePlan();
         else mirrorImageObjectInPlace(obj);
+      });
+    }
+
+    // Real report: inserted photos/PDF pages should default to sitting
+    // BELOW every measurement/text/callout/etc. (see placeInsertedImage),
+    // since a photo is a backdrop reference, not something meant to cover
+    // up the markup made on top of it -- but every so often one genuinely
+    // does need to sit above everything else (a close-up detail photo
+    // that's the whole point of that part of the plan), hence this escape
+    // hatch. Only offered while there's actually somewhere higher to go --
+    // an image already at the very top of the stack gets no row at all,
+    // rather than a "Bring to front" that would visibly do nothing.
+    if (!isBaseImage && obj.type === "image" && !obj.locked && state.objects[state.objects.length - 1] !== obj){
+      popoverRow(wrap, BRING_FRONT_ICON + "<span>Bring to front</span>", function(){
+        hideLockPopover();
+        var idx = state.objects.indexOf(obj);
+        if (idx >= 0){
+          state.objects.splice(idx, 1);
+          state.objects.push(obj);
+          pushHistory(); renderAll();
+          showToast("Brought to front.");
+        }
       });
     }
 
@@ -4127,6 +4428,38 @@
       sw.appendChild(d);
     });
     row.appendChild(sw); panel.appendChild(row);
+    }
+
+    // Border colour -- images only (the generic Color row just above stays
+    // hidden for them: there's still nothing to TINT, an image's colored
+    // border is its own separate, optional thing -- see makeImage). Only
+    // meaningful for an actual selected image, not the bare-tool state
+    // (there's no "image" drawing tool the way there's a dimension/rect
+    // one -- an image only ever exists via Open/Insert/paste).
+    if (obj && obj.type === "image"){
+      var bcRow = document.createElement("div"); bcRow.className = "panel-row";
+      var bcLab = document.createElement("span"); bcLab.className = "panel-label"; bcLab.textContent = "Border colour";
+      bcRow.appendChild(bcLab);
+      var bcSw = document.createElement("div"); bcSw.className = "swatches";
+      // "None" first -- clears back to just the neutral halo (this
+      // feature's own default), which every other swatch row lacks a way
+      // to get back to once a color's been picked.
+      var noneSwatch = document.createElement("div");
+      noneSwatch.className = "swatch" + (!obj.borderColor ? " selected" : "");
+      noneSwatch.title = "None";
+      noneSwatch.style.background = "repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 8px 8px";
+      noneSwatch.style.border = "1px solid var(--border-strong)";
+      noneSwatch.addEventListener("click", function(){ obj.borderColor = null; pushHistory(); renderAll(); });
+      bcSw.appendChild(noneSwatch);
+      COLORS.forEach(function(c){
+        var d = document.createElement("div");
+        d.className = "swatch" + (c === obj.borderColor ? " selected" : "");
+        d.style.background = c; d.style.border = c === "#ffffff" ? "1px solid var(--border-strong)" : "";
+        d.title = c;
+        d.addEventListener("click", function(){ obj.borderColor = c; pushHistory(); renderAll(); });
+        bcSw.appendChild(d);
+      });
+      bcRow.appendChild(bcSw); panel.appendChild(bcRow);
     }
 
     // "Make default" -- only worth showing once there's a selected object
@@ -4242,24 +4575,32 @@
       var sdRow = document.createElement("div"); sdRow.className = "panel-row";
       var sdLab = document.createElement("span"); sdLab.className = "panel-label"; sdLab.textContent = "Label side";
       sdRow.appendChild(sdLab);
-      var sdSel = document.createElement("select"); sdSel.className = "mini";
+      // Real report: this should be a button, not a dropdown -- with only
+      // ever two options (whichever pair of Top/Bottom/Left/Right actually
+      // applies to this line's own direction, from sideWord above), a
+      // one-tap segmented pair reads faster and needs no extra tap to open
+      // a menu first.
       var curSide = obj.label.side === "b" ? "b" : "a";
+      var sdGroup = document.createElement("div"); sdGroup.className = "seg-group";
       sideOptions.forEach(function(o){
-        var opt = document.createElement("option"); opt.value = o[0]; opt.textContent = o[1];
-        if (curSide === o[0]) opt.selected = true;
-        sdSel.appendChild(opt);
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "seg-btn" + (curSide === o[0] ? " active" : "");
+        btn.textContent = o[1];
+        btn.addEventListener("click", function(){
+          if (obj.label.side === o[0]) return;
+          obj.label.side = o[0];
+          // A deliberate side choice takes effect immediately, even if this
+          // label had previously been dragged by hand -- same "explicit
+          // instruction wins" reasoning as picking an Ends style overriding
+          // whatever the label's own drag history was.
+          obj.label.autoPos = true;
+          repositionDimensionLabel(obj);
+          pushHistory(); renderAll();
+        });
+        sdGroup.appendChild(btn);
       });
-      sdSel.addEventListener("change", function(){
-        obj.label.side = sdSel.value;
-        // A deliberate side choice takes effect immediately, even if this
-        // label had previously been dragged by hand -- same "explicit
-        // instruction wins" reasoning as picking an Ends style overriding
-        // whatever the label's own drag history was.
-        obj.label.autoPos = true;
-        repositionDimensionLabel(obj);
-        pushHistory(); renderAll();
-      });
-      sdRow.appendChild(sdSel); panel.appendChild(sdRow);
+      sdRow.appendChild(sdGroup); panel.appendChild(sdRow);
     }
     // font size (text-bearing)
     var labelObj = obj ? (obj.type === "text" ? obj : obj.label) : null;
@@ -4270,6 +4611,27 @@
         if (labelObj){ labelObj.fontSize = v; pushHistory(); }
         renderAll();
       }, 2, 8, 4000);
+    }
+
+    // Real report: Text objects should be able to have a border and
+    // background, the same way Callout labels already do -- a plain
+    // on/off toggle (obj.box, see makeText/renderObject) rather than a
+    // callout's always-on box, since bare floating text is the common case
+    // this shouldn't change anything for.
+    if (obj && obj.type === "text"){
+      var boxRow = document.createElement("div"); boxRow.className = "panel-row";
+      var boxLab = document.createElement("span"); boxLab.className = "panel-label"; boxLab.textContent = "Border & background";
+      boxRow.appendChild(boxLab);
+      var boxBtn = document.createElement("button");
+      boxBtn.type = "button";
+      boxBtn.className = "ibtn" + (obj.box ? " active" : "");
+      boxBtn.title = obj.box ? "Remove border and background" : "Add a border and background, like Callout";
+      boxBtn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="14" height="10" rx="1.5"/></svg>';
+      boxBtn.addEventListener("click", function(){
+        obj.box = !obj.box;
+        pushHistory(); renderAll();
+      });
+      boxRow.appendChild(boxBtn); panel.appendChild(boxRow);
     }
 
     if (obj){
@@ -4371,15 +4733,16 @@
           pushHistory(); renderAll(); updateLockAllButton();
         });
         row.appendChild(lockBtn);
-        var delBtn = document.createElement("button");
-        delBtn.className = "lbtn"; delBtn.title = "Delete";
-        delBtn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M8 6V4.5A1 1 0 0 1 9 3.5h2A1 1 0 0 1 12 4.5V6M6 6l.6 9.5A1.5 1.5 0 0 0 8.1 17h3.8a1.5 1.5 0 0 0 1.5-1.5L14 6"/></svg>';
-        delBtn.addEventListener("click", function(){
-          state.objects = state.objects.filter(function(x){ return x.id !== o.id; });
-          if (state.selectedId === o.id) state.selectedId = null;
-          pushHistory(); renderAll();
-        });
-        row.appendChild(delBtn);
+        // Real report: no per-row delete here -- too risky/easy to hit by
+        // accident once a plan has enough objects that this list is long
+        // and rows are packed close together (that's the whole reason this
+        // panel exists in the first place). Deleting is still one tap away
+        // for whatever's actually selected -- click the row to select it,
+        // then use the same Delete this app already offers everywhere else
+        // (the item-properties panel's own trash button, the right-click/
+        // long-press popover, or the Delete/Backspace key) -- every one of
+        // those is a deliberate, one-item-at-a-time action on whatever's
+        // currently selected, not a stray tap while scanning a long list.
         layersList.appendChild(row);
       })(state.objects[i]);
     }
@@ -4397,6 +4760,26 @@
     document.getElementById("snapGridBtn").classList.toggle("active", !!defaultStyle().snapToGrid);
   }
   updateSnapGridButton();
+
+  /* ============================== snap to horizontal/vertical toggle ==============================
+     A persistent stand-in for holding Shift while drawing or stretching a
+     dimension/line's endpoint -- Shift itself works fine with a mouse, but
+     an on-screen keyboard has no way to hold a modifier down mid-drag, so
+     touch/tablet users could never reach this at all without a toggle.
+     hvSnapActive() is what every H/V-snap call site should check instead of
+     a raw shiftKey, so the physical key and this toggle both keep working,
+     together or separately. */
+  function hvSnapActive(shiftKey){ return !!shiftKey || !!defaultStyle().hvSnap; }
+  document.getElementById("snapHVBtn").addEventListener("click", function(){
+    var s = defaultStyle();
+    s.hvSnap = !s.hvSnap;
+    scheduleAutosave();
+    updateSnapHVButton();
+  });
+  function updateSnapHVButton(){
+    document.getElementById("snapHVBtn").classList.toggle("active", !!defaultStyle().hvSnap);
+  }
+  updateSnapHVButton();
 
   /* ============================== confirm dialog ==============================
      Artifacts render in a sandboxed iframe that blocks native window.confirm
@@ -4917,9 +5300,9 @@
   // exactly the same reasoning backToProjectsBtn above already relies on).
   backToLevelsFromRoomsBtn.addEventListener("click", function(){
     activeLevelName = ""; activeLevelHandle = null;
-    activeLevelSavesHandle = null; activeLevelPdfsHandle = null;
+    activeLevelSavesHandle = null; activeLevelPdfsHandle = null; activeLevelBackupsHandle = null;
     activeRoomName = ""; activeRoomHandle = null;
-    activeRoomSavesHandle = null; activeRoomPdfsHandle = null;
+    activeRoomSavesHandle = null; activeRoomPdfsHandle = null; activeRoomBackupsHandle = null;
     refreshBrandSubtitle();
     if (switchProjectBtn) switchProjectBtn.style.display = "none";
     if (roomsBtn) roomsBtn.style.display = "none";
@@ -4938,11 +5321,11 @@
   function switchProject(){
     function goToGate(){
       activeLevelName = ""; activeLevelHandle = null;
-      activeLevelSavesHandle = null; activeLevelPdfsHandle = null;
+      activeLevelSavesHandle = null; activeLevelPdfsHandle = null; activeLevelBackupsHandle = null;
       // Stepping all the way out to the project's level list leaves any
       // open room behind too, same as leaving the level itself.
       activeRoomName = ""; activeRoomHandle = null;
-      activeRoomSavesHandle = null; activeRoomPdfsHandle = null;
+      activeRoomSavesHandle = null; activeRoomPdfsHandle = null; activeRoomBackupsHandle = null;
       refreshBrandSubtitle();
       // Purely cosmetic (the toolbar sits fully hidden behind the gate
       // either way), but leaving the old level's name showing in the
@@ -4974,7 +5357,7 @@
   function openRoomsPicker(){
     function goToGate(){
       activeRoomName = ""; activeRoomHandle = null;
-      activeRoomSavesHandle = null; activeRoomPdfsHandle = null;
+      activeRoomSavesHandle = null; activeRoomPdfsHandle = null; activeRoomBackupsHandle = null;
       state.fileBase = "plan";
       updateFileNameBtn();
       populateRoomList().then(function(){
@@ -5437,6 +5820,136 @@
     if (err && err.code === "image_decode_failed") return "Could not read that image.";
     return "Could not read that file.";
   }
+
+  /* ============================== crop-before-insert ============================== */
+  // Real request: "when photos come in give the option to crop". Sits
+  // between readImageFile() and the existing Open/Insert placement logic --
+  // resolves with the ORIGINAL {dataUrl,w,h} unchanged if the user skips
+  // ("Use full photo"), so nothing downstream (Open replacing the plan,
+  // Insert adding a second image) needs to know or care whether a crop
+  // happened at all. Deliberately only offered for actual photo files
+  // (readImageFile's callers), never for a PDF page -- an architectural
+  // sheet being opened/inserted as a plan isn't "a photo that came in".
+  var cropBackdrop = document.getElementById("cropBackdrop");
+  var cropStage = document.getElementById("cropStage");
+  var cropImg = document.getElementById("cropImg");
+  var cropRectEl = document.getElementById("cropRectEl");
+  var cropSkipBtn = document.getElementById("cropSkipBtn");
+  var cropApplyBtn = document.getElementById("cropApplyBtn");
+  var cropResolve = null;
+  var cropSrc = null; // { dataUrl, w, h } -- the ORIGINAL, uncropped photo
+  var cropRect = null; // current crop rect in DISPLAYED image-relative px (0,0 at the displayed image's own top-left)
+  function showCropDialog(dataUrl, naturalW, naturalH){
+    return new Promise(function(resolve){
+      cropResolve = resolve;
+      cropSrc = { dataUrl: dataUrl, w: naturalW, h: naturalH };
+      cropImg.src = dataUrl;
+      cropBackdrop.hidden = false;
+      // Wait for the image to actually lay out at its CSS-constrained
+      // (max-width/max-height) displayed size before measuring it -- its
+      // offsetWidth/offsetHeight are 0 (or stale, from a previous photo)
+      // until the browser has painted this one at least once.
+      var place = function(){
+        var dw = cropImg.offsetWidth, dh = cropImg.offsetHeight;
+        // A sane default: an inset 80% rect, centered -- enough that the
+        // corner handles are immediately visible and grabbable without the
+        // user having to first figure out where the crop even starts.
+        var inset = 0.1;
+        cropRect = { x: dw * inset, y: dh * inset, w: dw * (1 - 2 * inset), h: dh * (1 - 2 * inset) };
+        renderCropRect();
+      };
+      if (cropImg.complete && cropImg.naturalWidth) requestAnimationFrame(place);
+      else cropImg.onload = function(){ requestAnimationFrame(place); };
+    });
+  }
+  function renderCropRect(){
+    cropRectEl.style.left = cropRect.x + "px";
+    cropRectEl.style.top = cropRect.y + "px";
+    cropRectEl.style.width = cropRect.w + "px";
+    cropRectEl.style.height = cropRect.h + "px";
+  }
+  function closeCropDialog(result){
+    cropBackdrop.hidden = true;
+    cropImg.onload = null;
+    cropImg.src = "";
+    var resolve = cropResolve; cropResolve = null;
+    var src = cropSrc; cropSrc = null;
+    if (resolve) resolve(result || { dataUrl: src.dataUrl, w: src.w, h: src.h });
+  }
+  // Crops cropSrc down to cropRect (converted from displayed-image px back
+  // to the photo's own native pixel grid) and resolves with the result.
+  // Draws straight from the ORIGINAL image at its own native resolution --
+  // never through the smaller on-screen <img> -- so a crop never costs any
+  // sharpness the source photo actually had, the same reasoning the export
+  // pipeline's own native-resolution photo embedding just got fixed for.
+  function applyCrop(){
+    var dw = cropImg.offsetWidth, dh = cropImg.offsetHeight;
+    if (!dw || !dh || !cropSrc){ closeCropDialog(); return; }
+    var scale = cropSrc.w / dw; // natural px per displayed px (same for w/h -- image is never stretched non-uniformly)
+    var nx = Math.round(cropRect.x * scale), ny = Math.round(cropRect.y * scale);
+    var nw = Math.max(1, Math.round(cropRect.w * scale)), nh = Math.max(1, Math.round(cropRect.h * scale));
+    var full = new Image();
+    full.onload = function(){
+      var c = document.createElement("canvas");
+      c.width = nw; c.height = nh;
+      var ctx = c.getContext("2d");
+      ctx.drawImage(full, nx, ny, nw, nh, 0, 0, nw, nh);
+      var mime = (/^data:([^;]+);/.exec(cropSrc.dataUrl) || [])[1] || "image/jpeg";
+      var out;
+      try{ out = c.toDataURL(mime === "image/png" ? "image/png" : "image/jpeg", 0.92); }
+      catch(e){ closeCropDialog(); return; }
+      closeCropDialog({ dataUrl: out, w: nw, h: nh });
+    };
+    full.onerror = function(){ closeCropDialog(); };
+    full.src = cropSrc.dataUrl;
+  }
+  cropSkipBtn.addEventListener("click", function(){ closeCropDialog(); });
+  cropApplyBtn.addEventListener("click", applyCrop);
+  // Dragging the rect's body moves it; dragging a corner handle resizes it
+  // from that corner, with the OPPOSITE corner staying fixed -- both kept
+  // within the displayed image's own bounds throughout, and never allowed
+  // to collapse to zero (a crop that thin would produce a useless sliver,
+  // or in the resize-past-the-opposite-corner case, a negative/garbage
+  // width entirely).
+  var MIN_CROP_PX = 24;
+  function startCropDrag(e, mode, corner){
+    e.preventDefault(); e.stopPropagation();
+    var startX = e.clientX, startY = e.clientY;
+    var start = { x: cropRect.x, y: cropRect.y, w: cropRect.w, h: cropRect.h };
+    var stageW = cropImg.offsetWidth, stageH = cropImg.offsetHeight;
+    var target = e.currentTarget;
+    try{ target.setPointerCapture(e.pointerId); }catch(err){}
+    function onMove(ev){
+      var dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (mode === "move"){
+        cropRect.x = clamp(start.x + dx, 0, stageW - start.w);
+        cropRect.y = clamp(start.y + dy, 0, stageH - start.h);
+      } else {
+        var left = start.x, top = start.y, right = start.x + start.w, bottom = start.y + start.h;
+        if (corner === "nw" || corner === "sw") left = clamp(start.x + dx, 0, right - MIN_CROP_PX);
+        if (corner === "ne" || corner === "se") right = clamp(right + dx, left + MIN_CROP_PX, stageW);
+        if (corner === "nw" || corner === "ne") top = clamp(start.y + dy, 0, bottom - MIN_CROP_PX);
+        if (corner === "sw" || corner === "se") bottom = clamp(bottom + dy, top + MIN_CROP_PX, stageH);
+        cropRect.x = left; cropRect.y = top; cropRect.w = right - left; cropRect.h = bottom - top;
+      }
+      renderCropRect();
+    }
+    function onUp(ev){
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
+    }
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
+  }
+  cropRectEl.addEventListener("pointerdown", function(e){
+    if (e.target !== cropRectEl) return; // a handle's own listener (below) handles its own drag
+    startCropDrag(e, "move", null);
+  });
+  Array.prototype.forEach.call(cropRectEl.querySelectorAll(".crop-handle"), function(handle){
+    handle.addEventListener("pointerdown", function(e){ startCropDrag(e, "resize", handle.getAttribute("data-corner")); });
+  });
   // Flips a loaded image's actual pixels left-right, once, right here --
   // never a CSS transform left sitting on the image afterward -- so
   // everything drawn from then on (dimensions, labels, exports) is against
@@ -5649,7 +6162,9 @@
       return;
     }
     readImageFile(file).then(function(res){
-      applyLoadedImage(res.dataUrl, res.w, res.h, file.name);
+      return showCropDialog(res.dataUrl, res.w, res.h);
+    }).then(function(cropped){
+      applyLoadedImage(cropped.dataUrl, cropped.w, cropped.h, file.name);
       autosaveLevelPlanIfActive();
       showToast("Loaded " + file.name);
     }).catch(function(err){
@@ -5752,7 +6267,9 @@
       return;
     }
     readImageFile(file).then(function(res){
-      placeInsertedImage(res.dataUrl, res.w, res.h);
+      return showCropDialog(res.dataUrl, res.w, res.h);
+    }).then(function(cropped){
+      placeInsertedImage(cropped.dataUrl, cropped.w, cropped.h);
       autosaveLevelPlanIfActive();
       showToast("Image inserted — drag a corner to resize/stretch, or drag it to move.");
     }).catch(function(err){
@@ -5773,7 +6290,20 @@
     var s = Math.min(maxW / naturalW, maxH / naturalH, 1);
     var w = naturalW * s, h = naturalH * s;
     var obj = makeImage(center.x - w / 2, center.y - h / 2, w, h, dataUrl);
-    state.objects.push(obj);
+    // Real report: a newly-inserted reference photo should default to
+    // sitting BELOW every measurement/text/callout/etc already on the plan
+    // (a photo is backdrop reference, not something that should cover up
+    // markup that's already there) -- with "Bring to front" in its own
+    // right-click/long-press popover (see showLockPopover) as the escape
+    // hatch for the rarer photo that genuinely needs to sit on top. Object
+    // order in state.objects IS z-order (later = drawn on top, same as any
+    // other object), so this lands the new image just before the first
+    // non-image object instead of state.objects.push()'ing it straight to
+    // the very top -- still above any EARLIER inserted image, only ever
+    // below annotations.
+    var firstAnnotationIdx = state.objects.findIndex(function(o){ return o.type !== "image"; });
+    if (firstAnnotationIdx === -1) state.objects.push(obj);
+    else state.objects.splice(firstAnnotationIdx, 0, obj);
     state.selectedId = obj.id;
     setTool("select");
     pushHistory();
@@ -5783,6 +6313,8 @@
   /* ============================== export ============================== */
   var autoBackupCheckbox = document.getElementById("autoBackupToggle");
   var autoBackupGroup = document.getElementById("autoBackupGroup");
+  var autoBackupLabel = document.getElementById("autoBackupLabel");
+  var autoBackupLabelBaseTitle = autoBackupLabel.title;
   var autoBackupMinusBtn = document.getElementById("autoBackupMinus");
   var autoBackupPlusBtn = document.getElementById("autoBackupPlus");
   var autoBackupIntervalLabel = document.getElementById("autoBackupIntervalLabel");
@@ -5803,6 +6335,7 @@
     autoBackupLockShackle.setAttribute("d", autoBackupLocked ? LOCK_SHACKLE_CLOSED : LOCK_SHACKLE_OPEN);
   }
   refreshAutoBackupUI();
+  updateAutoBackupTooltip();
   autoBackupCheckbox.addEventListener("change", function(){
     if (autoBackupLocked) return; // belt-and-braces; the control is disabled too
     autoBackupOn = autoBackupCheckbox.checked;
@@ -5988,6 +6521,15 @@
       return b;
     }
     if (obj.type === "text"){
+      // With obj.box on, the rendered box extends past the bare text by
+      // the same fontSize*0.35 padding a callout's own box uses, plus its
+      // halo's outer width -- match that here too, or export/fit-to-view
+      // bounds would clip the box's own border on a text object sitting
+      // near the edge of the plan.
+      if (obj.box){
+        var tBoxSw2 = Math.max(1, obj.fontSize * 0.09);
+        return labelBounds({ text: obj.text, x: obj.x, y: obj.y, fontSize: obj.fontSize, family: obj.family }, obj.fontSize * 0.35 + haloOuterW(tBoxSw2));
+      }
       return labelBounds({ text: obj.text, x: obj.x, y: obj.y, fontSize: obj.fontSize, family: obj.family }, 4);
     }
     if (obj.type === "callout"){
@@ -6322,6 +6864,22 @@
   // embedded photo's pixel density -- every annotation is added afterward
   // as real vector paths via svg2pdf, completely unaffected by this.
   var PDF_EXPORT_RASTER_MAX_DIM = 16000;
+  // Real report: reference photos (inserted images -- the small site-photo
+  // callouts scattered around a plan) came out "unreadable" in an exported
+  // PDF even though the very same photo looks fine on screen in the app.
+  // Root cause: every pasted-in image used to be drawn onto the SAME shared
+  // page-wide canvas as the base plan (see the comment above
+  // renderExportPdfBlob), at whatever tiny footprint it's placed at on the
+  // page -- e.g. a photo placed at 0.9in on a 300dpi page only ever got
+  // ~270px of it, no matter how many megapixels the original camera photo
+  // actually had. A PDF viewer's zoom can't recover detail that was thrown
+  // away before the page was even assembled. Each inserted image is now
+  // embedded as its OWN separate image object (see the imageObjs loop
+  // below) at its real native resolution instead, so zooming into it in a
+  // PDF viewer shows genuine extra detail -- capped here purely to keep
+  // file size sane for a phone photo that can be 12+ megapixels; comfortably
+  // above what anyone can usefully zoom to on a printed/exported page.
+  var PDF_EXPORT_PHOTO_MAX_DIM = 3000;
   // Loads state.imageDataURL into a fresh <img> and waits for it to decode —
   // separate from the on-screen baseImage (an SVG <image>, which most
   // browsers refuse as a canvas drawImage() source) so it can be drawn to a
@@ -6381,26 +6939,31 @@
     //     PNG-encoded data URI string instead measured 30+ seconds
     //     (jsPDF's own pure-JS PNG encoder) versus ~3 seconds for a canvas
     //     encoded as JPEG (the browser's native encoder). So every raster
-    //     photo is decoded and drawn into one shared canvas here and added
-    //     as a single JPEG; only the vector annotation overlay (no <image>
-    //     at all) goes through svg2pdf.js, which is exactly the part that
-    //     needs to be real vector.
+    //     photo is decoded and drawn as JPEG; only the vector annotation
+    //     overlay (no <image> at all) goes through svg2pdf.js, which is
+    //     exactly the part that needs to be real vector.
     // A tiled base plan (see renderPdfPageGrid) has no single imageDataURL --
     // fall back to a one-item "tile" covering the whole photo so every line
     // below (loading, drawing, counting) treats a normal untiled plan and a
     // tiled one identically, just with one tile instead of several.
     var baseTiles = state.imageTiles && state.imageTiles.length ? state.imageTiles
       : [{ dataUrl: state.imageDataURL, x: 0, y: 0, w: state.imageW, h: state.imageH }];
+    // Only the base plan tiles go onto the shared composited canvas below --
+    // pasted-in reference photos are embedded separately at their own native
+    // resolution (see the imageObjs loop after doc.addImage), which is the
+    // fix for "images are unreadable" above. Keeping them out of `toLoad`'s
+    // shared-canvas half here means loadImageBitmap decodes each photo only
+    // once either way.
     var toLoad = baseTiles.map(function(t){ return t.dataUrl; }).concat(imageObjs.map(function(o){ return o.src; }));
     // The composited raster canvas below embeds as one JPEG scaled to fill
-    // the page -- it's the photo backdrop only, never the annotations (those
-    // go in separately as real vector paths via svg2pdf, just below), so
-    // downscaling it costs photo detail but never touches how sharp a
-    // dimension/label/line looks. That makes it safe to cap here exactly
-    // the way the on-screen PNG export already caps its own output size (see
-    // renderExportBlob) -- a composition big enough to need this is rare
-    // (it takes many large tiles/photos spread far apart), but without a
-    // cap here a big enough one could still ask for a single canvas beyond
+    // the page -- it's the base-plan backdrop only now (see above), never
+    // the annotations (those go in separately as real vector paths via
+    // svg2pdf, just below), so downscaling it costs photo detail but never
+    // touches how sharp a dimension/label/line looks. That makes it safe to
+    // cap here exactly the way the on-screen PNG export already caps its own
+    // output size (see renderExportBlob) -- a composition big enough to need
+    // this is rare (it takes many large tiles spread far apart), but without
+    // a cap here a big enough one could still ask for a single canvas beyond
     // what a real device can allocate, the exact failure tiling was
     // introduced to get away from.
     var rasterMaxDim = Math.max(contentW, contentH);
@@ -6413,9 +6976,9 @@
       // transparent black -- which JPEG encoding turns solid black. That's
       // invisible as long as the base photo fills the whole page (the case
       // this used to always be), but once a pasted-in image can sit off to
-      // the side there's real empty space between the two photos, so it
-      // needs an explicit fill first or that gap comes out black instead of
-      // matching the app's own light background.
+      // the side there's real empty space around it, so it needs an
+      // explicit fill first or that gap comes out black instead of matching
+      // the app's own light background.
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       // Each base tile sits at its own [x,y,w,h] within world [0,0,imageW,
@@ -6426,11 +6989,6 @@
       baseTiles.forEach(function(t, i){
         var ix = (t.x - cb.x0) * rasterScale, iy = (t.y - cb.y0) * rasterScale;
         ctx.drawImage(imgs[i], ix, iy, t.w * rasterScale, t.h * rasterScale);
-      });
-      imageObjs.forEach(function(o, i){
-        var idx = baseTiles.length + i;
-        var ix = (Math.min(o.x, o.x + o.w) - cb.x0) * rasterScale, iy = (Math.min(o.y, o.y + o.h) - cb.y0) * rasterScale;
-        ctx.drawImage(imgs[idx], ix, iy, Math.abs(o.w) * rasterScale, Math.abs(o.h) * rasterScale);
       });
 
       var pageW = contentW * PX_TO_PT, pageH = contentH * PX_TO_PT;
@@ -6469,6 +7027,35 @@
       });
       registerExportFonts(doc);
       doc.addImage(canvas, "JPEG", 0, 0, pageW, pageH, undefined, undefined, undefined);
+
+      // Each pasted-in reference photo is embedded as its OWN image object,
+      // in the same order they sit in state.objects (so later ones still
+      // paint over earlier ones, same stacking as before), at its real
+      // native resolution rather than being flattened into the shared
+      // page canvas above -- see PDF_EXPORT_PHOTO_MAX_DIM for why this is
+      // the fix for "images are unreadable" once a photo's placed footprint
+      // on the page is much smaller than the photo itself. Position/size
+      // use the same world-to-point conversion as the page itself (PX_TO_PT
+      // against cb's origin) -- entirely independent of rasterScale, which
+      // only ever applied to the base-plan canvas above.
+      imageObjs.forEach(function(o, i){
+        var img = imgs[baseTiles.length + i];
+        var natW = img.naturalWidth || img.width, natH = img.naturalHeight || img.height;
+        var src = img;
+        var longest = Math.max(natW, natH);
+        if (longest > PDF_EXPORT_PHOTO_MAX_DIM){
+          var photoScale = PDF_EXPORT_PHOTO_MAX_DIM / longest;
+          var pc = document.createElement("canvas");
+          pc.width = Math.max(1, Math.round(natW * photoScale));
+          pc.height = Math.max(1, Math.round(natH * photoScale));
+          var pctx = pc.getContext("2d");
+          pctx.drawImage(img, 0, 0, pc.width, pc.height);
+          src = pc;
+        }
+        var ox = (Math.min(o.x, o.x + o.w) - cb.x0) * PX_TO_PT, oy = (Math.min(o.y, o.y + o.h) - cb.y0) * PX_TO_PT;
+        var ow = Math.abs(o.w) * PX_TO_PT, oh = Math.abs(o.h) * PX_TO_PT;
+        doc.addImage(src, "JPEG", ox, oy, ow, oh, undefined, undefined, undefined);
+      });
 
       // Annotations only — cloneWorldForExport() strips handles/preview but
       // still includes every raster <image> (the base photo plus any
