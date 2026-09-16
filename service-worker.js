@@ -246,7 +246,40 @@
 // most recent, instead of just re-saving the same file with no history --
 // and the auto-backup toggle's tooltip now shows the last backup's date
 // and time on hover.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v17";
+//
+// (v18: another batch of fixes/requests. A dimension's Label side buttons
+// always read Left-then-Right or Top-then-Bottom in the correct physical
+// order now, for either draw direction (previously a line drawn one way
+// could show "Right | Left" backwards); a Top/Bottom pair also stacks
+// vertically instead of sitting side-by-side. Rectangles can now have an
+// optional background fill colour (a swatch row in the properties panel,
+// same pattern as the existing border-colour options); as a rule across
+// every object type, lowering an object's opacity now only fades its fill
+// (or halo background, for text/callouts) -- borders and text/labels stay
+// fully opaque so a faded object never becomes harder to read (dimension/
+// line/angle lines, which have no separate fill, still fade as a whole,
+// unchanged). A new Pan tool (hand icon, or press H) lets you drag to move
+// around the canvas without holding Space first. The old auto-backup
+// folder-picker (superseded once per-level backup folders shipped in v17)
+// has been removed. Exported PDF photos are now pre-compressed as JPEG at
+// a fixed quality before embedding -- previously jsPDF silently ignored
+// its own compression setting for any raw canvas/image source and always
+// embedded at maximum quality, which is why PDF exports with several
+// photos could come out much larger than expected; typical photo-heavy
+// exports are now roughly half the size with no visible quality loss. The
+// on-screen Share button's "current view" image snapshot now renders at
+// the viewport's true on-screen resolution (previously it drifted with
+// zoom level and could look soft once zoomed in past 100%) and now carries
+// the same plan-name/logo/timestamp watermark bar Save PDF/PNG/Share PDF
+// already have. The New toolbar button no longer clears the current plan
+// in place when a project/level is open -- a plain tap now safely routes
+// to the level picker instead (so a moment's delay before saving can no
+// longer let an auto-backup tick silently overwrite real content with
+// nothing to recover from); the old in-place clear is still available via
+// press-and-hold/right-click for the rarer case of wanting to reuse the
+// same level's folder. The plain single-file mode (no project/level system
+// in use) is unaffected.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v18";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

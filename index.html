@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v17">
+<link rel="manifest" href="./manifest.json?v=v18">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v17">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v17">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v18">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v18">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -190,8 +190,8 @@
     cursor:pointer; user-select:none; white-space:nowrap;
   }
   .autobk input{cursor:pointer; accent-color:var(--accent); width:14px; height:14px;}
-  .autobk-group.locked .autobk, .autobk-group.locked #autoBackupFolderBtn{opacity:0.5;}
-  .autobk-group.locked .autobk, .autobk-group.locked .autobk input, .autobk-group.locked #autoBackupFolderBtn{cursor:default;}
+  .autobk-group.locked .autobk{opacity:0.5;}
+  .autobk-group.locked .autobk, .autobk-group.locked .autobk input{cursor:default;}
   .autobk-stepper{
     display:flex; align-items:center; gap:3px;
     padding:0 6px; margin-right:2px;
@@ -336,6 +336,11 @@
   .seg-btn + .seg-btn{ border-left:1px solid var(--border-strong); }
   .seg-btn:hover{ background:var(--surface-2); }
   .seg-btn.active{ background:var(--accent); color:#fff; }
+  /* Top/Bottom pair (see sideOptions below): stack vertically so the
+     button's own layout matches the physical relationship it's choosing
+     between, instead of sitting side-by-side like the Left/Right pair. */
+  .seg-group.stacked{ flex-direction:column; }
+  .seg-group.stacked .seg-btn + .seg-btn{ border-left:none; border-top:1px solid var(--border-strong); }
   .panel-actions{display:flex; gap:6px; margin-top:2px;}
   .panel-actions .ibtn{border:1px solid var(--border-strong); background:var(--surface-0);}
   .panel-actions .ibtn.danger:hover{background:var(--accent-soft); color:var(--accent-ink); border-color:var(--accent);}
@@ -698,6 +703,9 @@
       <button class="ibtn" data-tool="zoomrect" title="Zoom to rectangle — drag an area to zoom into it (Z)" aria-label="Zoom to rectangle tool">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="2.2" y="2.2" width="9.6" height="7.6" rx="0.8" stroke-dasharray="2.1 1.7"/><circle cx="13.6" cy="13.6" r="3.1"/><path d="M16.1 16.1L18.2 18.2" stroke-linecap="round"/></svg>
       </button>
+      <button class="ibtn" data-tool="pan" title="Pan — drag to move around the canvas, no need to hold Space (H)" aria-label="Pan tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5V4.2a1.1 1.1 0 0 1 2.2 0v5.3"/><path d="M10.2 9.5V3.3a1.1 1.1 0 0 1 2.2 0v6.2"/><path d="M12.4 9.6V4.6a1.1 1.1 0 0 1 2.2 0v7.7"/><path d="M14.6 10.5V7.8a1.1 1.1 0 0 1 2.2 0v5.4c0 3-2 6.3-5.4 6.3h-1.9c-2 0-2.9-.6-3.9-2l-2.6-3.7c-.5-.8-.3-1.6.3-2.1.7-.5 1.6-.4 2.2.3l1.5 1.7"/></svg>
+      </button>
     </div>
 
     <div class="sep"></div>
@@ -741,7 +749,7 @@
     <div class="toolbar-row" id="toolbarRow2">
     <div class="spacer"></div>
 
-    <button class="tbtn" id="newBtn" title="Start a new file — clears the current plan and its annotations back to a blank canvas, ready for Open/Insert/paste or to draw on directly">
+    <button class="tbtn" id="newBtn" title="Start a new file — with a project/level open, goes to Switch project/level to start a fresh one, without touching this level's own content. Press and hold (or right-click) to instead clear THIS level's plan and annotations back to blank in place.">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 2.5h6l3.5 3.5V16a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z"/><path d="M11 2.5V6h3.5" stroke-linecap="round"/><path d="M10 9.5v4M8 11.5h4" stroke-linecap="round"/></svg>
       New
     </button>
@@ -796,9 +804,6 @@
       </div>
       <button type="button" class="autobk-lock" id="autoBackupLockBtn" title="Lock these settings so they can't be changed by accident" aria-label="Lock auto-backup settings" aria-pressed="false">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="10" height="7" rx="1.3"/><path id="autoBackupLockShackle" d="M7 9V6.5a3 3 0 0 1 6 0"/></svg>
-      </button>
-      <button type="button" class="autobk-lock" id="autoBackupFolderBtn" title="Choose a folder to save auto-backups to directly — no download prompts (Chrome/Edge desktop only)" aria-label="Choose auto-backup folder" style="display:none;">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.5 6a1 1 0 0 1 1-1h3.3l1.2 1.4h7a1 1 0 0 1 1 1v7.1a1 1 0 0 1-1 1h-11.5a1 1 0 0 1-1-1z"/></svg>
       </button>
     </div>
     <!-- Very last thing in the row, at the user's request -- it leaves the
@@ -1020,7 +1025,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v17";
+  var APP_VERSION = "v18";
   var SVG_NS = "http://www.w3.org/2000/svg";
   // Embedded copies (base64 woff2, weight 500 -- the only weight the app
   // ever measures or draws text with) of the two custom Google Fonts used
@@ -1270,7 +1275,12 @@
   var spaceDown = false;
   function updateCursor(){
     svgRoot.classList.toggle("panning", dragMode && dragMode.kind === "pan");
-    svgRoot.classList.toggle("pan-ready", spaceDown && !(dragMode && dragMode.kind === "pan"));
+    // The dedicated Pan tool (see toolButtons/setTool) keeps the same
+    // "ready to grab" cursor active the whole time it's selected -- not
+    // just while Space happens to be held -- since its whole point is a
+    // persistent hand tool for touch/tablet use, where there's no keyboard
+    // to hold Space on in the first place.
+    svgRoot.classList.toggle("pan-ready", (spaceDown || state.tool === "pan") && !(dragMode && dragMode.kind === "pan"));
   }
 
   /* ============================== dom refs ============================== */
@@ -1582,22 +1592,29 @@
   //
   // Where that file lands depends on what's available, checked in this
   // order every time it fires:
-  //  1. The claude.ai "downloads" capability (downloadsApi), when this
+  //  1. A level/room open (the per-project-folders system) -- writes a real
+  //     rolling snapshot straight into that level's own "backup" folder
+  //     (see writeLevelBackupSnapshot further down). This is the normal
+  //     case on every browser that supports the Projects/Levels flow at
+  //     all, which is mandatory there (see PROJECTS_ROOT_SUPPORTED/boot()),
+  //     so the two paths below are really only ever reached outside a level
+  //     -- the plain single-file fallback mode, or a level whose own
+  //     handles aren't available for some reason.
+  //  2. The claude.ai "downloads" capability (downloadsApi), when this
   //     page is running inside the Claude app/chat's own artifact view --
   //     that capability always shows its own confirmation (name + size)
   //     before anything reaches disk; there's no way to skip that or to
   //     target a specific folder from inside that view.
-  //  2. A folder the person has explicitly chosen via the "auto-backup
-  //     folder" button (backupDirHandle, below) -- File System Access API
-  //     (Chrome/Edge desktop only). Once granted, THIS is genuinely
-  //     silent: no picker, no confirmation, every backup just appears in
-  //     that folder. Pick a folder that's itself synced/roaming (a OneDrive
-  //     folder, a mapped network drive, a Windows roaming profile path)
-  //     and backups end up "roaming" too -- the app only needs to know
-  //     which local folder to write into; whatever already syncs that
-  //     folder does the rest.
   //  3. Otherwise, a plain downloaded file (browserDownloadBlob) -- lands
   //     wherever the browser's own default download folder is set to.
+  //
+  // (There used to be a 4th option here -- a folder the person could choose
+  // directly via a dedicated "auto-backup folder" button, File System
+  // Access API, Chrome/Edge desktop only. Removed: that button could only
+  // ever appear on a browser that also supports the Projects/Levels system,
+  // which forces every session through the project gate before there's
+  // anything to back up at all -- so option 1 above always intercepted
+  // first and that folder was never actually written to anymore.)
   var AUTOBACKUP_MIN_INTERVAL_MIN = 5, AUTOBACKUP_MAX_INTERVAL_MIN = 60, AUTOBACKUP_STEP_MIN = 5;
   var autoBackupIntervalMin = 5;
   try{ var storedInt = parseInt(localStorage.getItem("redline_autobackup_interval"), 10); if (storedInt) autoBackupIntervalMin = clamp(storedInt, AUTOBACKUP_MIN_INTERVAL_MIN, AUTOBACKUP_MAX_INTERVAL_MIN); }catch(e){}
@@ -1637,28 +1654,16 @@
   // be touched.
   var autoBackupLocked = false;
   try{ autoBackupLocked = localStorage.getItem("redline_autobackup_locked") === "1"; }catch(e){}
-  // ---- optional direct-to-folder backup target (File System Access API) ----
-  // Meant for Chrome/Edge DESKTOP only. This used to be a plain
-  // typeof-check on showDirectoryPicker, on the assumption that mobile
-  // browsers never expose it at all -- true for a long time, but Chrome for
-  // Android has since started exposing it on at least some versions/
-  // devices, even though picking a real folder there (especially a
-  // cloud-storage app's folder via Android's document-provider system,
-  // e.g. Dropbox) is exactly the kind of path that produced a real 0-byte-
-  // write bug report -- Android's underlying storage plumbing for this API
-  // isn't the same reliable local-folder access it is on desktop. So this
-  // now ALSO excludes anything that looks like a mobile device, regardless
-  // of what the API itself claims to support, matching what this feature's
-  // own tooltip has always promised ("Chrome/Edge desktop only").
+  // ---- mobile-device detection ----
   // Checks the plain user-agent string FIRST and treats any hit as mobile,
   // rather than trusting navigator.userAgentData.mobile as the deciding
   // vote -- that flag reflects Chrome's phone-vs-tablet FORM FACTOR guess,
   // and reportedly comes back false for at least some Android tablets/
-  // devices, which would have let this exact folder button slip back
-  // through on Android despite the check existing at all. An Android (or
-  // iOS) user agent is reason enough on its own; userAgentData is only
-  // consulted as a fallback signal when the user agent string itself is
-  // inconclusive.
+  // devices. An Android (or iOS) user agent is reason enough on its own;
+  // userAgentData is only consulted as a fallback signal when the user
+  // agent string itself is inconclusive. Used below to gate the standalone-
+  // app exit button, and elsewhere (see isLikelyMobileDevice() callsites)
+  // for similar mobile-only/desktop-only UI decisions.
   function isLikelyMobileDevice(){
     if (/Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || "")) return true;
     try{
@@ -1666,7 +1671,6 @@
     }catch(e){}
     return false;
   }
-  var backupDirSupported = typeof window.showDirectoryPicker === "function" && !isLikelyMobileDevice();
 
   // Exit button: only makes sense once this is running as an installed app
   // on a phone/tablet -- installed Windows/Mac copies already get a native
@@ -1695,9 +1699,6 @@
     }, 350);
   });
 
-  var backupDirHandle = null;
-  var backupDirPermissionOK = false;
-  var backupDirName = "";
   function autoBackupFilename(){
     var d = new Date();
     var pad = function(n){ return String(n).padStart(2, "0"); };
@@ -1712,11 +1713,11 @@
   }
   // Same timestamp pattern as autoBackupFilename, but for the fully editable
   // project file (see projectPayload() further down) rather than a
-  // flattened picture. Only used on the direct-to-folder backup path (see
-  // maybeAutoBackup below) -- a flattened PNG shows what a plan looked like
-  // at that moment, but it can't be reopened and kept working on; for a
-  // business relying on this as a real safety net, the thing worth
-  // protecting is the actual editable state, not just a picture of it.
+  // flattened picture -- used on the plain-download fallback path below.
+  // A flattened PNG shows what a plan looked like at that moment, but it
+  // can't be reopened and kept working on; for a business relying on this
+  // as a real safety net, the thing worth protecting is the actual
+  // editable state, not just a picture of it.
   function autoBackupProjectFilename(){
     var d = new Date();
     var pad = function(n){ return String(n).padStart(2, "0"); };
@@ -1724,27 +1725,6 @@
     // See the matching comment in autoBackupFilename() above -- same reason.
     var timePart = pad(d.getHours()) + "-" + pad(d.getMinutes()) + "-" + pad(d.getSeconds());
     return (state.fileBase || "plan") + " autobackup " + datePart + " " + timePart + ".utzline.json";
-  }
-  // Writes straight into the chosen directory handle -- no picker, no
-  // confirmation dialog, just a file appearing there. A previously-granted
-  // permission can lapse (browser restart, OS-level revocation, the folder
-  // itself being moved/deleted) with no warning ahead of time, so every
-  // write is guarded: a permission-shaped failure rejects with a specific
-  // code the caller can react to (flip the UI to "needs reconnecting")
-  // rather than being treated the same as a normal I/O error.
-  function writeBlobToBackupDir(blob, filename){
-    // verifiedHandleWrite (defined earlier, alongside the Save PDF/Save
-    // project save-picker paths) reads the write back and rejects with
-    // { code: "empty_write" } if it landed as an empty/truncated file --
-    // the same silent-failure mode those paths guard against.
-    return backupDirHandle.getFileHandle(filename, { create: true }).then(function(fh){
-      return verifiedHandleWrite(fh, blob);
-    }).catch(function(err){
-      if (err && (err.name === "NotAllowedError" || err.name === "SecurityError")){
-        return Promise.reject({ code: "permission_lost" });
-      }
-      return Promise.reject(err);
-    });
   }
   // Every branch below used to retry a failed backup completely silently
   // forever (a bare .catch(){ backupDirty = true; }) -- fine for a single
@@ -1762,15 +1742,13 @@
   }
   function maybeAutoBackup(){
     var canDownloadsApi = !!downloadsApi;
-    var canFolder = backupDirSupported && backupDirHandle && backupDirPermissionOK;
     // NOTE: this used to also require (canDownloadsApi || canFolder) here
     // and just quietly do nothing at all otherwise -- which meant
     // auto-backup was a complete no-op, with no warning of any kind, on
-    // every mobile browser (no File System Access API, so canFolder is
-    // always false there) and every non-claude.ai context without a chosen
-    // folder. The checkbox/interval controls looked and behaved like a
-    // working feature the whole time. See the plain-download fallback
-    // below, which now covers exactly that gap.
+    // every mobile browser and every non-claude.ai context. The checkbox/
+    // interval controls looked and behaved like a working feature the whole
+    // time. See the plain-download fallback below, which now covers exactly
+    // that gap.
     if (!autoBackupOn || !backupDirty || !state.imageW) return;
     if (Date.now() - lastBackupAt < autoBackupIntervalMin * 60 * 1000) return;
     backupDirty = false;
@@ -1808,51 +1786,16 @@
       });
       return;
     }
-    if (canFolder){
-      // Folder path: write BOTH a flattened PNG (a quick visual reference)
-      // AND the actual editable project file -- the real safety net here,
-      // since reopening it with Open project means picking up exactly
-      // where you left off, not re-tracing every annotation from a
-      // picture. Both writes are independently verified (see
-      // writeBlobToBackupDir / verifiedHandleWrite); if either one fails,
-      // the whole backup counts as not done and retries next tick -- a PNG
-      // with no matching reopenable project (or vice versa) isn't a real
-      // backup.
-      var jsonBlob;
-      try{
-        jsonBlob = new Blob([JSON.stringify(projectPayload())], { type: "application/json" });
-      }catch(e){
-        backupDirty = true;
-        return;
-      }
-      renderExportBlob().then(function(pngBlob){
-        return writeBlobToBackupDir(pngBlob, autoBackupFilename());
-      }).then(function(){
-        return writeBlobToBackupDir(jsonBlob, autoBackupProjectFilename());
-      }).then(function(){
-        showToast("Backed up.");
-        autoBackupFailWarned = false;
-        markBackupSucceeded();
-      }).catch(function(err){
-        backupDirty = true; // retry on the next tick
-        if (err && err.code === "permission_lost"){
-          backupDirPermissionOK = false;
-          refreshBackupDirUI();
-        } else {
-          warnAutoBackupFail();
-        }
-      });
-      return;
-    }
-    // Neither the claude.ai downloads capability nor a chosen backup folder
-    // is available -- true on every mobile browser and any desktop browser
-    // without the File System Access API (Firefox, Safari). Fall back to a
-    // plain download of both files, exactly like Save (project + PDF)
-    // already does when neither of those is available, rather than
-    // treating "no fancy save target" as "do nothing at all". There's no
-    // write-back to verify here (a plain download can't be read back the
-    // way a folder handle can), so this path just trusts the browser the
-    // same way a manual Save's own plain-download fallback already does.
+    // Neither a level/room nor the claude.ai downloads capability is
+    // available -- true on every mobile browser and any desktop browser
+    // without the File System Access API (Firefox, Safari), i.e. the plain
+    // single-file fallback mode. Fall back to a plain download of both
+    // files, exactly like Save (project + PDF) already does when neither of
+    // those is available, rather than treating "no fancy save target" as
+    // "do nothing at all". There's no write-back to verify here (a plain
+    // download can't be read back the way a folder handle can), so this
+    // path just trusts the browser the same way a manual Save's own
+    // plain-download fallback already does.
     var jsonBlob2;
     try{
       jsonBlob2 = new Blob([JSON.stringify(projectPayload())], { type: "application/json" });
@@ -2826,7 +2769,7 @@
     return obj;
   }
   function makeRect(x, y, w, h, color){
-    return { id: uid(), type: "rect", x: x, y: y, w: w, h: h, color: color || defaultColorFor("rect"), strokeWidth: defaultStroke() };
+    return { id: uid(), type: "rect", x: x, y: y, w: w, h: h, color: color || defaultColorFor("rect"), strokeWidth: defaultStroke(), fillColor: null };
   }
   // A pasted-in photo, placed anywhere on the canvas (including well
   // outside the main photo/plan's own bounds — off to one side, say) and
@@ -2965,7 +2908,18 @@
 
   function renderObject(obj, isPreview){
     var g = el("g", { "data-id": obj.id, class: isPreview ? "ui-preview" : "obj" });
-    if (!isPreview && objOpacity(obj) < 1) g.setAttribute("opacity", objOpacity(obj));
+    // Opacity only ever fades an object's FILL-like content (a rect's fill,
+    // a text/callout box's background, a photo's pixels) -- never its
+    // border/outline or any text/label, which stay fully legible no matter
+    // how low Opacity is set (see each branch below: the fadeable element
+    // gets its own fill-opacity/opacity, everything else is left at the
+    // default full opacity). Dimension/line/angle have no separate fill at
+    // all -- the stroke IS the whole visible mark -- so for those three the
+    // whole group still fades together exactly as before; there's nothing
+    // for a "keep the border full" rule to apply to when there's no fill to
+    // protect it from.
+    var fadesAsWhole = obj.type === "dimension" || obj.type === "line" || obj.type === "angle";
+    if (!isPreview && fadesAsWhole && objOpacity(obj) < 1) g.setAttribute("opacity", objOpacity(obj));
     if (obj.type === "dimension" || obj.type === "line"){
       // Angle for the tick/arrow orientation always comes from the TRUE
       // line -- unaffected by any offset, since a perpendicular offset is a
@@ -3052,12 +3006,27 @@
       g.appendChild(renderLabelGroup(obj.label, "label"));
     } else if (obj.type === "rect"){
       var rx = Math.min(obj.x, obj.x + obj.w), ry = Math.min(obj.y, obj.y + obj.h), rw = Math.abs(obj.w), rh = Math.abs(obj.h);
+      // Optional background fill, off by default (obj.fillColor unset) --
+      // same on/off-colour pattern as an image's optional border colour.
+      // Drawn BEFORE the border passes below so the border always sits
+      // crisply on top of it, and faded with its own fill-opacity (not the
+      // object's whole group) so lowering Opacity to see through the fill
+      // never also fades the border -- the exact "you lose the crisp edge
+      // right when you want it most" problem this was built to avoid.
+      if (obj.fillColor){
+        g.appendChild(el("rect", { x: rx, y: ry, width: rw, height: rh, fill: obj.fillColor, stroke: "none", "fill-opacity": objOpacity(obj) }));
+      }
       g.appendChild(el("rect", { x: rx, y: ry, width: rw, height: rh, stroke: "#ffffff", "stroke-width": haloOuterW(obj.strokeWidth), fill: "none" }));
       g.appendChild(el("rect", { x: rx, y: ry, width: rw, height: rh, stroke: "#000000", "stroke-width": haloW(obj.strokeWidth), fill: "none" }));
       g.appendChild(el("rect", { x: rx, y: ry, width: rw, height: rh, stroke: obj.color, "stroke-width": obj.strokeWidth, fill: "none" }));
     } else if (obj.type === "image"){
       var imx = Math.min(obj.x, obj.x + obj.w), imy = Math.min(obj.y, obj.y + obj.h), imw = Math.abs(obj.w), imh = Math.abs(obj.h);
-      g.appendChild(el("image", { x: imx, y: imy, width: imw, height: imh, href: obj.src, preserveAspectRatio: "none" }));
+      // The photo itself is this object's "fill" -- Opacity fades the image
+      // pixels only, never the border below (halo or the optional colored
+      // one), so a dimmed reference photo still keeps a crisp, fully
+      // visible edge against whatever's behind it. el() skips undefined
+      // attrs, so this only ever adds "opacity" when it's actually below 1.
+      g.appendChild(el("image", { x: imx, y: imy, width: imw, height: imh, href: obj.src, preserveAspectRatio: "none", opacity: objOpacity(obj) < 1 ? objOpacity(obj) : undefined }));
       // A thin two-tone border (same white-then-black halo language as
       // everything else) so a pasted photo's edge reads clearly even when
       // it's sitting on top of a busy plan or another photo right behind
@@ -3092,7 +3061,12 @@
         var tBoxX = obj.x - thbw, tBoxY = obj.y - thbh, tBoxW = thbw * 2, tBoxH = thbh * 2;
         var tBoxRot = "rotate(" + obj.rot + " " + obj.x + " " + obj.y + ")";
         g.appendChild(el("rect", { x: tBoxX, y: tBoxY, width: tBoxW, height: tBoxH, transform: tBoxRot, fill: "none", stroke: "#ffffff", "stroke-width": haloOuterW(tBoxSw) }));
-        g.appendChild(el("rect", { x: tBoxX, y: tBoxY, width: tBoxW, height: tBoxH, transform: tBoxRot, fill: "#ffffff", stroke: "#000000", "stroke-width": haloW(tBoxSw) }));
+        // This middle pass carries both the black halo STROKE and the box's
+        // actual white BACKGROUND fill in one rect -- fill-opacity fades
+        // only that background, leaving the halo stroke (and everything
+        // else: the outer white ring, the colored border below, the text
+        // itself) at full opacity no matter how low Opacity is set.
+        g.appendChild(el("rect", { x: tBoxX, y: tBoxY, width: tBoxW, height: tBoxH, transform: tBoxRot, fill: "#ffffff", "fill-opacity": objOpacity(obj), stroke: "#000000", "stroke-width": haloW(tBoxSw) }));
         g.appendChild(el("rect", { x: tBoxX, y: tBoxY, width: tBoxW, height: tBoxH, transform: tBoxRot, fill: "none", stroke: obj.color, "stroke-width": tBoxSw }));
       }
       g.appendChild(renderLabelGroup({ text: obj.text, x: obj.x, y: obj.y, rot: obj.rot, fontSize: obj.fontSize, family: obj.family, color: obj.color }, "label"));
@@ -3121,7 +3095,11 @@
       var boxX = lb.x - hbw, boxY = lb.y - hbh, boxW = hbw * 2, boxH = hbh * 2;
       var boxRot = "rotate(" + lb.rot + " " + lb.x + " " + lb.y + ")";
       g.appendChild(el("rect", { x: boxX, y: boxY, width: boxW, height: boxH, transform: boxRot, fill: "none", stroke: "#ffffff", "stroke-width": haloOuterW(boxSw) }));
-      g.appendChild(el("rect", { x: boxX, y: boxY, width: boxW, height: boxH, transform: boxRot, fill: "#ffffff", stroke: "#000000", "stroke-width": haloW(boxSw) }));
+      // Same fill-opacity-only fade as the text box above -- the box's
+      // white background fades with Opacity, the black halo stroke it
+      // shares this rect with (and everything else: leader line, anchor
+      // dot, colored border, label text) stays fully opaque.
+      g.appendChild(el("rect", { x: boxX, y: boxY, width: boxW, height: boxH, transform: boxRot, fill: "#ffffff", "fill-opacity": objOpacity(obj), stroke: "#000000", "stroke-width": haloW(boxSw) }));
       g.appendChild(el("rect", { x: boxX, y: boxY, width: boxW, height: boxH, transform: boxRot, fill: "none", stroke: obj.color, "stroke-width": boxSw }));
       g.appendChild(renderLabelGroup(lb, "label"));
     }
@@ -3449,7 +3427,7 @@
     // the background photo from visually "dragging around" on an ordinary
     // click — plain click-drag is reserved for drawing/selecting, and never
     // moves the view out from under you by accident.
-    if (e.button === 1 || (e.button === 0 && spaceDown)){
+    if (e.button === 1 || (e.button === 0 && (spaceDown || state.tool === "pan"))){
       e.preventDefault(); // middle-button drag would otherwise trigger the browser's own autoscroll
       dragMode = { kind: "pan", startClient: startClient, startView: { tx: state.view.tx, ty: state.view.ty } };
       updateCursor();
@@ -4129,6 +4107,7 @@
     state.tool = tool;
     document.querySelectorAll("#toolButtons .ibtn").forEach(function(b){ b.classList.toggle("active", b.dataset.tool === tool); });
     if (tool !== "select") state.selectedId = null;
+    updateCursor(); // Pan tool keeps its own persistent hand cursor -- see updateCursor()
     renderAll();
   }
   document.getElementById("toolButtons").addEventListener("click", function(e){
@@ -4169,6 +4148,7 @@
     if ((e.ctrlKey || e.metaKey) && k === "z"){ e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === "y"){ e.preventDefault(); redo(); return; }
     if (k === "v") setTool("select");
+    else if (k === "h") setTool("pan");
     else if (k === "d") setTool("dimension");
     else if (k === "l") setTool("line");
     else if (k === "a") setTool("angle");
@@ -4462,6 +4442,36 @@
       bcRow.appendChild(bcSw); panel.appendChild(bcRow);
     }
 
+    // Fill colour -- rectangles only. Off by default (obj.fillColor null,
+    // same "None" swatch pattern as an image's border colour above) so a
+    // plain outline rect looks exactly as it always has; picking a colour
+    // here is the only way a rect gets any fill at all (see makeRect and
+    // the rect branch of renderObject, which draws this UNDER the border
+    // passes and fades it with the Opacity slider independently of the
+    // border/label -- see renderObject's fill-opacity handling).
+    if (obj && obj.type === "rect"){
+      var fcRow = document.createElement("div"); fcRow.className = "panel-row";
+      var fcLab = document.createElement("span"); fcLab.className = "panel-label"; fcLab.textContent = "Fill colour";
+      fcRow.appendChild(fcLab);
+      var fcSw = document.createElement("div"); fcSw.className = "swatches";
+      var fcNone = document.createElement("div");
+      fcNone.className = "swatch" + (!obj.fillColor ? " selected" : "");
+      fcNone.title = "None";
+      fcNone.style.background = "repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 8px 8px";
+      fcNone.style.border = "1px solid var(--border-strong)";
+      fcNone.addEventListener("click", function(){ obj.fillColor = null; pushHistory(); renderAll(); });
+      fcSw.appendChild(fcNone);
+      COLORS.forEach(function(c){
+        var d = document.createElement("div");
+        d.className = "swatch" + (c === obj.fillColor ? " selected" : "");
+        d.style.background = c; d.style.border = c === "#ffffff" ? "1px solid var(--border-strong)" : "";
+        d.title = c;
+        d.addEventListener("click", function(){ obj.fillColor = c; pushHistory(); renderAll(); });
+        fcSw.appendChild(d);
+      });
+      fcRow.appendChild(fcSw); panel.appendChild(fcRow);
+    }
+
     // "Make default" -- only worth showing once there's a selected object
     // whose color actually differs from ITS TYPE's current default
     // (otherwise there'd be nothing for the button to do). Only that one
@@ -4571,7 +4581,18 @@
         if (Math.abs(px) >= Math.abs(py)) return px > 0 ? "Right" : "Left";
         return py > 0 ? "Bottom" : "Top";
       }
+      // Order by what the word actually means, not by the a/b sign that
+      // produced it -- sideWord(-1)/sideWord(1) can come out as either
+      // Left-then-Right or Right-then-Left depending on this line's own
+      // draw direction, so building the array as [a, b] in THAT order used
+      // to leave "Right" sitting on the left-hand button (and vice versa)
+      // for a line drawn the "other" way. Left always sorts before Right,
+      // Top always sorts before Bottom, regardless of which of a/b produced
+      // which word -- so the button's own layout always matches its label.
+      var SIDE_WORD_ORDER = { "Left": 0, "Top": 0, "Right": 1, "Bottom": 1 };
       var sideOptions = [["a", sideWord(-1)], ["b", sideWord(1)]];
+      sideOptions.sort(function(x, y){ return SIDE_WORD_ORDER[x[1]] - SIDE_WORD_ORDER[y[1]]; });
+      var isTopBottomPair = sideOptions[0][1] === "Top" || sideOptions[0][1] === "Bottom";
       var sdRow = document.createElement("div"); sdRow.className = "panel-row";
       var sdLab = document.createElement("span"); sdLab.className = "panel-label"; sdLab.textContent = "Label side";
       sdRow.appendChild(sdLab);
@@ -4579,9 +4600,11 @@
       // ever two options (whichever pair of Top/Bottom/Left/Right actually
       // applies to this line's own direction, from sideWord above), a
       // one-tap segmented pair reads faster and needs no extra tap to open
-      // a menu first.
+      // a menu first. Top/Bottom pairs stack vertically (see .seg-group.
+      // stacked above) so the buttons' own layout mirrors the physical
+      // relationship they're choosing between.
       var curSide = obj.label.side === "b" ? "b" : "a";
-      var sdGroup = document.createElement("div"); sdGroup.className = "seg-group";
+      var sdGroup = document.createElement("div"); sdGroup.className = "seg-group" + (isTopBottomPair ? " stacked" : "");
       sideOptions.forEach(function(o){
         var btn = document.createElement("button");
         btn.type = "button";
@@ -5477,15 +5500,48 @@
   });
 
   /* ============================== open / drop image ============================== */
-  document.getElementById("newBtn").addEventListener("click", function(){
-    function startBlank(){
-      var blank = generateBlank();
-      applyLoadedImage(blank.dataURL, blank.w, blank.h, "plan");
-      showToast("Started a new file — Open, Insert image, or paste a photo/PDF to begin.");
-    }
-    if (!state.objects.length){ startBlank(); return; }
+  // "New" used to always wipe THIS plan's content back to blank in place --
+  // safe from an accidental tap (there's a confirm dialog first) but not
+  // from simply leaving it a moment too long afterward: the next auto-
+  // backup tick (~30s) autosaves whatever's on screen straight over the
+  // level's real save file, and a level opened only moments earlier (before
+  // its first rolling backup snapshot) had nothing left to recover the real
+  // content from. With a project/level open, the app already has a
+  // completely safe way to reach the same "blank canvas to draw on" goal --
+  // starting a brand new level, which never touches this level's own files
+  // at all -- so that's the primary tap now. The old in-place clear is
+  // still here for the rarer case of wanting to reuse THIS level's own
+  // folder for something else entirely: press and hold (or right-click) the
+  // button, same gesture the project/level list rows already use for their
+  // own less-common destructive action.
+  var newBtnEl = document.getElementById("newBtn");
+  // NOTE: deliberately NOT named startBlankPlan -- that name is already a
+  // top-level function declared earlier (used by openLevel/openRoom to seed
+  // a brand-new level/room's blank canvas). Two top-level function
+  // declarations sharing a name silently collide (the later one wins for
+  // every caller), which previously made a fresh level/room's own open flow
+  // pop an incorrect toast showing the raw level/room name. Kept distinct on
+  // purpose.
+  function startBlankPlanWithToast(toastMsg){
+    var blank = generateBlank();
+    applyLoadedImage(blank.dataURL, blank.w, blank.h, "plan");
+    showToast(toastMsg);
+  }
+  newBtnEl.addEventListener("click", function(){
+    if (activeLevelName){ switchProject(); return; }
+    // No project/level system in play (the plain single-file fallback mode
+    // this app also supports) -- there's no separate, safer place to route
+    // this to, so it keeps its original direct behavior.
+    if (!state.objects.length){ startBlankPlanWithToast("Started a new file — Open, Insert image, or paste a photo/PDF to begin."); return; }
     showConfirm("Start a new file? This clears the current plan and its " + state.objects.length + " annotation(s) (save a project file first if you want to keep them).").then(function(ok){
-      if (ok) startBlank();
+      if (ok) startBlankPlanWithToast("Started a new file — Open, Insert image, or paste a photo/PDF to begin.");
+    });
+  });
+  wireLongPress(newBtnEl, function(){
+    if (!activeLevelName) return; // nothing extra to offer in single-file mode -- the plain tap above already covers it
+    if (!state.objects.length){ startBlankPlanWithToast("Cleared this level's content — Open, Insert image, or paste a photo/PDF to begin."); return; }
+    showConfirm("Clear this level's content? This wipes the current plan and its " + state.objects.length + " annotation(s) back to blank, reusing this same level's folder (save a project file first if you want to keep them).").then(function(ok){
+      if (ok) startBlankPlanWithToast("Cleared this level's content — Open, Insert image, or paste a photo/PDF to begin.");
     });
   });
   document.getElementById("openBtn").addEventListener("click", function(){
@@ -6353,81 +6409,7 @@
     autoBackupLocked = !autoBackupLocked;
     try{ localStorage.setItem("redline_autobackup_locked", autoBackupLocked ? "1" : "0"); }catch(e){}
     refreshAutoBackupUI();
-    refreshBackupDirUI(); // the folder button is locked/unlocked together with everything else here
     showToast(autoBackupLocked ? "Auto-backup settings locked." : "Auto-backup settings unlocked.");
-  });
-  // ---- auto-backup folder button ----
-  // Only shown at all when the File System Access directory picker exists
-  // (Chrome/Edge desktop) -- everywhere else auto-backup just keeps using
-  // downloadsApi or a plain download, exactly as before this feature existed.
-  var autoBackupFolderBtn = document.getElementById("autoBackupFolderBtn");
-  function refreshBackupDirUI(){
-    if (!backupDirSupported) return; // stays hidden (display:none from markup)
-    autoBackupFolderBtn.style.display = "";
-    // The folder choice is itself an auto-backup setting -- someone locking
-    // the interval/on-off toggle to stop accidental changes would rightly
-    // expect this to be covered too, since clicking it can silently switch
-    // (or via right-click, clear) where backups land. Disabling it here is
-    // belt-and-braces alongside the same check inside the click/contextmenu
-    // handlers below.
-    autoBackupFolderBtn.disabled = autoBackupLocked;
-    var has = !!backupDirHandle;
-    autoBackupFolderBtn.classList.toggle("active", has && backupDirPermissionOK);
-    autoBackupFolderBtn.classList.toggle("needs-attn", has && !backupDirPermissionOK);
-    if (!has){
-      autoBackupFolderBtn.title = "Choose a folder to save auto-backups to directly — no download prompts (Chrome/Edge desktop only)";
-    } else if (backupDirPermissionOK){
-      autoBackupFolderBtn.title = "Auto-backup saves straight to “" + backupDirName + "” — click to switch to a different folder, right-click to go back to plain downloads";
-    } else {
-      autoBackupFolderBtn.title = "Auto-backup folder needs to be reconnected — click to resume (or choose a different folder)";
-    }
-  }
-  function chooseBackupDir(){
-    window.showDirectoryPicker({ id: "redline-autobackup", mode: "readwrite" }).then(function(handle){
-      backupDirHandle = handle; backupDirPermissionOK = true; backupDirName = handle.name;
-      refreshBackupDirUI();
-      showToast("Auto-backup will save straight to “" + backupDirName + "”.");
-      // Best-effort persistence so the choice survives a reload -- if this
-      // fails (private browsing, storage quota, etc.) the folder still
-      // works for the rest of THIS session, so a persistence failure here
-      // must never look like the whole thing failed (that's why this isn't
-      // chained into the .catch below).
-      idbSet("backupDirHandle", handle).catch(function(){});
-    }).catch(function(err){
-      if (err && err.name === "AbortError") return; // cancelled -- no-op, keep whatever was set before
-      showToast("Couldn't set that folder.");
-    });
-  }
-  autoBackupFolderBtn.addEventListener("click", function(){
-    if (autoBackupLocked) return; // belt-and-braces; the control is disabled too
-    if (!backupDirSupported) return;
-    if (backupDirHandle && !backupDirPermissionOK){
-      // Folder already chosen but permission lapsed (browser restart, etc.)
-      // -- try to resume the SAME folder first, since that's what most
-      // clicks in this state mean. requestPermission() only works from a
-      // real user gesture like this click, which is exactly why this can't
-      // just be retried silently from the backup timer itself.
-      backupDirHandle.requestPermission({ mode: "readwrite" }).then(function(perm){
-        if (perm === "granted"){
-          backupDirPermissionOK = true;
-          refreshBackupDirUI();
-          showToast("Auto-backup folder reconnected.");
-        } else {
-          chooseBackupDir(); // they'd rather pick a different one
-        }
-      }).catch(function(){ chooseBackupDir(); });
-      return;
-    }
-    chooseBackupDir();
-  });
-  autoBackupFolderBtn.addEventListener("contextmenu", function(e){
-    e.preventDefault();
-    if (autoBackupLocked) return; // clearing the folder is a change too
-    if (!backupDirHandle) return;
-    backupDirHandle = null; backupDirPermissionOK = false; backupDirName = "";
-    refreshBackupDirUI();
-    idbSet("backupDirHandle", null);
-    showToast("Auto-backup folder cleared — backups will download as files instead.");
   });
   // flattened=true tags the name with "_UTZLINE" -- for the PDF/PNG export
   // paths below, which bake every annotation into a flat, non-editable
@@ -6880,6 +6862,20 @@
   // file size sane for a phone photo that can be 12+ megapixels; comfortably
   // above what anyone can usefully zoom to on a printed/exported page.
   var PDF_EXPORT_PHOTO_MAX_DIM = 3000;
+  // jsPDF's addImage() only respects a chosen JPEG quality when it's handed
+  // an already-encoded JPEG data-URL string -- pass it a raw <canvas>/<img>
+  // element instead (as every embed below used to) and it calls
+  // canvas.toDataURL("image/jpeg", 1.0) internally, HARDCODED to maximum
+  // quality, silently ignoring whatever "compression" argument addImage is
+  // given (confirmed directly against this app's own vendored jsPDF: NONE/
+  // FAST/MEDIUM/SLOW/undefined all produced byte-identical output). 0.88 is
+  // comfortably in the range that's visually indistinguishable from full
+  // quality at normal zoom while cutting embedded-photo size by roughly
+  // half to two-thirds -- real reports of 30MB+ exports (multiple full-
+  // resolution, uncompressed photos) were the reason this needed fixing at
+  // all. Applies to both the base plan backdrop and every placed reference
+  // photo below.
+  var PDF_EXPORT_JPEG_QUALITY = 0.88;
   // Loads state.imageDataURL into a fresh <img> and waits for it to decode —
   // separate from the on-screen baseImage (an SVG <image>, which most
   // browsers refuse as a canvas drawImage() source) so it can be drawn to a
@@ -7026,7 +7022,11 @@
         compress: true
       });
       registerExportFonts(doc);
-      doc.addImage(canvas, "JPEG", 0, 0, pageW, pageH, undefined, undefined, undefined);
+      // Pre-encode ourselves at PDF_EXPORT_JPEG_QUALITY (see its comment
+      // above) and hand addImage the resulting data-URL STRING, not the raw
+      // canvas -- that's what actually gets a smaller, quality-controlled
+      // JPEG into the PDF instead of a silently-full-quality one.
+      doc.addImage(canvas.toDataURL("image/jpeg", PDF_EXPORT_JPEG_QUALITY), "JPEG", 0, 0, pageW, pageH, undefined, undefined, undefined);
 
       // Each pasted-in reference photo is embedded as its OWN image object,
       // in the same order they sit in state.objects (so later ones still
@@ -7041,20 +7041,23 @@
       imageObjs.forEach(function(o, i){
         var img = imgs[baseTiles.length + i];
         var natW = img.naturalWidth || img.width, natH = img.naturalHeight || img.height;
-        var src = img;
         var longest = Math.max(natW, natH);
+        var outW = natW, outH = natH;
         if (longest > PDF_EXPORT_PHOTO_MAX_DIM){
           var photoScale = PDF_EXPORT_PHOTO_MAX_DIM / longest;
-          var pc = document.createElement("canvas");
-          pc.width = Math.max(1, Math.round(natW * photoScale));
-          pc.height = Math.max(1, Math.round(natH * photoScale));
-          var pctx = pc.getContext("2d");
-          pctx.drawImage(img, 0, 0, pc.width, pc.height);
-          src = pc;
+          outW = Math.max(1, Math.round(natW * photoScale));
+          outH = Math.max(1, Math.round(natH * photoScale));
         }
+        // Always goes through a canvas now (even when no downscaling is
+        // needed) so toDataURL can encode it at PDF_EXPORT_JPEG_QUALITY --
+        // an <img> element has no toDataURL of its own to call.
+        var pc = document.createElement("canvas");
+        pc.width = outW; pc.height = outH;
+        pc.getContext("2d").drawImage(img, 0, 0, outW, outH);
+        var srcDataUrl = pc.toDataURL("image/jpeg", PDF_EXPORT_JPEG_QUALITY);
         var ox = (Math.min(o.x, o.x + o.w) - cb.x0) * PX_TO_PT, oy = (Math.min(o.y, o.y + o.h) - cb.y0) * PX_TO_PT;
         var ow = Math.abs(o.w) * PX_TO_PT, oh = Math.abs(o.h) * PX_TO_PT;
-        doc.addImage(src, "JPEG", ox, oy, ow, oh, undefined, undefined, undefined);
+        doc.addImage(srcDataUrl, "JPEG", ox, oy, ow, oh, undefined, undefined, undefined);
       });
 
       // Annotations only — cloneWorldForExport() strips handles/preview but
@@ -7225,17 +7228,53 @@
       x1: (r.width - state.view.tx) / s, y1: (r.height - state.view.ty) / s
     };
   }
-  function renderViewSnapshotBlob(){
+  // Same reserved-footer-strip idea as computeExportBounds, but sized off
+  // this VIEWPORT crop's own width rather than the whole plan's, so the
+  // watermark bar this feeds into addExportOverlays scales sensibly whether
+  // the current view is zoomed in tight on one corner or showing the whole
+  // plan -- see the "current view" share note this was built to fix (it
+  // used to carry no branding/name/timestamp at all).
+  function computeViewSnapshotBounds(){
     var cb = computeViewportWorldBounds();
+    var contentW = cb.x1 - cb.x0;
+    var wmSize = clamp(contentW * 0.044, 44, 128);
+    var footerH = Math.round(wmSize * 3.6);
+    return { x0: cb.x0, y0: cb.y0, x1: cb.x1, y1: cb.y1 + footerH, wmSize: wmSize, contentY1: cb.y1 };
+  }
+  function renderViewSnapshotBlob(){
+    var viewportBounds = computeViewportWorldBounds();
+    var cb = computeViewSnapshotBounds();
     var contentW = cb.x1 - cb.x0, contentH = cb.y1 - cb.y0;
-    // Matches the current on-screen resolution (times device pixel ratio,
-    // capped) rather than the big fixed supersample the full export uses --
-    // this is meant to be "what you're looking at right now", not a
-    // maximum-quality copy of the plan.
+    // Real screenshot-equivalent resolution: density is derived from the
+    // ACTUAL on-screen relationship (real CSS pixels per world-unit, times
+    // device pixel ratio), not a fixed dpr-per-world-unit guess -- that old
+    // approach only matched genuine on-screen sharpness at exactly 100%
+    // zoom; at any other zoom it rendered at the same fixed density
+    // regardless of scale, which came out visibly softer than the real
+    // screen once zoomed in past 100% (the opposite of what "matches the
+    // current on-screen resolution" was meant to guarantee). A minimum
+    // long-edge floor is added on top so even a small window or a heavily
+    // zoomed-out crop still comes out legible once shared/viewed elsewhere,
+    // instead of tracking the viewport's raw on-screen pixel size all the
+    // way down to something illegible.
+    var r = svgRoot.getBoundingClientRect();
     var dpr = clamp(window.devicePixelRatio || 1, 1, 3);
-    var outW = Math.max(1, Math.round(contentW * dpr));
-    var outH = Math.max(1, Math.round(contentH * dpr));
+    var viewportContentW = viewportBounds.x1 - viewportBounds.x0;
+    var density = viewportContentW > 0 ? (r.width * dpr) / viewportContentW : dpr;
+    var outW = Math.max(1, Math.round(contentW * density));
+    var outH = Math.max(1, Math.round(contentH * density));
+    var VIEW_SNAPSHOT_MIN_LONG_EDGE = 1600;
+    var longEdge = Math.max(outW, outH);
+    if (longEdge > 0 && longEdge < VIEW_SNAPSHOT_MIN_LONG_EDGE){
+      var floorScale = VIEW_SNAPSHOT_MIN_LONG_EDGE / longEdge;
+      outW = Math.max(1, Math.round(outW * floorScale));
+      outH = Math.max(1, Math.round(outH * floorScale));
+    }
     var clone = cloneWorldForExport();
+    // Same identification bar (plan name, logo, save timestamp) Save PDF/
+    // PNG and Share PDF already carry -- a "current view" share used to go
+    // out with none of it.
+    addExportOverlays(clone, cb);
     var outSvg = document.createElementNS(SVG_NS, "svg");
     outSvg.setAttribute("xmlns", SVG_NS);
     outSvg.setAttribute("width", outW);
@@ -7483,21 +7522,6 @@
     if (hintTextEl) hintTextEl.appendChild(document.createTextNode(" · " + APP_VERSION));
     if (window.claude && window.claude.use){
       window.claude.use("downloads").then(function(d){ downloadsApi = d; }).catch(function(){});
-    }
-    refreshBackupDirUI();
-    if (backupDirSupported){
-      idbGet("backupDirHandle").then(function(handle){
-        if (!handle) return;
-        backupDirHandle = handle; backupDirName = handle.name;
-        return handle.queryPermission({ mode: "readwrite" }).then(function(perm){
-          backupDirPermissionOK = perm === "granted";
-        });
-      }).catch(function(){
-        // Handle is unusable (folder moved/deleted, revoked, or just not the
-        // shape we expect) -- fall back to "no folder chosen" rather than
-        // getting stuck in a broken state.
-        backupDirHandle = null; backupDirPermissionOK = false; backupDirName = "";
-      }).then(refreshBackupDirUI);
     }
     // Projects supported in this browser -- the whole point of this fork --
     // means boot always opens to the picker (see bootIntoProjectGate below)
