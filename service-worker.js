@@ -377,7 +377,25 @@
 // stepping around while nothing was ever open) still go straight through
 // with no prompt at all -- this only ever interrupts a genuine unsaved
 // change.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v24";
+// (v25: toolbar layout fix, requested by Andrew the same day -- "the menu
+// bar keeps jumping when a button is pressed, can it be locked into one /
+// 2 rows (based on screen size) file related on the top / first bar and
+// drawing related on the second bar." Root cause: the toolbar already had
+// two named halves in the markup (file/plan actions, drawing tools) but
+// they were flattened into ONE flex-wrap:wrap container at every width
+// except a narrow phone -- so toggling any button's visibility (Save/
+// Rooms/Switch project/the room-jump dropdown/Share/exit all show or hide
+// depending on what's open) could shift exactly where that shared row
+// wrapped, visibly reflowing every button after it. Fixed by making the
+// two rows permanently, independently fixed at every screen width -- file
+// actions on top, drawing tools below, exactly as requested -- each its
+// own non-wrapping strip that scrolls sideways on its own if it doesn't
+// fit, so a button appearing or disappearing can only ever affect its own
+// row's scroll room, never reflow the other row or change the row count.
+// A generous width threshold (2200px) merges both rows onto one line on
+// genuinely huge monitors, where there's real spare room for that rather
+// than it being a coincidence of one particular window size.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v25";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

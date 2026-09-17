@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v24">
+<link rel="manifest" href="./manifest.json?v=v25">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v24">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v24">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v25">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v25">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -117,15 +117,25 @@
     display:flex; flex-direction:column;
   }
 
-  /* ---------- toolbar ---------- */
+  /* ---------- toolbar ----------
+     Two ALWAYS-separate, fixed rows by default (file/plan actions on top,
+     drawing tools below -- see the HTML comment just above #toolbarRowFile
+     for the full "why", 2026-09-17) -- .toolbar stacks its two
+     .toolbar-row children in a column, and each row is its own
+     non-wrapping, independently horizontally-scrolling strip (see
+     .toolbar-row below), so a button showing/hiding never changes how many
+     rows are on screen and never reflows the OTHER row. Re-merged onto one
+     line only past the very wide min-width rule further down, where
+     there's genuinely enough room for that to help rather than just being
+     a coincidence of window width. */
   .toolbar{
-    display:flex; align-items:center; gap:6px;
-    padding:8px 10px;
+    display:flex; align-items:stretch; gap:0;
+    flex-direction:column;
+    padding:0;
     background:var(--surface-1);
     border-bottom:1px solid var(--border);
     box-shadow:var(--shadow);
     z-index:20;
-    flex-wrap:wrap;
   }
   .brand{
     display:flex; align-items:center; gap:8px;
@@ -153,10 +163,24 @@
     border:1px solid var(--border);
   }
   .sep{width:1px; align-self:stretch; background:var(--border); margin:2px 4px;}
-  .spacer{flex:1;}
-  /* Invisible to layout except inside the phone media query below, where it
-     becomes each half's own scrolling row -- see that rule for why. */
-  .toolbar-row{display:contents;}
+  /* Each row is its own fixed, non-wrapping, independently
+     horizontally-scrolling strip at every width (see .toolbar's own
+     comment above) -- a button showing/hiding inside one row can only ever
+     add/remove that row's own scroll room, never wrap into a new line and
+     never touch the other row. Only the min-width rule far below flattens
+     this back to display:contents, merging both rows onto one physical
+     line on screens wide enough for that to actually fit without either
+     row needing to scroll in the first place. */
+  .toolbar-row{
+    display:flex; align-items:center; gap:6px;
+    padding:8px 10px;
+    flex-wrap:nowrap;
+    overflow-x:auto; overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:thin;
+  }
+  .toolbar-row > *{flex:none;}
+  #toolbarRowFile{border-bottom:1px solid var(--border);}
   .ibtn{
     display:flex; align-items:center; justify-content:center;
     width:32px; height:32px;
@@ -643,42 +667,17 @@
     .status{font-size:10px;}
     .layers-panel{width:min(240px, calc(100vw - 16px)); right:8px; top:8px; max-height:60vh;}
 
-    /* Phone toolbar: at tablet widths and up, .toolbar's flex-wrap:wrap
-       above lets the row grow to two/three lines with everything at a
-       comfortable size. On a phone-narrow screen there isn't room for that
-       -- wrapping just squashes each row shorter and shorter until buttons
-       overlap/crowd each other, which is the "too small to use" complaint.
-       A single row that scrolls sideways fixed that, but left everything
-       on one long strip you had to keep swiping across. Splitting it into
-       its two natural halves -- editing tools (toolbarRow1) above, file/
-       plan actions (toolbarRow2) below -- keeps every button at full,
-       easy-to-tap size while cutting how far you ever need to swipe in
-       one direction, and each half scrolls independently. .toolbar-row is
-       plain display:contents everywhere else (see its base rule above),
-       so this only changes anything at phone widths. The brand name above
-       is hidden here too since it was just taking up scroll space for no
-       functional purpose on a phone. */
-    .toolbar{
-      flex-direction:column;
-      align-items:stretch;
-      flex-wrap:nowrap;
-      overflow:visible;
-    }
-    .toolbar-row{
-      display:flex;
-      align-items:center;
-      gap:6px;
-      flex-wrap:nowrap;
-      overflow-x:auto;
-      -webkit-overflow-scrolling:touch;
-      scrollbar-width:none;
-    }
+    /* Phone toolbar: the two-fixed-rows layout (file/plan actions on top,
+       drawing tools below, each independently side-scrolling) is now the
+       base behaviour at every width -- see .toolbar/.toolbar-row's own
+       comments up top -- so nothing about the ROW layout itself needs to
+       change here any more. This query now only bumps touch targets toward
+       the ~40-44px phones need -- 32px icon buttons are fine with a mouse
+       cursor but tight for a fingertip -- and hides the scrollbar thumb,
+       which reads as visual clutter on a touch device that scrolls by
+       dragging directly. */
+    .toolbar-row{scrollbar-width:none;}
     .toolbar-row::-webkit-scrollbar{display:none;}
-    .toolbar-row > *{flex:none;}
-    .spacer{display:none;} /* nothing to push into once each row scrolls instead of wraps */
-
-    /* Bump touch targets toward the ~40-44px phones need -- 32px icon
-       buttons are fine with a mouse cursor but tight for a fingertip. */
     .ibtn{width:40px; height:40px;}
     .ibtn svg{width:20px; height:20px;}
     .tbtn{height:40px; padding:0 14px; font-size:13px;}
@@ -689,6 +688,23 @@
     .autobk-lock svg{width:16px; height:16px;}
     .autobk-stepper button{width:24px; height:24px;}
     #fileNameBtnLabel{max-width:90px;}
+  }
+
+  /* Genuinely huge monitors only: both rows' realistic worst case (every
+     file button visible AND every drawing button visible at once) still
+     comfortably fits on one physical line well before this width, so
+     merging them here isn't a coincidence of one particular window size --
+     there's real spare room. .toolbar-row goes back to display:contents
+     (invisible to layout, same as it always was pre-2026-09-17), so
+     .toolbar's own flex row takes over and lays out every button from both
+     rows in DOM order -- file actions, then drawing tools -- on one line.
+     Below this width (the vast majority of real screens, including most
+     desktops/laptops), the two-fixed-rows layout above is what's in
+     effect, which is what actually fixes the reported "jumping". */
+  @media (min-width:2200px){
+    .toolbar{flex-direction:row; align-items:center; flex-wrap:nowrap; overflow-x:auto; padding:8px 10px; gap:6px;}
+    .toolbar-row{display:contents;}
+    #toolbarRowFile{border-bottom:none;}
   }
 
   /* ---- Viewer mode (read-only build for the drafting office) ----
@@ -760,89 +776,29 @@
 
 <div class="app" id="app">
   <div class="toolbar" id="toolbar">
-    <!-- Two named halves so the phone layout (see the max-width:640px rule
-         below) can turn each into its own full-width, independently
-         side-scrolling row -- "editing tools" on top, "file/plan actions"
-         below, instead of one very long single scrolling row or the old
-         auto-wrap that squashed everything trying to fit as many rows as
-         it took. display:contents on .toolbar-row at every OTHER width
-         makes these wrapper divs invisible to layout, so nothing changes
-         at tablet/desktop sizes -- children lay out exactly as if they
-         were still direct children of .toolbar. -->
-    <div class="toolbar-row" id="toolbarRow1">
+    <!-- Two named, ALWAYS-separate rows -- file/plan actions on top,
+         drawing tools below (2026-09-17, requested by Andrew: "the menu bar
+         keeps jumping when a button is pressed, can it be locked into one /
+         2 rows ... file related on the top / first bar and drawing related
+         on the second bar"). Previously .toolbar-row was display:contents
+         at every width except a narrow phone, so at ordinary desktop/
+         tablet widths every button -- both rows' worth -- sat in ONE
+         flex-wrap:wrap container; toggling any button's visibility (Save/
+         Rooms/Switch project/the room-jump dropdown/Share/exit all show or
+         hide depending on what's open) could shift exactly where the row
+         wrapped, visibly reflowing every button after it -- the "jumping"
+         reported. Each row is now its own fixed, independent, non-wrapping
+         flex strip (see .toolbar-row's base rule below) at every width, so
+         a button appearing or disappearing can only ever affect its OWN
+         row's own horizontal scroll -- never the other row, and never the
+         number of rows on screen, which is now permanently fixed at
+         exactly two. A generous min-width rule further up (see .toolbar's
+         own media queries) re-merges both rows onto one line on genuinely
+         huge monitors, where there's enough room for that to actually help
+         instead of just being a coincidence of window width. -->
+    <div class="toolbar-row" id="toolbarRowFile">
     <div class="brand"><img class="brand-icon" id="brandIcon" src="" alt="" aria-hidden="true"><span><span id="brandName">UTZLINE Site Measure</span><small id="brandSubtitle">plan markup</small></span></div>
     <div class="sep"></div>
-
-    <div class="tgroup" id="toolButtons">
-      <button class="ibtn active" data-tool="select" title="Select (V)" aria-label="Select tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 3l10 8.2-4.4.6L13 17l-2.3 1-2.5-5.7L5 15.5z"/></svg>
-      </button>
-      <button class="ibtn" data-tool="dimension" title="Dimension line (D)" aria-label="Dimension tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5v10M17 5v10M3 10h14"/></svg>
-      </button>
-      <button class="ibtn" data-tool="line" title="Line / arrow (L)" aria-label="Line tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3 17L16 4M16 4h-5M16 4v5"/></svg>
-      </button>
-      <button class="ibtn" data-tool="angle" title="Angle (A)" aria-label="Angle tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v12h12"/><path d="M8 16a6.5 6.5 0 0 1-4-6"/></svg>
-      </button>
-      <button class="ibtn" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="4.5" width="13" height="11" rx="1"/></svg>
-      </button>
-      <button class="ibtn" data-tool="text" title="Text (T)" aria-label="Text tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 5h12M10 5v10"/></svg>
-      </button>
-      <button class="ibtn" data-tool="callout" title="Callout note (C)" aria-label="Callout tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><circle cx="5" cy="15" r="1.4" fill="currentColor" stroke="none"/><path d="M5 15L11 7"/><rect x="10" y="2.5" width="7.5" height="6" rx="1.2"/></svg>
-      </button>
-      <button class="ibtn" data-tool="zoomrect" title="Zoom to rectangle — drag an area to zoom into it (Z)" aria-label="Zoom to rectangle tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="2.2" y="2.2" width="9.6" height="7.6" rx="0.8" stroke-dasharray="2.1 1.7"/><circle cx="13.6" cy="13.6" r="3.1"/><path d="M16.1 16.1L18.2 18.2" stroke-linecap="round"/></svg>
-      </button>
-      <button class="ibtn" data-tool="pan" title="Pan — drag to move around the canvas, no need to hold Space (H)" aria-label="Pan tool">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5V4.2a1.1 1.1 0 0 1 2.2 0v5.3"/><path d="M10.2 9.5V3.3a1.1 1.1 0 0 1 2.2 0v6.2"/><path d="M12.4 9.6V4.6a1.1 1.1 0 0 1 2.2 0v7.7"/><path d="M14.6 10.5V7.8a1.1 1.1 0 0 1 2.2 0v5.4c0 3-2 6.3-5.4 6.3h-1.9c-2 0-2.9-.6-3.9-2l-2.6-3.7c-.5-.8-.3-1.6.3-2.1.7-.5 1.6-.4 2.2.3l1.5 1.7"/></svg>
-      </button>
-    </div>
-
-    <div class="sep"></div>
-    <div class="tgroup">
-      <button class="ibtn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8H4V3"/><path d="M4.3 13.5A7 7 0 1 0 6 6l-2 2"/></svg></button>
-      <button class="ibtn" id="redoBtn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8h2V3"/><path d="M15.7 13.5A7 7 0 1 1 14 6l2 2"/></svg></button>
-    </div>
-    <div class="sep"></div>
-    <div class="tgroup">
-      <button class="ibtn" id="lockAllBtn" title="Lock all items (right-click one item to unlock just that one)" aria-label="Lock all items">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="10" height="7" rx="1.3"/><path d="M7 9V6.5a3 3 0 0 1 6 0"/></svg>
-      </button>
-    </div>
-    <div class="tgroup">
-      <button class="ibtn" id="snapGridBtn" title="Snap to grid — new points, moved endpoints and corners snap to an evenly spaced grid" aria-label="Toggle snap to grid">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3h4.7v4.7H3zM7.7 3v0M12.3 3h4.7v4.7h-4.7zM3 7.7v4.6M3 12.3h4.7V17H3zM7.7 12.3V17M12.3 12.3h4.7V17h-4.7zM12.3 7.7V17M3 7.7h14M7.7 3v14"/></svg>
-      </button>
-      <button class="ibtn" id="snapHVBtn" title="Snap to horizontal / vertical — new and stretched dimension, line and angle legs lock to perfectly level or plumb, same as holding Shift" aria-label="Toggle snap to horizontal or vertical">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 10h14M10 3v14"/></svg>
-      </button>
-      <button class="ibtn" id="layersBtn" title="Show all objects on this plan" aria-label="Toggle layers list">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M10 3l7 4-7 4-7-4z"/><path d="M3 11l7 4 7-4"/></svg>
-      </button>
-      <button class="ibtn" id="showHintBtn" title="Show the quick-help tip again (drag/pan/zoom controls)" aria-label="Show quick help tip">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M7.8 7.6a2.2 2.2 0 1 1 3.1 2c-.7.5-1.1.9-1.1 1.9"/><circle cx="10" cy="14" r="0.15" fill="currentColor"/></svg>
-      </button>
-      <!-- Icon + title/aria-label are set by setupThemeToggle() on load,
-           since they depend on the current mode (system/light/dark). -->
-      <button class="ibtn" id="themeToggleBtn" title="Appearance" aria-label="Appearance"></button>
-      <!-- Only shown on the installed/self-hosted build, which is the only
-           one that ever has a real service worker to check -- see
-           setupUpdateCheck() below. Hidden by default so it never appears
-           (or does nothing when tapped) on the claude.ai Artifact, which
-           has no service worker at all. -->
-      <button class="ibtn" id="checkUpdateBtn" title="Check for an app update" aria-label="Check for an app update" style="display:none;">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 10a6.5 6.5 0 1 1-1.8-4.5"/><path d="M16.7 2.8v3.4h-3.4"/></svg>
-      </button>
-    </div>
-    </div><!-- /toolbarRow1 -->
-
-    <div class="toolbar-row" id="toolbarRow2">
-    <div class="spacer"></div>
 
     <button class="tbtn" id="newBtn" title="Start a new file — with a project/level open, goes to Switch project/level to start a fresh one, without touching this level's own content. Press and hold (or right-click) to instead clear THIS level's plan and annotations back to blank in place.">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 2.5h6l3.5 3.5V16a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z"/><path d="M11 2.5V6h3.5" stroke-linecap="round"/><path d="M10 9.5v4M8 11.5h4" stroke-linecap="round"/></svg>
@@ -917,7 +873,76 @@
     <button class="ibtn" id="exitAppBtn" title="Exit app" aria-label="Exit app" style="display:none;">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.2H4.8a1 1 0 0 0-1 1v11.6a1 1 0 0 0 1 1H8"/><path d="M7.8 10h8.4M12.8 6.2l3.8 3.8-3.8 3.8"/></svg>
     </button>
-    </div><!-- /toolbarRow2 -->
+    </div><!-- /toolbarRowFile -->
+
+    <div class="toolbar-row" id="toolbarRowDraw">
+    <div class="tgroup" id="toolButtons">
+      <button class="ibtn active" data-tool="select" title="Select (V)" aria-label="Select tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 3l10 8.2-4.4.6L13 17l-2.3 1-2.5-5.7L5 15.5z"/></svg>
+      </button>
+      <button class="ibtn" data-tool="dimension" title="Dimension line (D)" aria-label="Dimension tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5v10M17 5v10M3 10h14"/></svg>
+      </button>
+      <button class="ibtn" data-tool="line" title="Line / arrow (L)" aria-label="Line tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3 17L16 4M16 4h-5M16 4v5"/></svg>
+      </button>
+      <button class="ibtn" data-tool="angle" title="Angle (A)" aria-label="Angle tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v12h12"/><path d="M8 16a6.5 6.5 0 0 1-4-6"/></svg>
+      </button>
+      <button class="ibtn" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="4.5" width="13" height="11" rx="1"/></svg>
+      </button>
+      <button class="ibtn" data-tool="text" title="Text (T)" aria-label="Text tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 5h12M10 5v10"/></svg>
+      </button>
+      <button class="ibtn" data-tool="callout" title="Callout note (C)" aria-label="Callout tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><circle cx="5" cy="15" r="1.4" fill="currentColor" stroke="none"/><path d="M5 15L11 7"/><rect x="10" y="2.5" width="7.5" height="6" rx="1.2"/></svg>
+      </button>
+      <button class="ibtn" data-tool="zoomrect" title="Zoom to rectangle — drag an area to zoom into it (Z)" aria-label="Zoom to rectangle tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="2.2" y="2.2" width="9.6" height="7.6" rx="0.8" stroke-dasharray="2.1 1.7"/><circle cx="13.6" cy="13.6" r="3.1"/><path d="M16.1 16.1L18.2 18.2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="ibtn" data-tool="pan" title="Pan — drag to move around the canvas, no need to hold Space (H)" aria-label="Pan tool">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5V4.2a1.1 1.1 0 0 1 2.2 0v5.3"/><path d="M10.2 9.5V3.3a1.1 1.1 0 0 1 2.2 0v6.2"/><path d="M12.4 9.6V4.6a1.1 1.1 0 0 1 2.2 0v7.7"/><path d="M14.6 10.5V7.8a1.1 1.1 0 0 1 2.2 0v5.4c0 3-2 6.3-5.4 6.3h-1.9c-2 0-2.9-.6-3.9-2l-2.6-3.7c-.5-.8-.3-1.6.3-2.1.7-.5 1.6-.4 2.2.3l1.5 1.7"/></svg>
+      </button>
+    </div>
+
+    <div class="sep"></div>
+    <div class="tgroup">
+      <button class="ibtn" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8H4V3"/><path d="M4.3 13.5A7 7 0 1 0 6 6l-2 2"/></svg></button>
+      <button class="ibtn" id="redoBtn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8h2V3"/><path d="M15.7 13.5A7 7 0 1 1 14 6l2 2"/></svg></button>
+    </div>
+    <div class="sep"></div>
+    <div class="tgroup">
+      <button class="ibtn" id="lockAllBtn" title="Lock all items (right-click one item to unlock just that one)" aria-label="Lock all items">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="10" height="7" rx="1.3"/><path d="M7 9V6.5a3 3 0 0 1 6 0"/></svg>
+      </button>
+    </div>
+    <div class="tgroup">
+      <button class="ibtn" id="snapGridBtn" title="Snap to grid — new points, moved endpoints and corners snap to an evenly spaced grid" aria-label="Toggle snap to grid">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3h4.7v4.7H3zM7.7 3v0M12.3 3h4.7v4.7h-4.7zM3 7.7v4.6M3 12.3h4.7V17H3zM7.7 12.3V17M12.3 12.3h4.7V17h-4.7zM12.3 7.7V17M3 7.7h14M7.7 3v14"/></svg>
+      </button>
+      <button class="ibtn" id="snapHVBtn" title="Snap to horizontal / vertical — new and stretched dimension, line and angle legs lock to perfectly level or plumb, same as holding Shift" aria-label="Toggle snap to horizontal or vertical">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 10h14M10 3v14"/></svg>
+      </button>
+      <button class="ibtn" id="layersBtn" title="Show all objects on this plan" aria-label="Toggle layers list">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M10 3l7 4-7 4-7-4z"/><path d="M3 11l7 4 7-4"/></svg>
+      </button>
+      <button class="ibtn" id="showHintBtn" title="Show the quick-help tip again (drag/pan/zoom controls)" aria-label="Show quick help tip">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.2"/><path d="M7.8 7.6a2.2 2.2 0 1 1 3.1 2c-.7.5-1.1.9-1.1 1.9"/><circle cx="10" cy="14" r="0.15" fill="currentColor"/></svg>
+      </button>
+      <!-- Icon + title/aria-label are set by setupThemeToggle() on load,
+           since they depend on the current mode (system/light/dark). -->
+      <button class="ibtn" id="themeToggleBtn" title="Appearance" aria-label="Appearance"></button>
+      <!-- Only shown on the installed/self-hosted build, which is the only
+           one that ever has a real service worker to check -- see
+           setupUpdateCheck() below. Hidden by default so it never appears
+           (or does nothing when tapped) on the claude.ai Artifact, which
+           has no service worker at all. -->
+      <button class="ibtn" id="checkUpdateBtn" title="Check for an app update" aria-label="Check for an app update" style="display:none;">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 10a6.5 6.5 0 1 1-1.8-4.5"/><path d="M16.7 2.8v3.4h-3.4"/></svg>
+      </button>
+    </div>
+    </div><!-- /toolbarRowDraw -->
     <input type="file" id="fileInput" accept="image/*,application/pdf" style="display:none">
     <input type="file" id="insertImageInput" accept="image/*,application/pdf" style="display:none">
     <input type="file" id="openProjectInput" accept=".json,application/json" style="display:none">
@@ -1130,7 +1155,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v24";
+  var APP_VERSION = "v25";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
