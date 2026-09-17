@@ -29,7 +29,12 @@
 // index.html, so it's read-only no matter how the URL is reached. Bumping
 // the cache name here so anyone who already loaded/cached the broken v20
 // build picks up this fix instead of continuing to serve it from cache.)
-var CACHE_NAME = "utzline-viewer-cache-v20a";
+// (v21: new "jump to any room" dropdown in the toolbar -- grouped by level,
+// lets you jump straight to any level's plan or any room in the whole open
+// project from anywhere, without stepping back out through Switch level/
+// Rooms first. Also re-skins the in-app accent color and logo to blue, to
+// match this app's own icon, instead of the editor's orange.)
+var CACHE_NAME = "utzline-viewer-cache-v21";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
