@@ -34,7 +34,17 @@
 // project from anywhere, without stepping back out through Switch level/
 // Rooms first. Also re-skins the in-app accent color and logo to blue, to
 // match this app's own icon, instead of the editor's orange.)
-var CACHE_NAME = "utzline-viewer-cache-v21";
+// (v22: CRITICAL SAFETY FIX -- long-press/right-click "Delete" on a
+// project/level/room row used to call the exact same real, recursive
+// removeEntry() the editor uses, with no read-only check at all, so this
+// app could actually destroy real project files despite being the
+// "read-only" Viewer (reported by Andrew, 2026-09-17). Replaced with a
+// purely local, non-destructive "hide from my list" -- reversible via a
+// new "Show hidden" toggle -- that never touches the real folder. Also
+// hides "+ New Project/Level/Room" (no legitimate create action exists in
+// read-only mode) and fixes the project-gate's own title to say "UTZLINE
+// Viewer" like the header already did.)
+var CACHE_NAME = "utzline-viewer-cache-v22";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [

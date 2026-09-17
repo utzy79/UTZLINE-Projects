@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v21">
+<link rel="manifest" href="./manifest.json?v=v22">
 <meta name="theme-color" content="#16283a">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v21">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v21">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v22">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v22">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -538,6 +538,17 @@
   .project-row:hover, .project-row:focus-visible{ background:var(--surface-1); border-color:var(--accent); }
   .project-row-arrow{ color:var(--text-secondary); flex:none; font-weight:400; }
   .project-gate-empty{ font-size:12.5px; color:var(--text-secondary); text-align:center; padding:10px 0 16px; }
+  /* Viewer-only "Show hidden" toggle and the dimmed rows it expands into
+     (see appendHiddenToggle/hideEntryForViewerInstead) -- deliberately
+     understated, since this is a rarely-used recovery path, not a normal
+     part of browsing the list. */
+  .project-row-hidden-toggle{
+    display:block; width:100%; background:none; border:none; padding:8px 4px;
+    color:var(--text-secondary); font-size:12.5px; font:inherit; cursor:pointer;
+    text-decoration:underline; text-underline-offset:2px; text-align:center;
+  }
+  .project-row-hidden{ opacity:0.6; margin-top:6px; }
+  .project-row-hidden:hover, .project-row-hidden:focus-visible{ opacity:1; }
   .project-gate-back{
     display:block; background:none; border:none; padding:0; margin:0 0 14px;
     color:var(--text-secondary); font-size:13px; font:inherit; cursor:pointer;
@@ -699,7 +710,18 @@
   body.viewer-mode #toolButtons [data-tool="angle"],
   body.viewer-mode #toolButtons [data-tool="rect"],
   body.viewer-mode #toolButtons [data-tool="text"],
-  body.viewer-mode #toolButtons [data-tool="callout"]{
+  body.viewer-mode #toolButtons [data-tool="callout"],
+  /* The project/level/room "gate" pickers' own create actions -- every one
+     of these was reachable and looked perfectly ordinary in the Viewer
+     even though createNewProject/Level/Room have always rejected with
+     {code:"view_only"} underneath (reported directly by Andrew, 2026-09-17,
+     as "not sure how importing a project is meant to work" after finding
+     "+ New Project" and getting nothing but a generic failure toast back).
+     "Use a Different Projects Folder" is deliberately NOT in this list --
+     choosing which folder to BROWSE is a read-only navigation action, not
+     a mutation, and stays available. */
+  body.viewer-mode #newProjectBtn, body.viewer-mode #newLevelBtn,
+  body.viewer-mode #newRoomBtn{
     display: none !important;
   }
   /* Viewer-only accent recolor: the same in-app blue used for the Viewer's
@@ -969,7 +991,7 @@
 
     <div class="project-gate" id="projectGate" hidden>
       <div class="project-gate-box">
-        <div class="project-gate-brand"><img id="projectGateIcon" src="" alt="" aria-hidden="true"><h1>UTZLINE Site Measure</h1></div>
+        <div class="project-gate-brand"><img id="projectGateIcon" src="" alt="" aria-hidden="true"><h1 id="projectGateTitle">UTZLINE Site Measure</h1></div>
 
         <div id="gateSetup">
           <p>Choose a folder on this device to keep your projects in. Each project you create gets its own folder inside it, holding one folder per level (e.g. "Level 1", "Level 2") -- and each level has its own <b>saves</b> folder (the working file you reopen) and <b>pdfs</b> folder (every PDF you export).</p>
@@ -1106,7 +1128,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v21";
+  var APP_VERSION = "v22";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -5657,7 +5679,96 @@
   // Two showConfirm()s in a row -- the second spelling out that it's
   // permanent and, for a project, takes every level in it with it -- before
   // anything is actually removed.
+  // ---- Viewer-only "hide from my list" -- the read-only replacement for
+  // Delete (see confirmAndDeleteEntry's own comment on why this exists).
+  // Persisted the same way the app already persists the remembered
+  // Projects-root folder handle (idbGet/idbSet against the "session"
+  // store), but keyed per browser profile/device, same as everything else
+  // idb-backed here -- exactly the "only removed for that local instance"
+  // Andrew asked for, never synced or shared, never touching the real
+  // folder. A project's key is just its own name; a level's/room's key
+  // also folds in its parent(s), since two different projects can
+  // obviously each have their own "Level 1".
+  var viewerHiddenEntries = null; // Set<string>, lazy-loaded once per session
+  function hiddenEntryKey(kind, name){
+    if (kind === "project") return "project::" + name;
+    if (kind === "level") return "level::" + activeProjectName + "::" + name;
+    return "room::" + activeProjectName + "::" + activeLevelName + "::" + name; // kind === "room"
+  }
+  function loadViewerHiddenEntries(){
+    if (viewerHiddenEntries) return Promise.resolve(viewerHiddenEntries);
+    return idbGet("viewerHiddenEntries").then(function(arr){
+      viewerHiddenEntries = new Set(arr || []);
+      return viewerHiddenEntries;
+    }).catch(function(){
+      viewerHiddenEntries = new Set();
+      return viewerHiddenEntries;
+    });
+  }
+  function saveViewerHiddenEntries(){
+    return idbSet("viewerHiddenEntries", Array.from(viewerHiddenEntries || [])).catch(function(){});
+  }
+  // Splits `names` into { visible, hidden } for whichever list is currently
+  // being populated (kind + the parent context hiddenEntryKey needs is
+  // whatever activeProjectName/activeLevelName already are at call time --
+  // exactly what's already true for every level/room list, one tier at a
+  // time, same as listExistingRooms's own scoping). Editor build: always
+  // resolves { visible: names, hidden: [] } without ever touching idb, so
+  // this is a genuine no-op there.
+  function splitHiddenNames(kind, names){
+    if (!VIEW_ONLY_MODE) return Promise.resolve({ visible: names, hidden: [] });
+    return loadViewerHiddenEntries().then(function(hidden){
+      var vis = [], hid = [];
+      names.forEach(function(n){
+        (hidden.has(hiddenEntryKey(kind, n)) ? hid : vis).push(n);
+      });
+      return { visible: vis, hidden: hid };
+    });
+  }
+  // The Viewer's own stand-in for confirmAndDeleteEntry's real delete --
+  // reversible (see restoreHiddenEntryForViewer), local-only, and the
+  // underlying folder is never even opened, let alone written to.
+  function hideEntryForViewerInstead(kind, name, onDone){
+    var what = kind === "project" ? "project" : (kind === "room" ? "room" : "level");
+    return showConfirm("Remove the " + what + " “" + name + "” from your list? This only changes what YOU see on this device -- it won't delete or change anything on disk, and it'll still be there for everyone else. You can bring it back later from \"Show hidden\" at the bottom of the list.").then(function(ok){
+      if (!ok){ showToast("Cancelled."); return; }
+      return loadViewerHiddenEntries().then(function(hidden){
+        hidden.add(hiddenEntryKey(kind, name));
+        return saveViewerHiddenEntries();
+      }).then(function(){
+        showToast("Removed “" + name + "” from your list.");
+        if (onDone) onDone();
+      });
+    }).catch(function(err){
+      console.error("Hide " + kind + " failed:", err);
+      showToast("Couldn't update your list — try again.");
+    });
+  }
+  function restoreHiddenEntryForViewer(kind, name, onDone){
+    return loadViewerHiddenEntries().then(function(hidden){
+      hidden.delete(hiddenEntryKey(kind, name));
+      return saveViewerHiddenEntries();
+    }).then(function(){
+      showToast("“" + name + "” is back on your list.");
+      if (onDone) onDone();
+    }).catch(function(err){
+      console.error("Restore " + kind + " failed:", err);
+      showToast("Couldn't update your list — try again.");
+    });
+  }
   function confirmAndDeleteEntry(kind, name, onDeleted){
+    // CRITICAL: the Viewer must never be able to touch a real file on disk,
+    // full stop -- that's the entire point of it existing as a separate
+    // read-only app. This used to have NO check at all here, which meant a
+    // long-press/right-click in the Viewer ran the exact same real,
+    // recursive removeEntry() the editor uses -- reported directly by
+    // Andrew (2026-09-17) after testing the v21 build. Every other mutating
+    // path already guards itself the same way (see createNewProject's own
+    // comment); this one just never had the guard added when the Viewer
+    // was built. Fixed by intercepting here, before ANY of the real
+    // delete logic below even runs, and replacing it with a purely local,
+    // non-destructive "hide from my list" (see hideEntryForViewerInstead).
+    if (VIEW_ONLY_MODE) return hideEntryForViewerInstead(kind, name, onDeleted);
     var what = kind === "project" ? "project" : (kind === "room" ? "room" : "level");
     // Both showConfirm() chains below now end in their own .catch() -- belt
     // and suspenders alongside the withTimeout() chain further in. Neither
@@ -5740,21 +5851,29 @@
       showToast("Couldn't delete “" + name + "” (" + describeError(err) + ") — try again.", 8000);
     });
   }
-  function populateProjectList(){
-    return listExistingProjects().then(function(names){
-      projectListItems.innerHTML = "";
-      if (!names.length){
+  // Shared row rendering for all three "gate" pickers (project/level/room
+  // -- same shape one folder deeper each time). A plain tap opens the
+  // entry; a long-press either deletes it for real (editor) or hides it
+  // from just this device's list (Viewer -- see confirmAndDeleteEntry's
+  // own VIEW_ONLY_MODE branch). splitHiddenNames is a no-op in the editor
+  // (nothing's ever actually hidden there), so `hidden` is always []
+  // there and the "Show hidden" toggle never appears outside the Viewer.
+  function renderPickerList(listEl, kind, names, emptyMessage, openFn, refreshFn){
+    return splitHiddenNames(kind, names).then(function(split){
+      listEl.innerHTML = "";
+      if (!split.visible.length){
         var empty = document.createElement("div");
         empty.className = "project-gate-empty";
-        empty.textContent = "No projects yet — start your first one below.";
-        projectListItems.appendChild(empty);
-        return;
+        empty.textContent = (split.hidden.length && VIEW_ONLY_MODE)
+          ? "Everything here is hidden from your list — see “Show hidden” below."
+          : emptyMessage;
+        listEl.appendChild(empty);
       }
-      names.forEach(function(name){
+      split.visible.forEach(function(name){
         var row = document.createElement("button");
         row.type = "button";
         row.className = "project-row";
-        row.title = "Tap to open — press and hold to delete";
+        row.title = VIEW_ONLY_MODE ? "Tap to open — press and hold to remove from your list" : "Tap to open — press and hold to delete";
         var label = document.createElement("span");
         label.textContent = name;
         var arrow = document.createElement("span");
@@ -5763,90 +5882,76 @@
         row.appendChild(label);
         row.appendChild(arrow);
         row.addEventListener("click", function(){
-          openProjectLevels(name).catch(function(err){
-            console.error("Open project failed:", err);
+          openFn(name).catch(function(err){
+            console.error("Open " + kind + " failed:", err);
             showToast("Couldn't open “" + name + "” — try again.");
           });
         });
         wireLongPress(row, function(){
-          confirmAndDeleteEntry("project", name, function(){ populateProjectList(); });
+          confirmAndDeleteEntry(kind, name, refreshFn);
         });
-        projectListItems.appendChild(row);
+        listEl.appendChild(row);
       });
+      if (split.hidden.length) appendHiddenToggle(listEl, kind, split.hidden, refreshFn);
+    });
+  }
+  // The "Show N hidden" row appended under a picker list once anything's
+  // been hidden -- expands in place into one row per hidden entry with a
+  // "Restore" action instead of "Open", so bringing something back is just
+  // as reversible and low-ceremony as hiding it was. Only ever reached in
+  // the Viewer (see renderPickerList's own guard above).
+  function appendHiddenToggle(listEl, kind, hiddenNames, refreshFn){
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "project-row-hidden-toggle";
+    toggle.textContent = "Show " + hiddenNames.length + " hidden";
+    toggle.addEventListener("click", function(){
+      toggle.remove();
+      hiddenNames.forEach(function(name){
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "project-row project-row-hidden";
+        row.title = "Tap to bring this back onto your list";
+        var label = document.createElement("span");
+        label.textContent = name;
+        var arrow = document.createElement("span");
+        arrow.className = "project-row-arrow";
+        arrow.textContent = "Restore";
+        row.appendChild(label);
+        row.appendChild(arrow);
+        row.addEventListener("click", function(){
+          restoreHiddenEntryForViewer(kind, name, refreshFn);
+        });
+        listEl.appendChild(row);
+      });
+    });
+    listEl.appendChild(toggle);
+  }
+  function populateProjectList(){
+    return listExistingProjects().then(function(names){
+      // "start your first one below" would reference a "+ New Project"
+      // button that doesn't exist in the Viewer (see the body.viewer-mode
+      // CSS hiding it) -- a plain "nothing here" reads correctly either way.
+      var emptyMessage = VIEW_ONLY_MODE ? "No projects here." : "No projects yet — start your first one below.";
+      return renderPickerList(projectListItems, "project", names, emptyMessage, openProjectLevels, populateProjectList);
     });
   }
   // Same shape as populateProjectList, one folder deeper: lists the levels
   // inside whichever project is currently open (activeProjectHandle).
   function populateLevelList(){
     return listExistingLevels().then(function(names){
-      levelListItems.innerHTML = "";
-      if (!names.length){
-        var empty = document.createElement("div");
-        empty.className = "project-gate-empty";
-        empty.textContent = "No levels yet — start your first one below.";
-        levelListItems.appendChild(empty);
-        return;
-      }
-      names.forEach(function(name){
-        var row = document.createElement("button");
-        row.type = "button";
-        row.className = "project-row";
-        row.title = "Tap to open — press and hold to delete";
-        var label = document.createElement("span");
-        label.textContent = name;
-        var arrow = document.createElement("span");
-        arrow.className = "project-row-arrow";
-        arrow.textContent = "Open →";
-        row.appendChild(label);
-        row.appendChild(arrow);
-        row.addEventListener("click", function(){
-          openLevel(name).catch(function(err){
-            console.error("Open level failed:", err);
-            showToast("Couldn't open “" + name + "” — try again.");
-          });
-        });
-        wireLongPress(row, function(){
-          confirmAndDeleteEntry("level", name, function(){ populateLevelList(); });
-        });
-        levelListItems.appendChild(row);
-      });
+      var emptyMessage = VIEW_ONLY_MODE ? "No levels here." : "No levels yet — start your first one below.";
+      return renderPickerList(levelListItems, "level", names, emptyMessage, openLevel, populateLevelList);
     });
   }
   // Same shape again, one folder deeper still: lists the rooms inside
   // whichever level is currently open (activeLevelHandle).
   function populateRoomList(){
     return listExistingRooms().then(function(names){
-      roomListItems.innerHTML = "";
-      if (!names.length){
-        var empty = document.createElement("div");
-        empty.className = "project-gate-empty";
-        empty.textContent = "No rooms yet — only add one if this level needs a separate annotated photo or drawing beyond its main floor plan.";
-        roomListItems.appendChild(empty);
-        return;
-      }
-      names.forEach(function(name){
-        var row = document.createElement("button");
-        row.type = "button";
-        row.className = "project-row";
-        row.title = "Tap to open — press and hold to delete";
-        var label = document.createElement("span");
-        label.textContent = name;
-        var arrow = document.createElement("span");
-        arrow.className = "project-row-arrow";
-        arrow.textContent = "Open →";
-        row.appendChild(label);
-        row.appendChild(arrow);
-        row.addEventListener("click", function(){
-          openRoom(name).catch(function(err){
-            console.error("Open room failed:", err);
-            showToast("Couldn't open “" + name + "” — try again.");
-          });
-        });
-        wireLongPress(row, function(){
-          confirmAndDeleteEntry("room", name, function(){ populateRoomList(); });
-        });
-        roomListItems.appendChild(row);
-      });
+      var emptyMessage = VIEW_ONLY_MODE
+        ? "This level has no separate rooms — just its own main floor plan."
+        : "No rooms yet — only add one if this level needs a separate annotated photo or drawing beyond its main floor plan.";
+      return renderPickerList(roomListItems, "room", names, emptyMessage, openRoom, populateRoomList);
     });
   }
   // Viewer mode asks for "read" permission, never "readwrite" -- on top of
@@ -8293,6 +8398,14 @@
     var brandNameEl = document.getElementById("brandName");
     if (brandNameEl) brandNameEl.textContent = VIEW_ONLY_MODE ? "UTZLINE Viewer" : "UTZLINE Site Measure";
     document.title = VIEW_ONLY_MODE ? "UTZLINE Viewer" : document.title;
+    // The project-gate's own big title (separate element from the small
+    // header brand name above) -- missed when the Viewer first shipped
+    // (v20) since everything was still orange either way and the
+    // mismatch was invisible; now that the gate itself is blue-branded
+    // (v21) a leftover "UTZLINE Site Measure" title right under a blue
+    // logo actually reads as wrong. Fixed alongside it.
+    var projectGateTitleEl = document.getElementById("projectGateTitle");
+    if (projectGateTitleEl) projectGateTitleEl.textContent = VIEW_ONLY_MODE ? "UTZLINE Viewer" : "UTZLINE Site Measure";
     // Blue recolor of the same mark (same hue-rotation used for the
     // Viewer's own installed icon set, see redline-viewer-pwa/icons) in
     // place of the orange original -- alongside the accent-color swap the
