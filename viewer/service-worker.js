@@ -91,7 +91,15 @@
 // read-only, same as everything else in this app. Same shared source.html
 // as the editor, so this bundle picks up both changes -- bumping the cache
 // name to match.)
-var CACHE_NAME = "utzline-viewer-cache-v27";
+// (v28: shares in the editor's own v28 bug fix (the batch "export all room/
+// level PDFs" buttons were exporting the background image with none of the
+// dimensions/annotations on them -- see the editor's own service worker for
+// the root cause). A pure no-op here in practice, since both batch-export
+// buttons are already hidden entirely in Viewer mode (they write into
+// project folders, same as every other create/export action already hidden
+// there) -- rebuilt purely because it shares the same source.html as the
+// editor. Bumping the cache name to match.)
+var CACHE_NAME = "utzline-viewer-cache-v28";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
