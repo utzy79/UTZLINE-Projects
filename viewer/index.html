@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v23">
+<link rel="manifest" href="./manifest.json?v=v24">
 <meta name="theme-color" content="#16283a">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v23">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v23">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v24">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v24">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1130,7 +1130,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v23";
+  var APP_VERSION = "v24";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -1655,6 +1655,7 @@
     updateUndoRedoButtons();
     scheduleAutosave();
     backupDirty = true;
+    unsavedSinceLastSave = true;
   }
   function undo(){
     if (historyIndex <= 0) return;
@@ -1744,6 +1745,14 @@
   try{ var storedInt = parseInt(localStorage.getItem("redline_autobackup_interval"), 10); if (storedInt) autoBackupIntervalMin = clamp(storedInt, AUTOBACKUP_MIN_INTERVAL_MIN, AUTOBACKUP_MAX_INTERVAL_MIN); }catch(e){}
   var backupDirty = false;
   var lastBackupAt = 0;
+  // Distinct from backupDirty above (which drives the periodic rolling
+  // backup snapshot and never resets on an ordinary Save): tracks whether
+  // the CANONICAL save file itself is out of date with what's on screen --
+  // true from the moment anything changes (pushHistory), false again the
+  // instant that change actually reaches disk (saveActiveLevelFile). Drives
+  // the "save before leaving?" confirm in saveActiveWorkBeforeLeaving --
+  // see its own comment.
+  var unsavedSinceLastSave = false;
   // Distinct from lastBackupAt above (which marks the start of an ATTEMPT,
   // purely to throttle how often maybeAutoBackup fires again) -- this is
   // only ever set once a backup has actually, verifiably finished, and is
@@ -2546,6 +2555,7 @@
             return openRoom(finalName);
           });
         }).catch(function(err){
+          if (err && err.code === "nav_cancelled") return; // declined the confirm -- just stay put
           console.error("Add room failed:", err);
           showToast("Couldn't add that room — try again.");
         });
@@ -2577,6 +2587,8 @@
     catch(e){ return Promise.reject(e); }
     return savesHandle.getFileHandle(projectSaveFilename(activeWorkName()), { create: true }).then(function(fh){
       return verifiedHandleWrite(fh, blob);
+    }).then(function(){
+      unsavedSinceLastSave = false;
     });
   }
 
@@ -2598,15 +2610,31 @@
   // straight over state.objects with no save (and, for the direct Rooms/
   // Levels list and room-jump routes, not even so much as a warning first).
   //
-  // Silent on success, exactly like the after-import autosave below (this
-  // fires on ordinary navigation, not something worth interrupting for) --
-  // but unlike that one, a failure here does NOT get swallowed with just a
-  // toast: it rejects, and every call site below stops the navigation
-  // rather than ever proceeding to overwrite still-unsaved work.
+  // Confirms first (2026-09-17, per Andrew: with leaving now always saving,
+  // a mistake -- an accidental delete, a stray drag -- would otherwise get
+  // permanently written the instant you moved on to the next room, with
+  // nothing to catch it) rather than saving silently: only when there's
+  // something genuinely unsaved (unsavedSinceLastSave -- NOT just "there's
+  // content on screen", which would mean re-confirming every single time
+  // you so much as glance at an already-saved room). Declining leaves the
+  // navigation cancelled and everything exactly as it was, still unsaved,
+  // so you can undo or fix whatever you're unsure about before trying
+  // again; every call site below (openLevel/openRoom, switchProject,
+  // openRoomsPicker) treats that as a quiet no-op, not an error.
+  //
+  // A failure to actually WRITE the save (as opposed to a decline) also
+  // stops the navigation rather than getting swallowed with just a toast --
+  // every call site rejects the same way, so nothing ever proceeds to
+  // overwrite still-unsaved work.
   function saveActiveWorkBeforeLeaving(){
     if (VIEW_ONLY_MODE) return Promise.resolve(); // nothing can be dirty; Save is unreachable anyway
     if (!activeWorkSavesHandle() || !state.objects.length) return Promise.resolve();
-    return saveActiveLevelFile();
+    if (!unsavedSinceLastSave) return Promise.resolve(); // already exactly what's on disk -- nothing to confirm
+    var leavingName = activeWorkName();
+    return showConfirm("Save changes to “" + leavingName + "” before leaving? This writes them straight into “" + leavingName + "”’s own folder. Choose Cancel to stay here instead, if you want to check something first.").then(function(ok){
+      if (!ok) return Promise.reject({ code: "nav_cancelled" });
+      return saveActiveLevelFile();
+    });
   }
 
   // The counterpart to saveActiveWorkBeforeLeaving(): once whatever was
@@ -2627,6 +2655,7 @@
     state.objects = [];
     state.selectedId = null;
     history = [deepClone(state.objects)]; historyIndex = 0;
+    unsavedSinceLastSave = false;
   }
 
   // Bringing a real plan/photo into an open level (Open, drag-drop, or
@@ -5562,8 +5591,14 @@
         : (entry.level === activeLevelName ? openRoom(entry.room)
                                             : openLevel(entry.level).then(function(){ return openRoom(entry.room); }));
       opening.catch(function(err){
-        console.error("Jump failed:", err);
-        showToast("Couldn't open that — try again.");
+        // A declined "save before leaving?" confirm -- not an error, just
+        // stay put. Still refresh the menu either way: its <select> already
+        // jumped to the target value the moment it was picked, so it needs
+        // resetting back to wherever we actually are.
+        if (!(err && err.code === "nav_cancelled")){
+          console.error("Jump failed:", err);
+          showToast("Couldn't open that — try again.");
+        }
         refreshRoomJumpMenu();
       });
     });
@@ -5944,6 +5979,7 @@
         row.appendChild(arrow);
         row.addEventListener("click", function(){
           openFn(name).catch(function(err){
+            if (err && err.code === "nav_cancelled") return; // declined the save-before-leaving confirm -- just stay put
             console.error("Open " + kind + " failed:", err);
             showToast("Couldn't open “" + name + "” — try again.");
           });
@@ -6120,6 +6156,7 @@
       if (value === null) return; // cancelled
       var clean = sanitizeFileBase(value);
       createNewLevel(clean).catch(function(err){
+        if (err && err.code === "nav_cancelled") return; // declined the confirm -- just stay put
         console.error("Create level failed:", err);
         showToast("Couldn't create that level — try again.");
       });
@@ -6140,6 +6177,7 @@
       if (value === null) return; // cancelled
       var clean = sanitizeFileBase(value);
       createNewRoom(clean).catch(function(err){
+        if (err && err.code === "nav_cancelled") return; // declined the confirm -- just stay put
         console.error("Create room failed:", err);
         showToast("Couldn't create that room — try again.");
       });
@@ -6153,6 +6191,7 @@
   // requiring "← All levels" and reopening the level from its own gate.
   openLevelPlanBtn.addEventListener("click", function(){
     openLevel(activeLevelName).catch(function(err){
+      if (err && err.code === "nav_cancelled") return; // declined the save-before-leaving confirm -- just stay put
       console.error("Open level failed:", err);
       showToast("Couldn't open “" + activeLevelName + "” — try again.");
     });
@@ -6210,6 +6249,7 @@
       });
     }
     saveActiveWorkBeforeLeaving().then(goToGate).catch(function(err){
+      if (err && err.code === "nav_cancelled") return; // declined the confirm -- just stay put
       console.error("Auto-save before switching failed:", err);
       showToast("Couldn't save “" + activeWorkName() + "” before switching (" + describeError(err) + ") — try Save first, then switch again.", 8000);
     });
@@ -6237,6 +6277,7 @@
       });
     }
     saveActiveWorkBeforeLeaving().then(goToGate).catch(function(err){
+      if (err && err.code === "nav_cancelled") return; // declined the confirm -- just stay put
       console.error("Auto-save before opening rooms failed:", err);
       showToast("Couldn't save “" + activeWorkName() + "” before opening rooms (" + describeError(err) + ") — try Save first, then try again.", 8000);
     });
@@ -8352,6 +8393,9 @@
     state.selectedId = null;
     applyImageToDom();
     history = [deepClone(state.objects)]; historyIndex = 0;
+    // Just loaded straight from the saved file -- by definition nothing's
+    // unsaved yet.
+    unsavedSinceLastSave = false;
     updateFileNameBtn();
   }
 

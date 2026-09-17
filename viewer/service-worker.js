@@ -52,7 +52,13 @@
 // blocked by VIEW_ONLY_MODE exactly like every other mutation already was
 // -- but it's the same shared source.html as the editor, so this bundle
 // picks it up too. Bumping the cache name to match the editor's release.)
-var CACHE_NAME = "utzline-viewer-cache-v23";
+// (v24: shares in the editor's own v24 "save before leaving?" confirm the
+// same way -- saveActiveWorkBeforeLeaving() checks VIEW_ONLY_MODE before
+// anything else and bails out immediately in that case, so this is a pure
+// no-op here: the Viewer already never wrote anything on navigation, and it
+// still doesn't; nothing new is ever shown to a Viewer user. Bumping the
+// cache name to match the editor's release, same as v23.)
+var CACHE_NAME = "utzline-viewer-cache-v24";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
