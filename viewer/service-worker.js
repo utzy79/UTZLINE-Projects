@@ -64,7 +64,17 @@
 // the "jumping" reflow that could happen as buttons showed/hid. Same
 // shared source.html as the editor, so this bundle picks it up too --
 // bumping the cache name to match.)
-var CACHE_NAME = "utzline-viewer-cache-v25";
+// (v26: shares in the editor's own v26 changes. The new "export all room/
+// level PDFs" batch actions are a no-op here -- both new buttons are hidden
+// in Viewer mode (they write into project folders, same as every other
+// create/export action already hidden there), same as Save itself always
+// has been. The "Share current view" title-block overflow fix (the logo/
+// timestamp block could spill off the left edge of a tightly-zoomed crop)
+// is real and DOES apply here too -- Share/print is fully live in the
+// Viewer, and addExportOverlays is the exact same shared function. Same
+// shared source.html as the editor, so this bundle picks up both --
+// bumping the cache name to match.)
+var CACHE_NAME = "utzline-viewer-cache-v26";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [

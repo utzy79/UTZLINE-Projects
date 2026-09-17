@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v25">
+<link rel="manifest" href="./manifest.json?v=v26">
 <meta name="theme-color" content="#16283a">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v25">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v25">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v26">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v26">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -739,7 +739,8 @@
      choosing which folder to BROWSE is a read-only navigation action, not
      a mutation, and stays available. */
   body.viewer-mode #newProjectBtn, body.viewer-mode #newLevelBtn,
-  body.viewer-mode #newRoomBtn{
+  body.viewer-mode #newRoomBtn, body.viewer-mode #exportAllRoomPdfsBtn,
+  body.viewer-mode #exportAllProjectPdfsBtn{
     display: none !important;
   }
   /* Viewer-only accent recolor: the same in-app blue used for the Viewer's
@@ -1051,6 +1052,7 @@
           <div class="project-list" id="levelListItems"></div>
           <div class="project-gate-actions">
             <button class="mbtn mbtn-accent" id="newLevelBtn">+ New Level</button>
+            <button class="mbtn" id="exportAllProjectPdfsBtn" title="Re-renders and saves a fresh PDF for every level's own main plan AND every room under every level in this project, straight into each one's own pdfs folder — without opening each one by hand first.">Export all PDFs (whole project)</button>
           </div>
         </div>
 
@@ -1068,6 +1070,7 @@
           <div class="project-list" id="roomListItems"></div>
           <div class="project-gate-actions">
             <button class="mbtn mbtn-accent" id="newRoomBtn">+ New Room</button>
+            <button class="mbtn" id="exportAllRoomPdfsBtn" title="Re-renders and saves a fresh PDF for every room in this level, straight into each room's own pdfs folder — without having to open each room and hit Save by hand.">Export all room PDFs</button>
           </div>
         </div>
       </div>
@@ -1155,7 +1158,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v25";
+  var APP_VERSION = "v26";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -2709,7 +2712,13 @@
   // its own timestamped filename (suggestFilename) and accumulates rather
   // than overwrites -- a folder of "here's what got sent on each date" is
   // exactly what you want there.
-  function exportBlobToActiveLevel(renderFn, ext, toastMsg){
+  // pdfsHandleOverride lets a caller target a SPECIFIC pdfs folder instead
+  // of whichever level/room happens to be active right now -- used by the
+  // batch "export all room/level PDFs" actions below, which render other,
+  // not-currently-open rooms/levels one at a time (see
+  // renderAndWriteBatchPdf). Omit it (undefined) for the normal Save-button
+  // behavior, completely unchanged.
+  function exportBlobToActiveLevel(renderFn, ext, toastMsg, pdfsHandleOverride){
     // This is the Save button's own PDF-into-the-level's-pdfs-folder half
     // (see saveAllProjectAware) -- distinct from Share, which renders the
     // exact same kind of stamped PDF/PNG but only ever hands it to the OS
@@ -2717,7 +2726,7 @@
     // folder. Viewer mode keeps Share fully working (it's how printing
     // works there) and blocks only this folder-writing half.
     if (VIEW_ONLY_MODE) return Promise.reject({ code: "view_only" });
-    var pdfsHandle = activeWorkPdfsHandle();
+    var pdfsHandle = pdfsHandleOverride || activeWorkPdfsHandle();
     if (!pdfsHandle) return Promise.reject({ code: "no_level" });
     var filename = suggestFilename(ext, true);
     var theBlob;
@@ -2738,21 +2747,22 @@
   // that want their own combined success/failure messaging (saveAllLevelAware
   // below) pass toastMsg as null/undefined and handle it themselves; direct
   // "Export PDF" toolbar actions elsewhere pass their own.
-  function exportPDFToActiveLevel(toastMsg, fallbackToastMsg){
+  // See exportBlobToActiveLevel's own comment on pdfsHandleOverride.
+  function exportPDFToActiveLevel(toastMsg, fallbackToastMsg, pdfsHandleOverride){
     if (!state.imageW) return Promise.reject({ code: "no_plan" });
     if (window.__pdfLibFailed){
-      return exportBlobToActiveLevel(renderExportBlob, "png", fallbackToastMsg);
+      return exportBlobToActiveLevel(renderExportBlob, "png", fallbackToastMsg, pdfsHandleOverride);
     }
     if (!pdfLibsReady()){
       return waitForPdfLibs(20000).then(function(ready){
         if (window.__pdfLibFailed){
-          return exportBlobToActiveLevel(renderExportBlob, "png", fallbackToastMsg);
+          return exportBlobToActiveLevel(renderExportBlob, "png", fallbackToastMsg, pdfsHandleOverride);
         }
         if (!ready) return Promise.reject({ code: "pdf_libs_not_ready" });
-        return exportBlobToActiveLevel(renderExportPdfBlob, "pdf", toastMsg);
+        return exportBlobToActiveLevel(renderExportPdfBlob, "pdf", toastMsg, pdfsHandleOverride);
       });
     }
-    return exportBlobToActiveLevel(renderExportPdfBlob, "pdf", toastMsg);
+    return exportBlobToActiveLevel(renderExportPdfBlob, "pdf", toastMsg, pdfsHandleOverride);
   }
 
   // The level-aware replacement for the original app's saveAll(): when a
@@ -2853,6 +2863,159 @@
         showToast("Couldn't save to this level's folder (" + describeError(jsonErr) + ") — try again.", 8000);
       }
     });
+  }
+
+  // ---- Batch PDF export: "export all room/level PDFs" (2026-09-17, per
+  // Andrew: the ordinary Save button already drops a fresh PDF into
+  // whichever single room/level is actually open right now -- see
+  // saveAllProjectAware above -- but re-generating every room's PDF after a
+  // round of edits meant opening each one by hand and hitting Save just to
+  // refresh its PDF, which doesn't scale past a handful of rooms.) ----
+  //
+  // Renders a fresh PDF from an arbitrary SAVED project payload -- not
+  // necessarily whatever's currently open -- and writes it into an
+  // arbitrary pdfs folder handle. exportPDFToActiveLevel/renderExportPdfBlob
+  // both read straight off the single shared `state` object with no
+  // parameterized variant, so this borrows it just long enough to render
+  // (after backing up the handful of fields that matter), then always puts
+  // the original values back, whether the export succeeds or fails. The
+  // batch walkers below only ever call this while sitting on a project-gate
+  // picker screen -- where nothing is actually open and the canvas itself
+  // is hidden behind the gate -- but restoring afterward costs nothing and
+  // removes any dependency on that staying true.
+  function renderAndWriteBatchPdf(pdfsHandle, saved, fileBaseForName){
+    var backup = {
+      imageDataURL: state.imageDataURL, imageTiles: state.imageTiles,
+      imageW: state.imageW, imageH: state.imageH,
+      fileBase: state.fileBase, objects: state.objects
+    };
+    function restore(){
+      state.imageDataURL = backup.imageDataURL; state.imageTiles = backup.imageTiles;
+      state.imageW = backup.imageW; state.imageH = backup.imageH;
+      state.fileBase = backup.fileBase; state.objects = backup.objects;
+    }
+    state.imageDataURL = saved.imageDataURL || null;
+    state.imageTiles = saved.imageTiles || null;
+    state.imageW = saved.imageW || 0;
+    state.imageH = saved.imageH || 0;
+    state.objects = saved.objects || [];
+    state.fileBase = fileBaseForName;
+    return exportPDFToActiveLevel(null, null, pdfsHandle).then(function(res){
+      restore();
+      return res;
+    }, function(err){
+      restore();
+      return Promise.reject(err);
+    });
+  }
+  // Reads one room/level's own saved JSON straight off a savesHandle,
+  // without ever touching activeRoom*/activeLevel* or requiring it to be
+  // the currently-open one -- shared by both walkers below. Resolves null
+  // (rather than rejecting) for "no save file yet" or "save file has no
+  // real plan on it", since a room/level nobody's ever put anything on yet
+  // is not a failure worth reporting, just nothing to export.
+  function readSavedPayloadIfAny(savesHandle, name){
+    return savesHandle.getFileHandle(projectSaveFilename(name)).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      var saved = null;
+      try{ saved = JSON.parse(text); }catch(e){ saved = null; }
+      if (saved && (saved.utzlineProject || saved.redlineProject) && savedHasImage(saved)) return saved;
+      return null;
+    }, function(){ return null; });
+  }
+  // Walks every room under one level (by directory handle) and (re)renders
+  // + writes a fresh timestamped PDF into each room's own pdfs folder, from
+  // each room's own last-SAVED state. Rooms run one at a time (not in
+  // parallel) since they all share the single `state` object via
+  // renderAndWriteBatchPdf above. Returns one {name, ok, filename?, error?,
+  // skipped?} per room rather than rejecting on a single room's failure, so
+  // one bad room can't stop every other room in the level from exporting.
+  function exportAllRoomPdfsForLevel(levelHandle, levelName, projectName){
+    return listExistingRoomsIn(levelHandle).then(function(roomNames){
+      var results = [];
+      return roomNames.reduce(function(chain, roomName){
+        return chain.then(function(){
+          return levelHandle.getDirectoryHandle(roomName, { create: false }).then(function(roomDirH){
+            return ensureWorkFolders(roomDirH);
+          }).then(function(subs){
+            return readSavedPayloadIfAny(subs.savesHandle, roomName).then(function(saved){
+              if (!saved){ results.push({ name: roomName, ok: false, skipped: true }); return; }
+              var fileBaseForName = sanitizeFileBase(projectName + "_" + levelName + "_" + roomName);
+              return renderAndWriteBatchPdf(subs.pdfsHandle, saved, fileBaseForName).then(function(res){
+                results.push({ name: roomName, ok: true, filename: res.filename });
+              }).catch(function(err){
+                results.push({ name: roomName, ok: false, error: describeError(err) });
+              });
+            });
+          }).catch(function(err){
+            results.push({ name: roomName, ok: false, error: describeError(err) });
+          });
+        });
+      }, Promise.resolve()).then(function(){ return results; });
+    });
+  }
+  // listExistingRooms() (used by the room picker) always reads FROM
+  // activeLevelHandle -- the batch project-wide walker below needs the same
+  // "real subfolders minus saves/pdfs/backup" filtering for a level that
+  // isn't necessarily the active one, hence this handle-parameterized twin.
+  function listExistingRoomsIn(levelHandle){
+    return listSubdirNames(levelHandle).then(function(names){
+      return names.filter(function(n){ return n !== "saves" && n !== "pdfs" && n !== "backup"; });
+    });
+  }
+  // The level's own main-plan half of the project-wide walker below --
+  // mirrors exportAllRoomPdfsForLevel one tier up, for the one plan that
+  // lives directly in the level's own folder rather than a room's.
+  function exportLevelMainPlanPdf(levelHandle, levelName, projectName){
+    return ensureWorkFolders(levelHandle).then(function(subs){
+      return readSavedPayloadIfAny(subs.savesHandle, levelName).then(function(saved){
+        if (!saved) return { name: levelName, ok: false, skipped: true };
+        var fileBaseForName = sanitizeFileBase(projectName + "_" + levelName);
+        return renderAndWriteBatchPdf(subs.pdfsHandle, saved, fileBaseForName).then(function(res){
+          return { name: levelName, ok: true, filename: res.filename };
+        }).catch(function(err){
+          return { name: levelName, ok: false, error: describeError(err) };
+        });
+      });
+    });
+  }
+  // The project-wide walker: every level's own main plan, AND every room
+  // under every level -- one full "export everything in this project"
+  // pass, for a full handoff rather than picking through level by level.
+  // Levels run one at a time for the same shared-`state` reason rooms do
+  // within exportAllRoomPdfsForLevel.
+  function exportAllPdfsForProject(projectHandle, projectName){
+    return listSubdirNames(projectHandle).then(function(levelNames){
+      var allResults = [];
+      return levelNames.reduce(function(chain, levelName){
+        return chain.then(function(){
+          return projectHandle.getDirectoryHandle(levelName, { create: false }).then(function(levelDirH){
+            return exportLevelMainPlanPdf(levelDirH, levelName, projectName).then(function(levelResult){
+              allResults.push(levelResult);
+              return exportAllRoomPdfsForLevel(levelDirH, levelName, projectName);
+            }).then(function(roomResults){
+              allResults = allResults.concat(roomResults);
+            });
+          }).catch(function(err){
+            allResults.push({ name: levelName, ok: false, error: describeError(err) });
+          });
+        });
+      }, Promise.resolve()).then(function(){ return allResults; });
+    });
+  }
+  // Turns a {name, ok, filename?, error?, skipped?}[] batch result into one
+  // human-readable toast line, shared by both button handlers below.
+  function summarizeBatchPdfResults(results, scopeLabel){
+    var ok = results.filter(function(r){ return r.ok; });
+    var skipped = results.filter(function(r){ return r.skipped; });
+    var failed = results.filter(function(r){ return !r.ok && !r.skipped; });
+    var msg = "Exported " + ok.length + " PDF" + (ok.length === 1 ? "" : "s") + " " + scopeLabel + ".";
+    if (skipped.length) msg += " " + skipped.length + " skipped (nothing saved on " + (skipped.length === 1 ? "it" : "them") + " yet).";
+    if (failed.length) msg += " " + failed.length + " failed: " + failed.map(function(r){ return "“" + r.name + "” (" + r.error + ")"; }).join("; ") + ".";
+    return { text: msg, hadFailure: failed.length > 0 };
   }
   var autosaveTimer = null;
   // This is the safety net that lets a reload/crash/accidental tab-close
@@ -6187,6 +6350,30 @@
       });
     });
   });
+  // "Export all PDFs (whole project)" -- the project-wide counterpart to
+  // "Export all room PDFs" above: every level's own main plan, and every
+  // room under every level, all in one pass (see exportAllPdfsForProject's
+  // own comment). Can take a while on a project with many levels/rooms --
+  // the button stays disabled for the duration so it can't be started
+  // twice at once.
+  var exportAllProjectPdfsBtn = document.getElementById("exportAllProjectPdfsBtn");
+  if (exportAllProjectPdfsBtn){
+    exportAllProjectPdfsBtn.addEventListener("click", function(){
+      if (VIEW_ONLY_MODE || !activeProjectHandle) return;
+      var projectName = activeProjectName;
+      exportAllProjectPdfsBtn.disabled = true;
+      showToast("Exporting every level and room's PDF in “" + projectName + "”… this can take a while.");
+      exportAllPdfsForProject(activeProjectHandle, projectName).then(function(results){
+        var summary = summarizeBatchPdfResults(results, "across “" + projectName + "”");
+        showToast(summary.text, summary.hadFailure ? 9000 : 6000);
+      }).catch(function(err){
+        console.error("Export all PDFs for project failed:", err);
+        showToast("Couldn't export all PDFs (" + describeError(err) + ") — try again.", 8000);
+      }).then(function(){
+        exportAllProjectPdfsBtn.disabled = false;
+      });
+    });
+  }
   // Steps back out to the top-level project list without opening a level --
   // nothing on screen to lose here (the gate is still up, no plan loaded
   // from this project yet), so no confirm needed.
@@ -6208,6 +6395,30 @@
       });
     });
   });
+  // "Export all room PDFs" -- refreshes every room's own PDF in this level
+  // in one pass (see exportAllRoomPdfsForLevel's own comment above for why:
+  // Save already does this per-room, but only for whichever one is
+  // actually open). Reachable only from the Rooms picker screen itself, so
+  // activeLevelHandle is always this level's -- disabled for the duration
+  // so a second tap can't start an overlapping pass while one is running.
+  var exportAllRoomPdfsBtn = document.getElementById("exportAllRoomPdfsBtn");
+  if (exportAllRoomPdfsBtn){
+    exportAllRoomPdfsBtn.addEventListener("click", function(){
+      if (VIEW_ONLY_MODE || !activeLevelHandle) return;
+      var levelName = activeLevelName, projectName = activeProjectName;
+      exportAllRoomPdfsBtn.disabled = true;
+      showToast("Exporting every room's PDF in “" + levelName + "”…");
+      exportAllRoomPdfsForLevel(activeLevelHandle, levelName, projectName).then(function(results){
+        var summary = summarizeBatchPdfResults(results, "in “" + levelName + "”");
+        showToast(summary.text, summary.hadFailure ? 9000 : 5000);
+      }).catch(function(err){
+        console.error("Export all room PDFs failed:", err);
+        showToast("Couldn't export room PDFs (" + describeError(err) + ") — try again.", 8000);
+      }).then(function(){
+        exportAllRoomPdfsBtn.disabled = false;
+      });
+    });
+  }
   // Opens THIS level's own main floor plan straight from its room list --
   // the level's own plan isn't itself a "room" and so never appears as a
   // row above, but it's still the thing most visits to this screen are
@@ -7577,7 +7788,34 @@
     // a thin top border so it reads as a deliberate bar rather than just
     // empty page margin.
     var wmSize = cb.wmSize || clamp(contentW * 0.044, 44, 128);
+    // computeViewSnapshotBounds sizes wmSize off the PHYSICAL screen (a
+    // constant ~28-64 CSS px, converted to world units via the current
+    // zoom's density, floored at 44 world units so it never reads illegibly
+    // small on screen) -- that floor has nothing to do with how much world-
+    // unit width is actually available in a "current view" crop, and at a
+    // tight enough zoom the crop's own contentW can come out SMALLER than
+    // the logo+timestamp block's fixed footprint. Anchored to the right
+    // edge (cb.x1), that block then spilled part or all of itself past the
+    // LEFT edge of the crop -- rendering off-canvas (invisible) or, more
+    // often, overlapping/overflowing however much of it still fell inside
+    // frame, which is exactly the "logo looks fine, the timestamp text does
+    // not" report (reported by Andrew, 2026-09-17): the logo sits flush
+    // against the anchor edge (cb.x1) so it's the block's LAST piece to run
+    // out of room, while the timestamp text sits furthest from it and is
+    // the first to spill. Reusing the same "Saved ..." format string twice
+    // (here as a width estimate, again below as the real content) rather
+    // than computing it once is deliberate: the two calls are microseconds
+    // apart, so any difference is never more than a possible one-digit
+    // day-of-month/hour, immaterial to a footprint check that already needs
+    // no more than rough accuracy.
     var pad = wmSize * 0.8;
+    var footprintStampWidth = textWidth(formatSaveStamp(new Date()), wmSize, "sans");
+    var naturalFootprint = pad + wmSize * 2.6 + wmSize * 0.6 + footprintStampWidth + pad;
+    if (naturalFootprint > contentW && naturalFootprint > 0){
+      var shrink = Math.max(contentW / naturalFootprint, 0);
+      wmSize = Math.max(8, wmSize * shrink);
+      pad = wmSize * 0.8;
+    }
     var footerTop = cb.contentY1 != null ? cb.contentY1 : cb.y1;
     var footerH = cb.y1 - footerTop;
     var footerMidY = (footerTop + cb.y1) / 2;
