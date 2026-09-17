@@ -314,7 +314,28 @@
 // project's level list instead of an empty/confusing project list --
 // handles the real limitation that a folder handle can't identify its own
 // parent, so this only works looking at what's INSIDE the picked folder.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v20";
+//
+// (v21: adds a Viewer-only "jump to any room" dropdown (grouped by level,
+// reads live off the project's own folders) and a Viewer-only blue re-skin
+// -- accent color and in-app logo -- so the Viewer reads as visually
+// distinct beyond just its own taskbar icon and text label. Both are
+// gated on VIEW_ONLY_MODE and never appear/apply in this editor build.)
+//
+// (v22: CRITICAL SAFETY FIX -- confirmAndDeleteEntry (the long-press/
+// right-click "Delete" on a project/level/room row) had NO VIEW_ONLY_MODE
+// check at all, so the Viewer could call the exact same real, recursive
+// removeEntry() the editor uses and actually destroy real project files
+// (reported by Andrew, 2026-09-17). Now intercepted at the very top in
+// viewer mode and replaced with a purely local, non-destructive "hide from
+// my list" (hideEntryForViewerInstead/restoreHiddenEntryForViewer,
+// idb-persisted per device, filtered in populate*List via
+// splitHiddenNames, with a "Show hidden" toggle to bring one back) --
+// never touches the real folder. Also hides "+ New Project/Level/Room" in
+// the Viewer (there's no legitimate create/import action in read-only
+// mode -- was previously visible and silently rejected with a generic
+// failure toast) and fixes the project-gate's own big title to follow
+// VIEW_ONLY_MODE the same way the small header brand name already did.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v22";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

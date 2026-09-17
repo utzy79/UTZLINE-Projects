@@ -7,12 +7,17 @@ UTZLINE Site Measure going forward, and the old single-plan version is
 retired. Everything in the app itself (page title, toolbar brand,
 opening screen, installed-app name) says "UTZLINE Site Measure" now.
 
-**One thing has deliberately NOT changed yet: the GitHub repo and
-hosted URL below are still named `UTZLINE-Projects`.** Renaming those
-is a bigger, separate step (it affects the live URL, any installed
-shortcuts, and the Android APK's Trusted Web Activity target) — ask if
-and when you want to do that; nothing here depends on it happening
-first.
+**The repo/hosting cleanup this was waiting on is now underway
+(2026-09-16):** the old retired single-plan repo (`Utzline-Site-Measure`)
+is being deleted, and the live repo hosting THIS app (previously named
+`UTZLINE-Projects`) is being renamed to match — `UTZLINE-Site-Measure`
+— once that old name is free. Everything below already reflects that
+target end state (repo name, hosted URL, and the new `viewer/`
+subfolder for the standalone read-only Viewer app). If you're reading
+this before finishing that rename, the live URL is still the old
+`utzy79.github.io/UTZLINE-Projects/` one for now — GitHub's automatic
+redirect for a renamed repo should carry old links/installs over once
+it's done.
 
 It shares the same underlying markup/photo-annotation and PDF-export
 code as the old version, but adds an opening project picker. A project is a folder of
@@ -37,12 +42,14 @@ Measure — easy to mix them up:
    app is hosted on its own domain or installed. Not what your installed
    copies run.
 2. **This bundle, hosted on GitHub Pages** — the
-   [`UTZLINE-Projects`](https://github.com/utzy79/UTZLINE-Projects) repo,
+   [`UTZLINE-Site-Measure`](https://github.com/utzy79/UTZLINE-Site-Measure) repo,
    live at
-   [`https://utzy79.github.io/UTZLINE-Projects/`](https://utzy79.github.io/UTZLINE-Projects/) —
-   separate from both
-   [`Utzline-Site-Measure`](https://github.com/utzy79/Utzline-Site-Measure)
-   and [`utzy79.github.io`](https://github.com/utzy79/utzy79.github.io).
+   [`https://utzy79.github.io/UTZLINE-Site-Measure/`](https://utzy79.github.io/UTZLINE-Site-Measure/) —
+   separate from [`utzy79.github.io`](https://github.com/utzy79/utzy79.github.io)
+   (the old `Utzline-Site-Measure` repo this name was freed from is retired
+   and deleted). The standalone read-only **Viewer** app lives right
+   alongside this, in the same repo's `viewer/` subfolder — see
+   `../redline-viewer-pwa/README.md` for that one specifically.
    This is the real thing: fully offline-capable, and the only place the
    folder picker actually works from a browser tab.
 3. **A desktop install** — Chrome/Edge's "Install this site as an app"
@@ -50,14 +57,16 @@ Measure — easy to mix them up:
 4. **The Android app (the APK)** — also a thin wrapper (a Trusted Web
    Activity) around that same hosted URL, built via
    [PWABuilder](https://www.pwabuilder.com/), with its own package ID and
-   its own signing key (kept completely separate from UTZLINE Site
-   Measure's APK/keystore — these are two unrelated apps as far as
-   Android is concerned). **The APK does not contain the app's code.** It
+   its own signing key. **The APK does not contain the app's code.** It
    loads whatever is live at
-   [`utzy79.github.io/UTZLINE-Projects`](https://utzy79.github.io/UTZLINE-Projects/)
+   [`utzy79.github.io/UTZLINE-Site-Measure`](https://utzy79.github.io/UTZLINE-Site-Measure/)
    right now, so updating the app is a matter of updating the *files* in
    the repo, never rebuilding the APK — except when the app's identity
-   changes (name, icon, package ID).
+   changes (name, icon, package ID). If the APK was built pointing at the
+   old `UTZLINE-Projects` URL, GitHub's redirect for the renamed repo
+   should keep it working; rebuilding it to point at the new URL directly
+   is worth doing eventually so it's not relying on that redirect forever,
+   but isn't urgent.
 5. **Optionally, chrome-less full-screen mode** (no browser address bar)
    for the Android app — this needs a `.well-known/assetlinks.json` on
    the domain the app claims to represent, verifying the APK's signing
@@ -74,14 +83,15 @@ Whenever new files show up in chat as a zip:
 
 1. Unzip it.
 2. Go to the
-   [`UTZLINE-Projects`](https://github.com/utzy79/UTZLINE-Projects) repo
-   on GitHub (not `Utzline-Site-Measure`, not `utzy79.github.io`).
+   [`UTZLINE-Site-Measure`](https://github.com/utzy79/UTZLINE-Site-Measure) repo
+   on GitHub (not `utzy79.github.io` — and note this app's files go at the
+   repo **root**, not inside `viewer/`, which is the separate Viewer app).
 3. Upload the files from the zip, overwriting the existing ones (drag
    them onto the repo page, or use **Add file → Upload files**), keeping
    the `icons` folder structure intact. Commit.
 4. Wait about a minute for GitHub Pages to redeploy, then check it took:
    open
-   [`https://utzy79.github.io/UTZLINE-Projects/`](https://utzy79.github.io/UTZLINE-Projects/)
+   [`https://utzy79.github.io/UTZLINE-Site-Measure/`](https://utzy79.github.io/UTZLINE-Site-Measure/)
    directly in a normal browser tab and confirm the change is there.
 5. Get each installed copy to pick it up:
    - **Desktop install**: close and reopen it; a refresh is usually
@@ -147,17 +157,19 @@ You already have this running, so you shouldn't need this — but for
 reference, in case it's ever needed again from scratch:
 
 1. Create a **public** GitHub repo (this one is
-   [`UTZLINE-Projects`](https://github.com/utzy79/UTZLINE-Projects) — a
-   different name from `Utzline-Site-Measure` and `utzy79.github.io`,
-   which are already taken by the other app and its Digital Asset Links
-   file). Upload every file from this bundle, keeping the `icons` folder
-   structure.
+   [`UTZLINE-Site-Measure`](https://github.com/utzy79/UTZLINE-Site-Measure) —
+   a different name from `utzy79.github.io`, which is already taken by
+   its Digital Asset Links file). Upload every file from this bundle,
+   keeping the `icons` folder structure, at the repo **root**. Add the
+   Viewer app's own files (see `../redline-viewer-pwa/`) into a `viewer/`
+   subfolder of this same repo alongside it.
 2. Repo **Settings → Pages** → Source: **Deploy from a branch**, branch
    **main**, folder **/(root)** → Save. Wait ~1 minute for the live URL —
-   [`https://utzy79.github.io/UTZLINE-Projects/`](https://utzy79.github.io/UTZLINE-Projects/).
+   [`https://utzy79.github.io/UTZLINE-Site-Measure/`](https://utzy79.github.io/UTZLINE-Site-Measure/)
+   (the Viewer app then lives at that same URL's `viewer/` path).
 3. Open that URL once while online (to cache it for offline use), then
    install it: on Windows/Mac, the browser's install icon in the address
    bar; on Android, Chrome's **⋮ → Add to Home screen** (or build a
    proper APK via [PWABuilder.com](https://www.pwabuilder.com/) for a
    real installable app with no browser chrome at all — its own package
-   ID and signing key, kept separate from UTZLINE Site Measure's).
+   ID and signing key, kept separate from other apps).
