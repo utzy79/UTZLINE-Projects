@@ -484,7 +484,36 @@
 // actually opening a real level's plan -- explicitly sanity-checked (revert
 // the fix, confirm the test times out failing to find a real project list)
 // to be a real guard, not just a passing test.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v29";
+// (v30: real bug fixed, reported by Andrew: "layering needs to go like
+// this. 1, background, 2, images, 3, dimentions at the moment there is no
+// way to get a dimension back to the front layer if an image covers it.
+// selecting an image automatically brings it to the front." Root cause,
+// part 1: the plain click-to-select code path called an unconditional
+// bringSelectedToFront() on every ordinary tap -- for every object type,
+// not just while dragging -- which spliced the tapped object to the very
+// END of state.objects (the same array whose order IS the saved/exported
+// z-order). Selecting an image this way permanently promoted it above
+// every annotation on the plan, silently, on a plain tap, with no drag or
+// explicit "Bring to front" involved -- and it served no real purpose:
+// hit-testing already picks the topmost object regardless of array order,
+// and selection handles render in their own always-on-top layer either
+// way. Root cause, part 2: "Bring to front" (the deliberate escape hatch
+// for the rarer image that legitimately needs to sit above the plan's
+// annotations) only ever existed for image objects -- once used, whatever
+// dimension/text/etc. it now covered had no equivalent action available to
+// bring it back. Fixed by (1) removing the automatic reorder-on-select
+// entirely, (2) broadening "Bring to front" to every real, unlocked object
+// type so a covered dimension can be pulled back above an image, and (3)
+// adding a symmetric "Send to back" for images specifically, which also
+// works as a one-tap repair for a project file saved before this fix where
+// an image may already be sitting above annotations. New regression test
+// run_layering_select_bug.js simulates a genuine click-to-select via the
+// real onPointerDown/onPointerUp handlers and confirms z-order is
+// untouched, confirms the new popover rows exist and work, and was
+// explicitly sanity-checked (temporarily reintroducing the old reorder,
+// confirming the test correctly fails, then restoring the fix) to be a
+// real guard.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v30";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

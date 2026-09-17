@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v29">
+<link rel="manifest" href="./manifest.json?v=v30">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v29">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v29">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v30">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v30">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1224,7 +1224,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v29";
+  var APP_VERSION = "v30";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -1708,10 +1708,14 @@
   // renderHandles' selection outline, and the right-click popover) check
   // for it explicitly.
   var BASE_IMAGE_SELECT_ID = "__baseImage__";
-  function bringSelectedToFront(){
-    var idx = state.objects.findIndex(function(o){ return o.id === state.selectedId; });
-    if (idx > -1){ var o = state.objects.splice(idx, 1)[0]; state.objects.push(o); }
-  }
+  // bringSelectedToFront() used to live here -- it auto-promoted whichever
+  // object a plain tap selected all the way to the end of state.objects
+  // (this array's own order IS the saved z-order). Removed in v30: see the
+  // onPointerDown select-tool branch's own comment for the full bug report
+  // and reasoning (it silently broke the intended background/images/
+  // annotations tiering and wasn't needed for anything visual). z-order now
+  // only ever changes via the deliberate "Bring to front"/"Send to back"
+  // popover actions (see showLockPopover).
   // durationMs lets a rarer, longer, more important message (a save that
   // may have silently gone wrong, say) stay up long enough to actually
   // read -- every existing call just omits it and keeps the same 2400ms
@@ -4272,7 +4276,30 @@
       if (hitO){
         var panelWasOpen = panel.style.display !== "none";
         state.selectedId = hitO.id;
-        bringSelectedToFront();
+        // BUG FIXED (v30, 2026-09-17, reported by Andrew: layering should
+        // always be background < images < dimensions/annotations, "at the
+        // moment there is no way to get a dimension back to the front layer
+        // if an image covers it. selecting an image automatically brings it
+        // to the front"). This used to call bringSelectedToFront() here
+        // unconditionally -- for EVERY object type, on every plain tap-to-
+        // select, not just a drag -- which spliced the tapped object to the
+        // very END of state.objects, the SAME array whose order IS the
+        // saved z-order (see placeInsertedImage's own comment on that
+        // invariant). Selecting an image this way permanently promoted it
+        // above every annotation already on the plan, silently and
+        // immediately on tap, with no drag or explicit "Bring to front"
+        // needed -- breaking the intended background/images/annotations
+        // tiering just by looking at an image. It also served no real
+        // purpose: hitObject() above already hit-tests topmost-first (it
+        // walks state.objects backwards), so the visually topmost object is
+        // always what gets selected regardless of array order, and the
+        // selection outline/handles render in their own handlesLayer, which
+        // paints after (on top of) objectsLayer unconditionally -- see the
+        // <g id="handlesLayer"> markup, always the last layer inside
+        // #world. So a selected object's handles were never at risk of
+        // being visually buried either way. Selecting no longer reorders
+        // anything now; the deliberate escape hatches below (Bring to
+        // front / Send to back) are the only things that do.
         renderAll();
         // Selecting something new can open the phone-docked properties
         // panel, which pushes the canvas down and shrinks svgRoot's
@@ -5092,6 +5119,11 @@
   var DELETE_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M8 6V4.5A1 1 0 0 1 9 3.5h2A1 1 0 0 1 12 4.5V6M6 6l.6 9.5A1.5 1.5 0 0 0 8.1 17h3.8a1.5 1.5 0 0 0 1.5-1.5L14 6"/></svg>';
   var MIRROR_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5v15" stroke-dasharray="1.6 1.8"/><path d="M7 6.5L3.8 9l3.2 2.5"/><path d="M13 6.5L16.2 9l-3.2 2.5"/></svg>';
   var BRING_FRONT_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="9" height="9" rx="1"/><path d="M5.5 12.5H4A1 1 0 0 1 3 11.5V4A1 1 0 0 1 4 3h7.5a1 1 0 0 1 1 1v1.5"/></svg>';
+  // Same two-rectangle language as Bring to front, mirrored: the BACK
+  // rectangle (where the object is going) is the solid/foreground one here,
+  // the front one it's ducking behind is the outline -- the reverse of
+  // Bring to front's own composition.
+  var SEND_BACK_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="9" height="9" rx="1"/><path d="M14.5 7.5H16A1 1 0 0 1 17 8.5V16A1 1 0 0 1 16 17H8.5A1 1 0 0 1 7.5 16V14.5"/></svg>';
   var ROOM_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17V4.5a1 1 0 0 1 1-1h4l4 2v11.5"/><path d="M5 17h9"/><circle cx="11.3" cy="10.5" r="0.7" fill="currentColor" stroke="none"/></svg>';
   var ADD_ROOM_ICON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 17V4.5a1 1 0 0 1 1-1h3.5l3.5 2v11.5"/><path d="M4.5 17h8"/><path d="M14 10v3.6M12.2 11.8h3.6" stroke-width="1.8"/></svg>';
   // Same curved-arrow language (and literal paths) as the toolbar's own
@@ -5222,9 +5254,24 @@
     // does need to sit above everything else (a close-up detail photo
     // that's the whole point of that part of the plan), hence this escape
     // hatch. Only offered while there's actually somewhere higher to go --
-    // an image already at the very top of the stack gets no row at all,
+    // an object already at the very top of the stack gets no row at all,
     // rather than a "Bring to front" that would visibly do nothing.
-    if (isRealObject && obj.type === "image" && !obj.locked && !VIEW_ONLY_MODE && state.objects[state.objects.length - 1] !== obj){
+    //
+    // BUG FIXED (v30, 2026-09-17, reported by Andrew: "at the moment there
+    // is no way to get a dimension back to the front layer if an image
+    // covers it"). Bring to front used to be offered for image objects
+    // only -- a reasonable-looking restriction back when it shipped in v17,
+    // since at the time nothing else could ever legitimately end up above
+    // an annotation. That stopped being true the moment an image actually
+    // DOES get raised above the plan's annotations via this same action (a
+    // deliberate, legitimate use of it) -- there was then no way back for
+    // whichever dimension/text/etc. it now covers, since this row simply
+    // didn't exist for anything but an image. It's the same underlying
+    // mechanism (move to the very end of state.objects, the array whose
+    // order IS z-order) regardless of object type, so the type restriction
+    // is gone -- every real, unlocked object type can now be brought to
+    // front, including a dimension buried under an image.
+    if (isRealObject && !obj.locked && !VIEW_ONLY_MODE && state.objects[state.objects.length - 1] !== obj){
       popoverRow(wrap, BRING_FRONT_ICON + "<span>Bring to front</span>", function(){
         hideLockPopover();
         var idx = state.objects.indexOf(obj);
@@ -5233,6 +5280,32 @@
           state.objects.push(obj);
           pushHistory(); renderAll();
           showToast("Brought to front.");
+        }
+      });
+    }
+    // Send to back -- the reverse, and (unlike Bring to front) still
+    // offered for images only: images are meant to sit in their own middle
+    // tier (background photo < images < annotations, per Andrew's own
+    // description of the intended layering), so "back" for an image always
+    // means "the very back of the whole plan", index 0 -- below even the
+    // other images -- which is a sensible, unambiguous place to send one.
+    // "Back" for an annotation is a fuzzier idea (there's no single
+    // obviously-correct tier boundary below which it should land, the way
+    // there is for an image), so this is deliberately NOT offered for every
+    // type the way Bring to front now is. Also doubles as the one-tap fix
+    // for a project file saved before this version, where an image may
+    // already be sitting above the plan's annotations because of the
+    // selection-side bug described above -- no need to manually bring every
+    // annotation back to front one at a time.
+    if (isRealObject && obj.type === "image" && !obj.locked && !VIEW_ONLY_MODE && state.objects[0] !== obj){
+      popoverRow(wrap, SEND_BACK_ICON + "<span>Send to back</span>", function(){
+        hideLockPopover();
+        var idx = state.objects.indexOf(obj);
+        if (idx >= 0){
+          state.objects.splice(idx, 1);
+          state.objects.unshift(obj);
+          pushHistory(); renderAll();
+          showToast("Sent to back.");
         }
       });
     }
