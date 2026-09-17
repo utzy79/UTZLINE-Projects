@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v27">
+<link rel="manifest" href="./manifest.json?v=v28">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v27">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v27">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v28">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v28">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1224,7 +1224,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v27";
+  var APP_VERSION = "v28";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -2953,12 +2953,36 @@
     var backup = {
       imageDataURL: state.imageDataURL, imageTiles: state.imageTiles,
       imageW: state.imageW, imageH: state.imageH,
-      fileBase: state.fileBase, objects: state.objects
+      fileBase: state.fileBase, objects: state.objects, selectedId: state.selectedId
     };
+    // BUG FIX (2026-09-17, reported by Andrew: "the new export all pdf
+    // button worked, but exported them with none of the dimensions etc on
+    // them, just the background image"): renderExportPdfBlob/renderExportBlob
+    // both build the exported page from cloneWorldForExport(), which clones
+    // the LIVE DOM (objectsLayer's actual <g> children, baseImage's actual
+    // href) -- NOT `state` directly. Borrowing `state` alone (as this
+    // function originally did) never touched that DOM at all, so every
+    // batch-exported file was silently rendering whatever the canvas
+    // happened to still be showing from the last time a real room/level was
+    // actually opened before stepping out to the picker screen -- frozen,
+    // identical, and completely disconnected from each room's own saved
+    // content, since nothing had called applyImageToDom()/renderAll() since.
+    // (computeContentBounds() itself already reads straight from
+    // `state.objects`, which is why the PAGE came out correctly sized for
+    // each room even though it visually showed the wrong -- or no --
+    // content: the size was right, the picture wasn't.) Fixed by actually
+    // pushing the borrowed state into the DOM before rendering, and again
+    // after restoring, so the (hidden, behind the gate) canvas never sits
+    // showing stale batch-rendered content afterward either.
+    function pushStateToDom(){
+      applyImageToDom();
+      renderAll();
+    }
     function restore(){
       state.imageDataURL = backup.imageDataURL; state.imageTiles = backup.imageTiles;
       state.imageW = backup.imageW; state.imageH = backup.imageH;
-      state.fileBase = backup.fileBase; state.objects = backup.objects;
+      state.fileBase = backup.fileBase; state.objects = backup.objects; state.selectedId = backup.selectedId;
+      pushStateToDom();
     }
     state.imageDataURL = saved.imageDataURL || null;
     state.imageTiles = saved.imageTiles || null;
@@ -2966,6 +2990,8 @@
     state.imageH = saved.imageH || 0;
     state.objects = saved.objects || [];
     state.fileBase = fileBaseForName;
+    state.selectedId = null;
+    pushStateToDom();
     return exportPDFToActiveLevel(null, null, pdfsHandle).then(function(res){
       restore();
       return res;

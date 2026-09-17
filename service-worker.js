@@ -438,7 +438,29 @@
 // stored handle, and removed (press-and-hold, same gesture as every other
 // row) without ever touching the real folder on disk. Purely additive --
 // this app's own single-root flow is untouched either way.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v27";
+// (v28: BUG FIX, reported by Andrew: "the new export all pdf button worked,
+// but exported them with none of the dimentions etc on them, just the
+// background image." Root cause: the batch-export renderer
+// (renderAndWriteBatchPdf, added in v26) borrowed the shared `state` object
+// for each room/level in turn, but the actual export pipeline
+// (renderExportPdfBlob/renderExportBlob) builds the exported page from the
+// LIVE ON-SCREEN DOM (cloneWorldForExport), not from `state` directly --
+// mutating `state` alone never touched it. Every batch-exported file was
+// silently rendering whatever the canvas happened to still be showing from
+// the last time a real room/level was actually opened before stepping out
+// to the picker screen, frozen and identical across the whole batch,
+// completely disconnected from each room's own saved content -- which is
+// exactly why the picture came through (real, if stale) while the
+// dimensions/text/etc from each room's ACTUAL save file never did. Fixed by
+// actually pushing the borrowed state into the DOM (applyImageToDom +
+// renderAll) before rendering each one, and again after restoring
+// afterward. New regression test run_batch_pdf_visual_content.js inspects
+// the DOM synchronously at the moment of each render (proven, via a
+// deliberate before/after check, to actually fail without this fix) --
+// the older run_batch_pdf_export.js only ever checked PDF file counts,
+// which never caught this since a real room happened to still be on
+// screen during that test's own run.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v28";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
