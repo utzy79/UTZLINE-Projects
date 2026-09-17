@@ -395,7 +395,26 @@
 // A generous width threshold (2200px) merges both rows onto one line on
 // genuinely huge monitors, where there's real spare room for that rather
 // than it being a coincidence of one particular window size.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v25";
+// (v26: two fixes, same day. (1) New batch PDF export -- "Export all room
+// PDFs" (on the Rooms picker screen) and "Export all PDFs (whole project)"
+// (on the Levels picker screen) re-render and save a fresh PDF for every
+// room/level in one pass, straight into each one's own pdfs folder --
+// without opening each one by hand and hitting Save, which is all the
+// ordinary Save button has ever been able to do (one room/level at a time,
+// whichever's actually open). (2) Real bug fix: the "Share current view"
+// title-block bar's logo+timestamp block could spill off the LEFT edge of
+// a tightly-zoomed crop -- it was sized off the physical screen (a
+// constant ~28-64 CSS px converted to world units via the current zoom,
+// floored at 44 world units so it never read illegibly small), but that
+// floor had nothing to do with how much world-unit width the current crop
+// actually had, so a tight enough zoom could need MORE width than the crop
+// itself contained. Anchored to the right edge, the logo -- right at that
+// edge -- mostly stayed put, while the timestamp text -- furthest from it
+// -- spilled badly off the left (reported by Andrew as "logo size seems ok
+// but text is no good"). Fixed by shrinking the block (down to an 8-world-
+// unit floor) whenever its natural footprint would exceed the crop's own
+// width.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v26";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
