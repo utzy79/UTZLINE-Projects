@@ -460,7 +460,31 @@
 // the older run_batch_pdf_export.js only ever checked PDF file counts,
 // which never caught this since a real room happened to still be on
 // screen during that test's own run.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v28";
+// (v29: real bug fixed, reported by Andrew: "personal 'my projects' in the
+// viewer does not work. does it need a certain folder structure." Root
+// cause: v27's "My projects" only ever recognized a folder as a "level" or
+// a "project" -- a "root" shape (a folder that itself contains SEVERAL
+// project folders, exactly what one project manager's own Projects folder
+// looks like, which is the real shape of "different project managers,
+// different locations") was silently treated as a plain "project". Opening
+// it then listed that root's real project folders as if they were LEVELS
+// of one project; tapping one failed with a generic "Couldn't open" toast,
+// since a project folder has no saves/pdfs/backup of its own two layers
+// down for ensureWorkFolders to find -- and nothing in the UI ever
+// explained why, or what folder shape was actually expected. Fixed by
+// giving "root" its own real kind: opening a "root" entry now lands on an
+// actual project list (populateProjectList against that root, under its own
+// typed label), exactly like the existing single-Projects-root flow already
+// does when you point its own picker at a fresh root folder -- so a whole
+// project manager's folder of jobs can now genuinely be added and browsed
+// from "My projects", which is exactly the real-world shape this feature
+// was built for. New regression test run_my_projects_root_folder.js builds
+// a genuine three-level-deep detached root/project/level structure, adds
+// the ROOT folder via "+ Add a project", and drives all the way down to
+// actually opening a real level's plan -- explicitly sanity-checked (revert
+// the fix, confirm the test times out failing to find a real project list)
+// to be a real guard, not just a passing test.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v29";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
