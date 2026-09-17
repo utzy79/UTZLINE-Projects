@@ -414,7 +414,31 @@
 // but text is no good"). Fixed by shrinking the block (down to an 8-world-
 // unit floor) whenever its natural footprint would exceed the crop's own
 // width.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v26";
+//
+// (v27: two UI/UX fixes requested directly by Andrew. (1) The toolbar's
+// horizontal scrollbar ("the slider on the menu bar") is now a slim,
+// rounded, theme-colored bar on a transparent track instead of the
+// platform's stock grey scrollbar, which looked out of place against the
+// app's own rounded UI -- still a full drag affordance on desktop/tablet,
+// just restyled rather than removed (phone widths still hide it entirely,
+// unchanged). (2) "My projects" -- a Viewer-only, ADDITIONAL personal list
+// of individually-added project/level folders, layered above the existing
+// single-Projects-root flow (which is completely unchanged): "the open
+// files on the viewer needs the ability to look in different locations,
+// think of it like a import function." This was the "personal My projects
+// list" idea noted as pending since v20 -- the drafting office works
+// across different project managers whose projects live in different
+// locations, which a single remembered root doesn't fit. Each entry is a
+// remembered folder handle plus a typed label (a folder can't reveal its
+// own parent path, and real project folders are routinely all named
+// identically "UTZLINE" in the field, so the label is what actually
+// distinguishes one job from another) -- shown even with zero Projects
+// root chosen at all, added via "+ Add a project" (shape-detected the same
+// way the existing folder picker already is), opened directly from its own
+// stored handle, and removed (press-and-hold, same gesture as every other
+// row) without ever touching the real folder on disk. Purely additive --
+// this app's own single-root flow is untouched either way.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v27";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

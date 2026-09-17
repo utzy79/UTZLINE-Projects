@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v26">
+<link rel="manifest" href="./manifest.json?v=v27">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v26">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v26">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v27">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v27">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -178,8 +178,29 @@
     overflow-x:auto; overflow-y:hidden;
     -webkit-overflow-scrolling:touch;
     scrollbar-width:thin;
+    scrollbar-color:var(--border-strong) transparent;
   }
   .toolbar-row > *{flex:none;}
+  /* Restyled scrollbar (2026-09-17, reported by Andrew: "i dont like the
+     slider on the menu bar") -- Chrome/Edge/Safari otherwise draw the
+     platform's stock grey scrollbar here, a chunky mismatched bar that
+     looks out of place against the app's own rounded, theme-colored UI.
+     A slim, fully-rounded, theme-aware thumb on a transparent track reads
+     as part of the toolbar instead of an OS control -- still a full,
+     obvious drag affordance for a mouse/trackpad, just restyled rather
+     than removed (phone widths still hide it entirely further down, since
+     touch scrolling there needs no visible bar at all). The Firefox
+     equivalent is the scrollbar-color line just above. Shared by both
+     toolbar rows AND the >=2200px merged single-row layout further below,
+     which reuses this same scrollable-strip look on `.toolbar` itself. */
+  .toolbar-row::-webkit-scrollbar, .toolbar::-webkit-scrollbar{ height:6px; }
+  .toolbar-row::-webkit-scrollbar-track, .toolbar::-webkit-scrollbar-track{ background:transparent; }
+  .toolbar-row::-webkit-scrollbar-thumb, .toolbar::-webkit-scrollbar-thumb{
+    background:var(--border-strong); border-radius:999px;
+  }
+  .toolbar-row::-webkit-scrollbar-thumb:hover, .toolbar::-webkit-scrollbar-thumb:hover{
+    background:var(--text-secondary);
+  }
   #toolbarRowFile{border-bottom:1px solid var(--border);}
   .ibtn{
     display:flex; align-items:center; justify-content:center;
@@ -581,6 +602,15 @@
     text-decoration:underline; text-underline-offset:2px;
   }
   .project-gate-back:hover, .project-gate-back:focus-visible{ color:var(--text-primary); }
+  /* "My projects" (Viewer only) -- a personal, per-device list of
+     individually-added project/level folders, layered above the existing
+     single-Projects-folder flow rather than replacing it (see #gateMyProjects'
+     own HTML comment for the full "why"). Styled as its own clearly-separate
+     section -- a heading plus a divider below it -- so it doesn't read as
+     just more rows in whichever single-root list happens to be showing
+     underneath. */
+  #gateMyProjects{ margin-bottom:22px; padding-bottom:18px; border-bottom:1px solid var(--border); }
+  .project-gate-section-title{ font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-secondary); margin:0 0 10px; }
 
   /* ---------- share-as choice ---------- */
   .share-choice-box{max-width:340px;}
@@ -702,7 +732,7 @@
      desktops/laptops), the two-fixed-rows layout above is what's in
      effect, which is what actually fixes the reported "jumping". */
   @media (min-width:2200px){
-    .toolbar{flex-direction:row; align-items:center; flex-wrap:nowrap; overflow-x:auto; padding:8px 10px; gap:6px;}
+    .toolbar{flex-direction:row; align-items:center; flex-wrap:nowrap; overflow-x:auto; padding:8px 10px; gap:6px; scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent;}
     .toolbar-row{display:contents;}
     #toolbarRowFile{border-bottom:none;}
   }
@@ -1021,6 +1051,42 @@
       <div class="project-gate-box">
         <div class="project-gate-brand"><img id="projectGateIcon" src="" alt="" aria-hidden="true"><h1 id="projectGateTitle">UTZLINE Site Measure</h1></div>
 
+        <!-- "My projects" (Viewer only), added 2026-09-17 at Andrew's request
+             ("the open files on the viewer needs the ability to look in
+             different locations, think of it like a import function") --
+             this is the "personal My projects list" feature that had been
+             sitting in the pending notes since v20: the drafting office works
+             across different project managers, whose projects live in
+             different source locations, so the single-remembered-root model
+             below (still exactly as it was, untouched) doesn't fit them --
+             they need to pull in individual project (or bare level) folders
+             from wherever each one actually lives, one at a time, like an
+             import. Kept as an ADDITIONAL section layered above gateSetup/
+             gateList (see showGateState/populateMyProjectList) rather than a
+             replacement, so anyone already happy with a single Projects
+             folder sees no change in that flow at all -- this is purely
+             additive. Each entry is just a remembered folder handle + a
+             typed label (the folder itself can't reveal its own parent
+             path/job name, per detectFolderShape's own comment, hence asking
+             for one when it's added) plus which shape it turned out to be
+             ("project" = a folder of levels, "level" = a bare level/room
+             folder opened directly) -- stored per-device in IndexedDB
+             (viewerMyProjects), never synced or shared. Removing an entry
+             (press-and-hold, same gesture as everywhere else in this gate)
+             only forgets it from this list -- the real folder on disk is
+             never touched, and it can always be added back later from
+             wherever it lives. Hidden entirely in the editor build (see
+             showGateState) since this whole model is specific to browsing
+             projects that live scattered across locations you don't
+             otherwise have a "root" for. -->
+        <div id="gateMyProjects" hidden>
+          <p class="project-gate-section-title">My projects</p>
+          <div class="project-list" id="myProjectListItems"></div>
+          <div class="project-gate-actions">
+            <button class="mbtn" id="addMyProjectBtn">+ Add a project…</button>
+          </div>
+        </div>
+
         <div id="gateSetup">
           <p>Choose a folder on this device to keep your projects in. Each project you create gets its own folder inside it, holding one folder per level (e.g. "Level 1", "Level 2") -- and each level has its own <b>saves</b> folder (the working file you reopen) and <b>pdfs</b> folder (every PDF you export).</p>
           <div class="project-gate-actions">
@@ -1158,7 +1224,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v26";
+  var APP_VERSION = "v27";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -5677,6 +5743,13 @@
   var projectListItems = document.getElementById("projectListItems");
   var newProjectBtn = document.getElementById("newProjectBtn");
   var switchProjectsRootBtn = document.getElementById("switchProjectsRootBtn");
+  // "My projects" (Viewer only) -- see the HTML comment above #gateMyProjects
+  // for the full "why". These elements simply don't exist in a build whose
+  // HTML never got this block, so every reference below is null-guarded the
+  // same way switchProjectBtn/roomsBtn etc. already are.
+  var gateMyProjects = document.getElementById("gateMyProjects");
+  var myProjectListItems = document.getElementById("myProjectListItems");
+  var addMyProjectBtn = document.getElementById("addMyProjectBtn");
   var gateLevels = document.getElementById("gateLevels");
   var gateLevelsLabel = document.getElementById("gateLevelsLabel");
   var levelListItems = document.getElementById("levelListItems");
@@ -5799,6 +5872,14 @@
     gateList.hidden = which !== "list";
     gateLevels.hidden = which !== "levels";
     gateRooms.hidden = which !== "rooms";
+    // "My projects" only ever makes sense at the top level -- browsing a
+    // specific project's levels/rooms, or reconnecting a lapsed root, isn't
+    // where you'd want to be adding a DIFFERENT project from. VIEW_ONLY_MODE
+    // gates it out of the editor build entirely, same as every other
+    // viewer-only affordance.
+    var showMyProjects = VIEW_ONLY_MODE && (which === "setup" || which === "list");
+    if (gateMyProjects) gateMyProjects.hidden = !showMyProjects;
+    if (showMyProjects) populateMyProjectList();
     projectGate.hidden = false;
   }
   // Shows "Project — Level" (or, with a room open, "Project — Level — Room")
@@ -6237,6 +6318,129 @@
         ? "This level has no separate rooms — just its own main floor plan."
         : "No rooms yet — only add one if this level needs a separate annotated photo or drawing beyond its main floor plan.";
       return renderPickerList(roomListItems, "room", names, emptyMessage, openRoom, populateRoomList);
+    });
+  }
+  // ---- "My projects" (Viewer only) -- see the HTML comment above
+  // #gateMyProjects for the full "why". Each entry is
+  // { label, kind: "project"|"level", handle }, stored per-device via the
+  // same idbGet/idbSet the single Projects-root handle already uses --
+  // kept as an in-memory write-through cache (myProjectsList), same
+  // pattern as viewerHiddenEntries above, so an add/remove is reflected
+  // immediately regardless of whether its idbSet has resolved yet (or, in
+  // a test harness whose fake handles aren't structured-cloneable, even if
+  // it silently fails to persist at all -- see fake-fs.js's own comment).
+  var myProjectsList = null;
+  function loadMyProjects(){
+    if (myProjectsList) return Promise.resolve(myProjectsList);
+    return idbGet("viewerMyProjects").then(function(arr){
+      myProjectsList = arr || [];
+      return myProjectsList;
+    }).catch(function(){
+      myProjectsList = [];
+      return myProjectsList;
+    });
+  }
+  function saveMyProjects(){
+    return idbSet("viewerMyProjects", myProjectsList || []).catch(function(){});
+  }
+  function populateMyProjectList(){
+    if (!VIEW_ONLY_MODE || !myProjectListItems) return Promise.resolve();
+    return loadMyProjects().then(function(list){
+      myProjectListItems.innerHTML = "";
+      if (!list.length){
+        var empty = document.createElement("div");
+        empty.className = "project-gate-empty";
+        empty.textContent = "Nothing added yet — use “+ Add a project” below to bring one in from anywhere on this device.";
+        myProjectListItems.appendChild(empty);
+        return;
+      }
+      list.forEach(function(entry, idx){
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "project-row";
+        row.title = "Tap to open — press and hold to remove from your list (this never touches the real folder)";
+        var label = document.createElement("span");
+        label.textContent = entry.label;
+        var arrow = document.createElement("span");
+        arrow.className = "project-row-arrow";
+        arrow.textContent = "Open →";
+        row.appendChild(label);
+        row.appendChild(arrow);
+        row.addEventListener("click", function(){
+          openMyProjectEntry(entry).catch(function(err){
+            if (err && err.code === "nav_cancelled") return; // declined the save-before-leaving confirm -- moot in the viewer, kept for symmetry
+            console.error("Open my-project entry failed:", err);
+            var msg = (err && err.code === "permission_denied")
+              ? "Couldn't get permission to open “" + entry.label + "” — try again, or remove and re-add it if that keeps happening."
+              : "Couldn't open “" + entry.label + "” — try again. If the folder was moved, remove it and add it again from its new location.";
+            showToast(msg, 7000);
+          });
+        });
+        wireLongPress(row, function(){
+          showConfirm("Remove “" + entry.label + "” from your list? This only changes what YOU see on this device — it won't delete or change anything on disk, and it'll still be there for everyone else. You can always add it back later from wherever it lives.").then(function(ok){
+            if (!ok){ showToast("Cancelled."); return; }
+            var pos = myProjectsList ? myProjectsList.indexOf(entry) : -1;
+            if (pos !== -1) myProjectsList.splice(pos, 1);
+            return saveMyProjects().then(function(){
+              showToast("Removed “" + entry.label + "” from your list.");
+              populateMyProjectList();
+            });
+          });
+        });
+        myProjectListItems.appendChild(row);
+      });
+    });
+  }
+  // Opens a personally-added entry directly from its stored handle -- no
+  // known projectsRootHandle/activeProjectHandle parent, same situation
+  // pickProjectsRootFolder's own shape-detection branches are already in
+  // (a viewer pick with "no known parent", see openLevelFromHandle/
+  // openProjectFromHandle's own comments) -- so this reuses those same two
+  // functions rather than duplicating the open logic. Uses the entry's own
+  // typed LABEL as the name shown/used for file naming, not the folder's own
+  // raw name -- real project folders in the field are routinely all named
+  // identically ("UTZLINE", see detectFolderShape's own comment), so the
+  // label the person actually typed in is the only thing that meaningfully
+  // distinguishes one job's exported PDFs from another's.
+  // Permission on a stored handle can lapse (browser restart, OS-level
+  // revocation) exactly like the single Projects-root handle's own
+  // "reconnect" flow handles -- re-requested here instead, since this is
+  // reached directly from a click (a genuine user gesture, which
+  // requestPermission needs to be allowed to prompt at all).
+  function openMyProjectEntry(entry){
+    return entry.handle.requestPermission({ mode: "read" }).then(function(perm){
+      if (perm !== "granted"){
+        var err = new Error("Permission not granted for “" + entry.label + "”");
+        err.code = "permission_denied";
+        throw err;
+      }
+      projectsRootHandle = null; activeProjectName = ""; activeProjectHandle = null;
+      if (entry.kind === "level") return openLevelFromHandle(entry.handle, entry.label);
+      return openProjectFromHandle(entry.handle, entry.label);
+    });
+  }
+  if (addMyProjectBtn){
+    addMyProjectBtn.addEventListener("click", function(){
+      window.showDirectoryPicker({ id: "utzline-my-project", mode: "read" }).then(function(handle){
+        return detectFolderShape(handle).then(function(shape){
+          var kind = shape === "level" ? "level" : "project"; // "root"/"empty"/"unknown" all behave fine treated as "project" -- openProjectFromHandle just lists whatever's inside as levels
+          return showRenameDialog(handle.name, "Label this for your list (e.g. the job name/number) — the actual folder name isn't shown to you here, so pick whatever you'll recognize it by later:").then(function(value){
+            if (value === null) return; // cancelled
+            var clean = value.trim() || handle.name;
+            return loadMyProjects().then(function(list){
+              list.push({ label: clean, kind: kind, handle: handle });
+              return saveMyProjects();
+            }).then(function(){
+              showToast("Added “" + clean + "” to your list.");
+              return populateMyProjectList();
+            });
+          });
+        });
+      }).catch(function(err){
+        if (err && err.name === "AbortError") return; // cancelled the picker -- stay put
+        console.error("Add project failed:", err);
+        showToast(folderPickerErrorMessage(err));
+      });
     });
   }
   // Viewer mode asks for "read" permission, never "readwrite" -- on top of
