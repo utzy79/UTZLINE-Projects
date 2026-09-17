@@ -99,7 +99,23 @@
 // project folders, same as every other create/export action already hidden
 // there) -- rebuilt purely because it shares the same source.html as the
 // editor. Bumping the cache name to match.)
-var CACHE_NAME = "utzline-viewer-cache-v28";
+// (v29: real bug fixed here specifically, reported by Andrew: "personal 'my
+// projects' in the viewer does not work. does it need a certain folder
+// structure." "My projects" only ever recognized a folder it was given as a
+// "level" or a "project" -- a "root" shape (a folder that itself contains
+// several project folders, i.e. one project manager's own Projects folder --
+// exactly what "different project managers, different locations" looks like
+// in practice) got silently treated as a plain "project", so opening it
+// listed its real project folders as if they were levels and tapping one
+// failed with a generic error, with nothing explaining why. Fixed by giving
+// "root" its own real kind: opening one now lands on an actual project list
+// under its own typed label, same as the existing single-Projects-root flow
+// already does for a freshly-picked root folder -- so a whole project
+// manager's folder of jobs can genuinely be added and browsed now. See the
+// editor's own service worker for the fuller root-cause writeup; same
+// shared source.html as the editor, so this bundle picks up the fix too --
+// bumping the cache name to match.)
+var CACHE_NAME = "utzline-viewer-cache-v29";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [

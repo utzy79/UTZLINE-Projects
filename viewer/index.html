@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v28">
+<link rel="manifest" href="./manifest.json?v=v29">
 <meta name="theme-color" content="#16283a">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v28">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v28">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v29">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v29">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1224,7 +1224,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v28";
+  var APP_VERSION = "v29";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -6348,13 +6348,29 @@
   }
   // ---- "My projects" (Viewer only) -- see the HTML comment above
   // #gateMyProjects for the full "why". Each entry is
-  // { label, kind: "project"|"level", handle }, stored per-device via the
-  // same idbGet/idbSet the single Projects-root handle already uses --
+  // { label, kind: "project"|"level"|"root", handle }, stored per-device via
+  // the same idbGet/idbSet the single Projects-root handle already uses --
   // kept as an in-memory write-through cache (myProjectsList), same
   // pattern as viewerHiddenEntries above, so an add/remove is reflected
   // immediately regardless of whether its idbSet has resolved yet (or, in
   // a test harness whose fake handles aren't structured-cloneable, even if
   // it silently fails to persist at all -- see fake-fs.js's own comment).
+  //
+  // BUG FIXED (v29, 2026-09-17, reported by Andrew: "personal 'my projects'
+  // in the viewer does not work. does it need a certain folder structure"):
+  // a "root" shape (a folder that itself contains several project folders --
+  // exactly what "different project managers, different locations" means in
+  // practice, since each manager's own folder is usually a small Projects
+  // root of its own, not a single job) was being silently folded into
+  // "project" here, same as the fallback for "empty"/"unknown". Opening it
+  // then listed each of that root's real PROJECT folders as if they were
+  // LEVELS of one project -- clicking one failed with a generic "Couldn't
+  // open" toast, since a project folder has no saves/pdfs/backup of its own
+  // for ensureWorkFolders to find. "root" now gets its own real kind (see
+  // detectFolderShape's own comment for what distinguishes it) and opens
+  // into an actual project list, one layer up from a plain "project" entry,
+  // exactly like the existing single-Projects-root flow already does for a
+  // freshly-picked root folder.
   var myProjectsList = null;
   function loadMyProjects(){
     if (myProjectsList) return Promise.resolve(myProjectsList);
@@ -6421,12 +6437,13 @@
   // known projectsRootHandle/activeProjectHandle parent, same situation
   // pickProjectsRootFolder's own shape-detection branches are already in
   // (a viewer pick with "no known parent", see openLevelFromHandle/
-  // openProjectFromHandle's own comments) -- so this reuses those same two
-  // functions rather than duplicating the open logic. Uses the entry's own
-  // typed LABEL as the name shown/used for file naming, not the folder's own
-  // raw name -- real project folders in the field are routinely all named
-  // identically ("UTZLINE", see detectFolderShape's own comment), so the
-  // label the person actually typed in is the only thing that meaningfully
+  // openProjectFromHandle's own comments) -- so this reuses those same
+  // functions (plus populateProjectList for a "root" entry) rather than
+  // duplicating the open logic. Uses the entry's own typed LABEL as the name
+  // shown/used for file naming, not the folder's own raw name -- real
+  // project folders in the field are routinely all named identically
+  // ("UTZLINE", see detectFolderShape's own comment), so the label the
+  // person actually typed in is the only thing that meaningfully
   // distinguishes one job's exported PDFs from another's.
   // Permission on a stored handle can lapse (browser restart, OS-level
   // revocation) exactly like the single Projects-root handle's own
@@ -6442,6 +6459,24 @@
       }
       projectsRootHandle = null; activeProjectName = ""; activeProjectHandle = null;
       if (entry.kind === "level") return openLevelFromHandle(entry.handle, entry.label);
+      if (entry.kind === "root"){
+        // A whole projects folder (e.g. one project manager's own root,
+        // holding several jobs) -- land on an actual project list, same as
+        // pickProjectsRootFolder's own "root" branch, using the entry's own
+        // typed label rather than the real folder name (same reasoning as
+        // every other My-projects entry). This is only ever an in-memory,
+        // temporary use of projectsRootHandle/projectsRootName for this
+        // browsing session -- it's never persisted over the real single
+        // Projects root (no idbSet here), so choosing a different My-
+        // projects entry, or the real Projects root, later is unaffected.
+        projectsRootHandle = entry.handle;
+        projectsRootPermissionOK = true;
+        projectsRootName = entry.label;
+        return populateProjectList().then(function(){
+          gateListFolderLabel.textContent = "Projects folder: “" + projectsRootName + "”";
+          showGateState("list");
+        });
+      }
       return openProjectFromHandle(entry.handle, entry.label);
     });
   }
@@ -6449,8 +6484,13 @@
     addMyProjectBtn.addEventListener("click", function(){
       window.showDirectoryPicker({ id: "utzline-my-project", mode: "read" }).then(function(handle){
         return detectFolderShape(handle).then(function(shape){
-          var kind = shape === "level" ? "level" : "project"; // "root"/"empty"/"unknown" all behave fine treated as "project" -- openProjectFromHandle just lists whatever's inside as levels
-          return showRenameDialog(handle.name, "Label this for your list (e.g. the job name/number) — the actual folder name isn't shown to you here, so pick whatever you'll recognize it by later:").then(function(value){
+          // "root" (a folder OF projects, e.g. one project manager's own
+          // Projects folder) gets its own kind -- see openMyProjectEntry's
+          // own comment for why this can't just be folded into "project"
+          // like "empty"/"unknown" harmlessly can (those still land on an
+          // empty-but-valid project's level list either way).
+          var kind = shape === "level" ? "level" : (shape === "root" ? "root" : "project");
+          return showRenameDialog(handle.name, "Label this for your list (e.g. the job name/number, or the project manager's name if this is a whole folder of their jobs) — the actual folder name isn't shown to you here, so pick whatever you'll recognize it by later:").then(function(value){
             if (value === null) return; // cancelled
             var clean = value.trim() || handle.name;
             return loadMyProjects().then(function(list){
