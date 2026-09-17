@@ -115,7 +115,17 @@
 // editor's own service worker for the fuller root-cause writeup; same
 // shared source.html as the editor, so this bundle picks up the fix too --
 // bumping the cache name to match.)
-var CACHE_NAME = "utzline-viewer-cache-v29";
+// (v30: shares in the editor's own v30 layering fix. The automatic
+// reorder-on-select bug (tapping an image to look at it would silently
+// promote it above the plan's annotations in memory) applied here too --
+// this bundle never saves, so it was never persisted to disk, but it could
+// still visibly misorder the on-screen layering the moment you tapped an
+// image while browsing, until the level was reopened. Fixed the same way,
+// via the same shared source.html. The new "Bring to front"/"Send to back"
+// popover rows stay editor-only, same as before -- nothing in the Viewer
+// writes to a save file, so there's nothing for them to do here. Bumping
+// the cache name to match the editor's release.)
+var CACHE_NAME = "utzline-viewer-cache-v30";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
