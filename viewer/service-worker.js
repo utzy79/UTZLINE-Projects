@@ -74,7 +74,24 @@
 // Viewer, and addExportOverlays is the exact same shared function. Same
 // shared source.html as the editor, so this bundle picks up both --
 // bumping the cache name to match.)
-var CACHE_NAME = "utzline-viewer-cache-v26";
+// (v27: two real changes for THIS app specifically, both requested directly
+// by Andrew. (1) The toolbar's scrollbar restyle (slim/rounded/theme-
+// colored instead of the platform default) is cosmetic and applies exactly
+// as it does in the editor -- shared CSS. (2) "My projects" is the real
+// headline change here: "the open files on the viewer needs the ability to
+// look in different locations, think of it like a import function." A new,
+// ADDITIONAL section (on top of the existing single-Projects-root flow,
+// which is unchanged) lets a drafting-office person build up their own
+// personal, per-device list of project/level folders pulled in from
+// wherever each one actually lives -- exactly the "different project
+// managers, different source locations" gap the pending notes had been
+// tracking since v20. Shown even before any Projects root is ever chosen.
+// Each entry is opened straight from its own stored folder handle and
+// removed (press-and-hold) without ever touching the real folder -- fully
+// read-only, same as everything else in this app. Same shared source.html
+// as the editor, so this bundle picks up both changes -- bumping the cache
+// name to match.)
+var CACHE_NAME = "utzline-viewer-cache-v27";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
