@@ -359,7 +359,25 @@
 // the just-saved room/level's content lingering in memory, which a later
 // navigation's auto-save could then misattribute into a completely
 // different level's file -- state.objects is now cleared at that point too.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v23";
+// (v24: follow-up to v23's auto-save-on-leave fix, requested by Andrew the
+// same day once he'd thought through the consequences -- always silently
+// auto-saving on the way out means a genuine mistake (an accidental delete,
+// a stray edit) now gets permanently written with nothing left to catch it,
+// where previously a mistake could still be walked back by simply not
+// saving. saveActiveWorkBeforeLeaving() now asks first -- "Save changes to
+// '<name>' before leaving?" -- whenever there's a real unsaved edit
+// (tracked by a new unsavedSinceLastSave flag, set on every actual edit via
+// pushHistory() and cleared on save/fresh-load), before writing anything;
+// choosing Cancel stays right where you are, plan and all, exactly as it
+// was, so a mistake can be reviewed or undone before trying again. Every
+// navigation route (Levels/Rooms list rows, the room-jump dropdown, "Rooms",
+// "Switch project/level") shares this one gate, so the confirm shows up
+// consistently everywhere leaving-with-unsaved-changes can happen. Purely
+// cosmetic/navigational moves (nothing drawn since the last save, or
+// stepping around while nothing was ever open) still go straight through
+// with no prompt at all -- this only ever interrupts a genuine unsaved
+// change.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v24";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
