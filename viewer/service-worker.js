@@ -44,7 +44,15 @@
 // hides "+ New Project/Level/Room" (no legitimate create action exists in
 // read-only mode) and fixes the project-gate's own title to say "UTZLINE
 // Viewer" like the header already did.)
-var CACHE_NAME = "utzline-viewer-cache-v22";
+// (v23: shares in the two fixes shipped in the editor's own v23 the same
+// day -- the "jump to any room" dropdown was already here since v21 and is
+// unchanged; the real change for THIS app is the multi-room save fix
+// (saveActiveWorkBeforeLeaving/clearActiveWorkInMemory in source.html).
+// It's a no-op here in practice -- every write it could trigger is still
+// blocked by VIEW_ONLY_MODE exactly like every other mutation already was
+// -- but it's the same shared source.html as the editor, so this bundle
+// picks it up too. Bumping the cache name to match the editor's release.)
+var CACHE_NAME = "utzline-viewer-cache-v23";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
