@@ -58,7 +58,13 @@
 // no-op here: the Viewer already never wrote anything on navigation, and it
 // still doesn't; nothing new is ever shown to a Viewer user. Bumping the
 // cache name to match the editor's release, same as v23.)
-var CACHE_NAME = "utzline-viewer-cache-v24";
+// (v25: shares in the editor's own v25 toolbar layout fix -- the toolbar's
+// two rows (file actions / drawing tools) are now permanently fixed and
+// independently scrollable instead of one shared flex-wrap row, stopping
+// the "jumping" reflow that could happen as buttons showed/hid. Same
+// shared source.html as the editor, so this bundle picks it up too --
+// bumping the cache name to match.)
+var CACHE_NAME = "utzline-viewer-cache-v25";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
