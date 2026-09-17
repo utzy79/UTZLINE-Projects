@@ -335,7 +335,31 @@
 // mode -- was previously visible and silently rejected with a generic
 // failure toast) and fixes the project-gate's own big title to follow
 // VIEW_ONLY_MODE the same way the small header brand name already did.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v22";
+// (v23: two changes, both requested by Andrew, 2026-09-17 --
+// (1) the "jump to any room" dropdown (level>room tree, shipped Viewer-
+// only in v21) is now available in this editor too -- it's pure
+// navigation, nothing about it was ever gated on VIEW_ONLY_MODE
+// underneath, so refreshRoomJumpMenu() no longer excludes the editor.
+// (2) CRITICAL DATA-LOSS FIX -- editing several rooms/levels in one visit
+// used to only ever keep whichever one happened to be open at the moment
+// Save was actually clicked: navigating on to a different room/level (via
+// the Rooms/Levels list, the room-jump dropdown, "Rooms", or "Switch
+// project/level") reloaded the destination straight over the in-memory
+// plan with no save first, silently discarding everything drawn on the one
+// just left -- the direct list/dropdown routes gave no warning at all, and
+// "Rooms"/"Switch project/level" only ever reminded you to save first
+// without actually doing it. Fixed with a new saveActiveWorkBeforeLeaving(),
+// wired into openLevel()/openRoom() (the chokepoints every navigation route
+// funnels through) plus switchProject()/openRoomsPicker(), so leaving a
+// room or level now always auto-saves it first, silently, before anything
+// gets overwritten -- editing multiple rooms and pressing Save once now
+// keeps every one of them, not just the last. A companion fix
+// (clearActiveWorkInMemory()) also closes a related gap this uncovered:
+// stepping back out to a list without opening something new used to leave
+// the just-saved room/level's content lingering in memory, which a later
+// navigation's auto-save could then misattribute into a completely
+// different level's file -- state.objects is now cleared at that point too.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v23";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
