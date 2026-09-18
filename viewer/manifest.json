@@ -1,13 +1,14 @@
 {
-  "name": "UTZLINE Viewer",
-  "short_name": "UTZLINE Viewer",
-  "description": "Read-only viewer for UTZLINE Site Measure plans: open a project's folder to pan, zoom, and browse markups, dimensions, and room links exactly as measured, and print or share a view -- without any risk of accidentally moving, deleting, or editing anything.",
-  "start_url": "./index.html?viewer=1",
-  "scope": "./",
+  "id": "/utzline-site-measure-viewer",
+  "name": "UTZLINE Redline Viewer",
+  "short_name": "UTZ Viewer",
+  "description": "Read-only viewer app for UTZLINE project files and site plan markups.",
+  "start_url": "/UTZLINE-Site-Measure/viewer/index.html",
+  "scope": "/UTZLINE-Site-Measure/viewer/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#11171c",
-  "theme_color": "#16283a",
+  "background_color": "#13181a",
+  "theme_color": "#1b2224",
   "icons": [
     {
       "src": "icons/icon-192.png?v=v35",
