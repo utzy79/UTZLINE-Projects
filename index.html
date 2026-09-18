@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v34">
+<link rel="manifest" href="./manifest.json?v=v35">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v34">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v34">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v35">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v35">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -540,6 +540,7 @@
   .modal-actions{ display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
   /* ---------- project info dialog (Project No. / Name / Head Contractor) ---------- */
   #projectInfoBackdrop .modal-box{ max-width:360px; }
+  #joineryItemBackdrop .modal-box{ max-width:360px; }
   .project-info-field-label{
     display:block; font-size:12px; font-weight:600; color:var(--text-secondary);
     margin:0 0 4px;
@@ -1275,6 +1276,28 @@
       </div>
     </div>
 
+    <!-- Placing a room-link marker on a level's plan now creates one
+         JOINERY ITEM (a room can hold several dots, one per item), not one
+         marker per room -- requested by Andrew, 2026-09-18: "the popup
+         needs to ask for room in one box then joinery code in another...
+         if a room name is already created, it can call up a drop down
+         selector list based on that level with a create new button also."
+         See promptAddRoomAt/showJoineryItemDialog. -->
+    <div class="modal-backdrop" id="joineryItemBackdrop" hidden>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="joineryItemLabel">
+        <p id="joineryItemLabel">Add a joinery item here — links this spot on the plan to a room and a joinery item:</p>
+        <label class="project-info-field-label" for="joineryItemRoomSelect">Room</label>
+        <select class="rename-input" id="joineryItemRoomSelect"></select>
+        <input type="text" class="rename-input" id="joineryItemNewRoomInput" maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="New room name" hidden>
+        <label class="project-info-field-label" for="joineryItemCodeInput">Joinery code</label>
+        <input type="text" class="rename-input" id="joineryItemCodeInput" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. J101">
+        <div class="modal-actions">
+          <button class="mbtn" id="joineryItemCancel">Cancel</button>
+          <button class="mbtn mbtn-accent" id="joineryItemOk">Add</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-backdrop" id="projectInfoBackdrop" hidden>
       <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="projectInfoLabel">
         <p id="projectInfoLabel">Project info — used to auto-fill ITP checklist title blocks for this project:</p>
@@ -1335,7 +1358,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v34";
+  var APP_VERSION = "v35";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -2810,10 +2833,20 @@
     listExistingRooms().then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
       if (existingLower.indexOf(obj.roomName.toLowerCase()) === -1){
-        state.objects = state.objects.filter(function(o){ return o.id !== obj.id; });
-        if (state.selectedId === obj.id) state.selectedId = null;
+        // A room can now hold several of these markers, one per joinery
+        // item (Andrew, 2026-09-18) -- so a deleted room can leave SEVERAL
+        // dangling ones behind, not just the single marker that used to be
+        // the only possibility. Clean up every marker pointing at this
+        // same (now-gone) room in one go, rather than only the one that
+        // happened to be clicked, so the rest don't sit there as dead pins
+        // waiting to each be clicked individually.
+        var staleRoomLower = obj.roomName.toLowerCase();
+        var isStaleForThisRoom = function(o){ return o.type === "roomlink" && o.roomName && o.roomName.toLowerCase() === staleRoomLower; };
+        var removedIds = state.objects.filter(isStaleForThisRoom).map(function(o){ return o.id; });
+        state.objects = state.objects.filter(function(o){ return !isStaleForThisRoom(o); });
+        if (state.selectedId && removedIds.indexOf(state.selectedId) !== -1) state.selectedId = null;
         pushHistory(); renderAll();
-        showToast("“" + obj.roomName + "” was deleted — removed this marker.");
+        showToast("“" + obj.roomName + "” was deleted — removed " + (removedIds.length === 1 ? "this marker" : "its " + removedIds.length + " markers") + ".");
         return;
       }
       openRoom(obj.roomName).catch(function(err){
@@ -2835,32 +2868,57 @@
   // written to disk. So this replicates createNewRoom's own name-dedup
   // logic directly, places the marker, explicitly saves the level's plan
   // first, and only THEN calls openRoom() to actually navigate in.
+  // Andrew, 2026-09-18: a room can now hold several of these markers, one
+  // per joinery ITEM, so this asks for Room (a dropdown of rooms that
+  // already exist on this level, plus "+ Create new room…") and a Joinery
+  // code, rather than just a room name. Picking an EXISTING room just
+  // drops another pin and stays put -- no need to reopen that room's
+  // canvas every time another item is added to it; picking "create new
+  // room" still jumps straight into that brand-new room's own canvas
+  // afterward, same as before, since a genuinely new room still needs an
+  // actual photo taken/imported.
   function promptAddRoomAt(wx, wy){
     if (VIEW_ONLY_MODE) return; // defensive -- the popover row that calls this is hidden in viewer mode
     if (!activeLevelName || activeRoomName) return;
-    showConfirm("Add a new room here? This creates a separate annotated photo/drawing for just this room, with a marker at this spot on the floor plan linking to it.").then(function(ok){
-      if (!ok) return;
-      showRenameDialog("", "Name your new room:").then(function(value){
+    listExistingRooms().then(function(existing){
+      return showJoineryItemDialog(existing).then(function(value){
         if (value === null) return; // cancelled
-        var clean = sanitizeFileBase(value);
-        listExistingRooms().then(function(existing){
-          var existingLower = existing.map(function(n){ return n.toLowerCase(); });
-          var finalName = clean, n = 2;
-          while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
-            finalName = clean + " " + n; n++;
+        var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+        var codeRaw = (value.code || "").trim();
+        var finalRoomName;
+        if (value.isNewRoom){
+          var roomRaw = (value.roomName || "").trim();
+          if (!roomRaw){ showToast("Enter a name for the new room."); return; }
+          var clean = sanitizeFileBase(roomRaw);
+          finalRoomName = clean;
+          var n = 2;
+          while (existingLower.indexOf(finalRoomName.toLowerCase()) !== -1){
+            finalRoomName = clean + " " + n; n++;
           }
-          var marker = makeRoomLink(wx, wy, finalName);
-          state.objects.push(marker);
-          pushHistory(); renderAll();
-          return saveActiveLevelFile().then(function(){
-            return openRoom(finalName);
-          });
-        }).catch(function(err){
-          if (err && err.code === "nav_cancelled") return; // declined the confirm -- just stay put
-          console.error("Add room failed:", err);
-          showToast("Couldn't add that room — try again.");
+        } else {
+          finalRoomName = value.roomName;
+        }
+        // Two dots for the same room can't share a label -- dedup the code
+        // against sibling markers already in this room on this level, same
+        // numbered-suffix convention used for room/level naming.
+        var siblingCodesLower = state.objects.filter(function(o){
+          return o.type === "roomlink" && o.roomName && o.roomName.toLowerCase() === finalRoomName.toLowerCase();
+        }).map(function(o){ return (o.joineryCode || "").toLowerCase(); });
+        var finalCode = codeRaw, cn = 2;
+        while (finalCode && siblingCodesLower.indexOf(finalCode.toLowerCase()) !== -1){
+          finalCode = codeRaw + " " + cn; cn++;
+        }
+        var marker = makeRoomLink(wx, wy, finalRoomName, finalCode);
+        state.objects.push(marker);
+        pushHistory(); renderAll();
+        return saveActiveLevelFile().then(function(){
+          if (value.isNewRoom) return openRoom(finalRoomName);
+          showToast("Added “" + finalRoomName + (finalCode ? " · " + finalCode : "") + "”.");
         });
       });
+    }).catch(function(err){
+      console.error("Add joinery item failed:", err);
+      showToast("Couldn't add that — try again.");
     });
   }
 
@@ -3849,13 +3907,20 @@
   // own size (autoFontSize), same as every other new object's default size,
   // so a marker looks reasonably sized whether the plan is a small sketch or
   // a large photo.
-  function makeRoomLink(x, y, roomName, color){
+  // joineryCode identifies which joinery ITEM within roomName this marker
+  // is for -- a room can hold several of these markers, one per item
+  // (door, window, joinery run, ...), each landing wherever that piece
+  // actually sits on the plan. Older markers saved before this existed
+  // have no joineryCode ("" ), and just show the room name alone, same as
+  // before -- see promptAddRoomAt.
+  function makeRoomLink(x, y, roomName, joineryCode, color){
     var c = color || defaultColorFor("roomlink");
     var fontSize = defaultFontSize();
     var r = fontSize * 0.85;
+    var labelText = joineryCode ? (roomName + " · " + joineryCode) : roomName;
     return {
-      id: uid(), type: "roomlink", x: x, y: y, r: r, roomName: roomName, color: c,
-      label: { text: roomName, x: x, y: y + r + fontSize * 0.95, rot: 0, fontSize: fontSize, family: "sans", color: c, anchor: "middle" }
+      id: uid(), type: "roomlink", x: x, y: y, r: r, roomName: roomName, joineryCode: joineryCode || "", color: c,
+      label: { text: labelText, x: x, y: y + r + fontSize * 0.95, rot: 0, fontSize: fontSize, family: "sans", color: c, anchor: "middle" }
     };
   }
 
@@ -5649,7 +5714,7 @@
     // itself no-ops in that case, but showing the row at all would be
     // confusing).
     if (!VIEW_ONLY_MODE && (isBaseImage || isEmptyCanvas) && activeLevelName && !activeRoomName){
-      popoverRow(wrap, ADD_ROOM_ICON + "<span>Add a room here</span>", function(){
+      popoverRow(wrap, ADD_ROOM_ICON + "<span>Add joinery item here</span>", function(){
         hideLockPopover();
         promptAddRoomAt(obj.__atPoint.x, obj.__atPoint.y);
       });
@@ -7534,6 +7599,62 @@
       else if (e.key === "Escape"){ e.preventDefault(); closeProjectInfo(null); }
     });
   });
+
+  /* ---------- "Add joinery item" dialog (Room + Joinery code) ---------- */
+  var joineryItemBackdrop = document.getElementById("joineryItemBackdrop");
+  var joineryItemRoomSelect = document.getElementById("joineryItemRoomSelect");
+  var joineryItemNewRoomInput = document.getElementById("joineryItemNewRoomInput");
+  var joineryItemCodeInput = document.getElementById("joineryItemCodeInput");
+  var joineryItemOk = document.getElementById("joineryItemOk");
+  var joineryItemCancel = document.getElementById("joineryItemCancel");
+  var joineryItemResolve = null;
+  var JOINERY_NEW_ROOM_VALUE = "__new__";
+  function updateJoineryNewRoomVisibility(){
+    var isNew = joineryItemRoomSelect.value === JOINERY_NEW_ROOM_VALUE;
+    joineryItemNewRoomInput.hidden = !isNew;
+    if (isNew) joineryItemNewRoomInput.focus();
+  }
+  // existingRoomNames: every room already on this level, so the picker
+  // offers them directly instead of forcing a retype -- "+ Create new
+  // room…" is always appended as the last option.
+  function showJoineryItemDialog(existingRoomNames){
+    joineryItemRoomSelect.innerHTML = "";
+    (existingRoomNames || []).forEach(function(name){
+      var opt = document.createElement("option");
+      opt.value = name; opt.textContent = name;
+      joineryItemRoomSelect.appendChild(opt);
+    });
+    var newOpt = document.createElement("option");
+    newOpt.value = JOINERY_NEW_ROOM_VALUE; newOpt.textContent = "+ Create new room…";
+    joineryItemRoomSelect.appendChild(newOpt);
+    joineryItemRoomSelect.value = (existingRoomNames && existingRoomNames.length) ? existingRoomNames[0] : JOINERY_NEW_ROOM_VALUE;
+    joineryItemNewRoomInput.value = "";
+    joineryItemCodeInput.value = "";
+    updateJoineryNewRoomVisibility();
+    joineryItemBackdrop.hidden = false;
+    if (joineryItemRoomSelect.value !== JOINERY_NEW_ROOM_VALUE) joineryItemCodeInput.focus();
+    return new Promise(function(resolve){ joineryItemResolve = resolve; });
+  }
+  function closeJoineryItem(value){
+    joineryItemBackdrop.hidden = true;
+    var resolve = joineryItemResolve; joineryItemResolve = null;
+    if (resolve) resolve(value);
+  }
+  function currentJoineryItemValue(){
+    var isNew = joineryItemRoomSelect.value === JOINERY_NEW_ROOM_VALUE;
+    return { roomName: isNew ? joineryItemNewRoomInput.value : joineryItemRoomSelect.value, code: joineryItemCodeInput.value, isNewRoom: isNew };
+  }
+  joineryItemRoomSelect.addEventListener("change", updateJoineryNewRoomVisibility);
+  joineryItemOk.addEventListener("click", function(){ closeJoineryItem(currentJoineryItemValue()); });
+  joineryItemCancel.addEventListener("click", function(){ closeJoineryItem(null); });
+  joineryItemBackdrop.addEventListener("click", function(e){ if (e.target === joineryItemBackdrop) closeJoineryItem(null); });
+  [joineryItemNewRoomInput, joineryItemCodeInput].forEach(function(inp){
+    inp.addEventListener("keydown", function(e){
+      if (e.key === "Enter"){ e.preventDefault(); closeJoineryItem(currentJoineryItemValue()); }
+      else if (e.key === "Escape"){ e.preventDefault(); closeJoineryItem(null); }
+    });
+  });
+
   // "Project Info" button on the levels-list screen -- lets info be added
   // to a project that skipped it when created, or fixed later; hidden in
   // the Viewer (CSS) alongside every other create/edit action there.
