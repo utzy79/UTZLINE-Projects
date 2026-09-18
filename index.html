@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v32">
+<link rel="manifest" href="./manifest.json?v=v33">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v32">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v32">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v33">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v33">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1312,7 +1312,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v32";
+  var APP_VERSION = "v33";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -3009,6 +3009,55 @@
       showToast("Brought that in, but couldn't auto-save it to “" + activeWorkName() + "” yet (" + describeError(err) + ") — hit Save as soon as you can.", 8000);
     });
   }
+
+  // Periodic, timer-based autosave of the level/room's own save file --
+  // requested directly by Andrew (2026-09-18), as a companion to the
+  // trigger-based autosaves above: those only flush at specific known
+  // moments (before a file/camera picker, after import, on navigating
+  // away), so a long stretch of continuous editing with none of those
+  // moments happening -- exactly the situation the original "low memory"
+  // tab-discard report came from -- could still lose everything back to
+  // the last explicit Save if the tab got killed mid-session. This ticks on
+  // its own regardless of what else is happening.
+  //
+  // Deliberately reuses autosaveLevelPlanIfActive() (the exact same silent,
+  // no-confirm JSON-only write already used for the v32 pre-picker flush)
+  // rather than a new save mechanism, so it inherits: the VIEW_ONLY_MODE
+  // guard (via saveActiveLevelFile itself), and the fact that this is a
+  // small single-file overwrite -- no PDF re-render, no backup snapshot, no
+  // image re-encoding (confirmed directly in code when Andrew asked "does
+  // autosave save a full file/backup/pdf each time?" -- see the project
+  // notes). That matters here specifically: a periodic tick firing every
+  // minute would be a real cost if it also regenerated a PDF each time;
+  // as a lightweight JSON-only write it isn't.
+  //
+  // Two things this tick checks that the trigger-based callers above don't
+  // need to, because a trigger-based call only ever fires at a moment that
+  // already can't be mid-gesture:
+  //   1. unsavedSinceLastSave -- skip entirely when nothing has changed
+  //      since the last save, so an idle tick never touches disk (and
+  //      never generates a pointless Dropbox sync event) for no reason.
+  //   2. Not mid-gesture -- skip while an active drag/draw/inline-text-edit
+  //      is in progress (dragMode, state.drawing, or editingId truthy), so
+  //      a tick landing mid-drag can't ever write a half-finished shape or
+  //      a stray in-progress edit. Skipping just means trying again on the
+  //      next tick, a minute later at most -- once the gesture ends,
+  //      unsavedSinceLastSave is still true and the very next tick (or the
+  //      next real trigger -- Save, leaving, a picker) catches it.
+  var PERIODIC_LEVEL_AUTOSAVE_INTERVAL_MS = 60 * 1000; // 60s: frequent enough
+  // to matter for the low-memory/crash scenario this exists for, spaced out
+  // enough that the resulting file-sync traffic on a Dropbox-synced tier
+  // stays negligible (a single small JSON overwrite once a minute, only
+  // when something has actually changed).
+  function periodicLevelAutosaveTick(){
+    if (VIEW_ONLY_MODE) return; // nothing can be dirty; also the real
+    // folder-write chokepoint (saveActiveLevelFile) already refuses this,
+    // but there's no reason to even try on every tick in the Viewer.
+    if (!unsavedSinceLastSave) return;
+    if (dragMode || state.drawing || editingId) return; // mid-gesture -- try again next tick
+    autosaveLevelPlanIfActive();
+  }
+  setInterval(periodicLevelAutosaveTick, PERIODIC_LEVEL_AUTOSAVE_INTERVAL_MS);
 
   // PDF (or PNG, if the PDF libraries didn't load) export straight into this
   // level's own pdfs/ folder. Unlike the save file above, every export gets
