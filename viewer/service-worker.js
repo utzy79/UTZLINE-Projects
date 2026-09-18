@@ -217,7 +217,7 @@
 // (this fix) and run_viewer_recolor.js (the expanded recolour scope),
 // each sanity-checked via a temporary revert-and-restore cycle. Bumping
 // the cache name to match the editor's release.)
-var CACHE_NAME = "utzline-viewer-cache-v32";
+var CACHE_NAME = "utzline-viewer-cache-v33";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
