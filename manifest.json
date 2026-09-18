@@ -1,9 +1,10 @@
 {
+  "id": "/utzline-site-measure-main",
   "name": "UTZLINE Site Measure",
   "short_name": "UTZLINE",
   "description": "Annotate plans and site photos with per-project folders: dimensions, callouts, notes, and markups, each job saved and exported into its own named folder.",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "/UTZLINE-Site-Measure/index.html",
+  "scope": "/UTZLINE-Site-Measure/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#13181a",
