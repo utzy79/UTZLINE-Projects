@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v30">
+<link rel="manifest" href="./manifest.json?v=v31">
 <meta name="theme-color" content="#16283a">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v30">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v30">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v31">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v31">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -277,6 +277,11 @@
   .autobk-lock:hover{background:var(--surface-2);}
   .autobk-lock.active{color:var(--accent);}
   .autobk-lock.needs-attn{color:var(--accent); position:relative;}
+  /* Viewer-only "recolour lines" swatch (see #viewerRecolorGroup) -- the
+     generic ".autobk input{width:14px;height:14px;}" rule above is sized
+     for a checkbox and would squash a color swatch far too small to see or
+     tap comfortably, so this ID-scoped rule overrides it. */
+  #viewerRecolorInput{ width:30px; height:22px; padding:0; border:1px solid var(--border-strong); border-radius:4px; background:none; cursor:pointer; }
   .autobk-lock.needs-attn::after{
     content:""; position:absolute; top:2px; right:2px;
     width:6px; height:6px; border-radius:50%; background:var(--accent);
@@ -516,7 +521,7 @@
     border-radius:6px; border:1px solid var(--border-strong);
     background:var(--surface-0); color:var(--text-primary);
   }
-  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
   /* ---------- crop-before-insert dialog ---------- */
   .crop-box{ max-width:min(92vw, 600px); }
   .crop-stage{
@@ -831,6 +836,21 @@
     <div class="brand"><img class="brand-icon" id="brandIcon" src="" alt="" aria-hidden="true"><span><span id="brandName">UTZLINE Site Measure</span><small id="brandSubtitle">plan markup</small></span></div>
     <div class="sep"></div>
 
+    <!-- Requested directly by Andrew, 2026-09-18: "we need a back button on
+         the menu." A genuine one-step-back, distinct from both Switch
+         project/level (always jumps all the way out to this project's
+         level list) and Rooms (always jumps INTO the room list): from
+         inside a room this goes straight to that level's own main plan
+         (skipping the room list -- previously only reachable in two steps,
+         via Rooms then its own "open main floor plan" row); from a level's
+         own main plan this goes up to this project's level list, exactly
+         what Switch project/level already does. See backBtnClicked() and
+         updateBackBtnVisibility() -- hidden whenever there's genuinely
+         nowhere for it to go (a bare level with no known project, and no
+         room open either, same reasoning switchProjectBtn already uses). -->
+    <button class="ibtn" id="backBtn" title="Back — from a room, to this level's own main plan; from a level's own plan, to this project's level list" aria-label="Back" style="display:none;">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L6 10l6 6"/></svg>
+    </button>
     <button class="tbtn" id="newBtn" title="Start a new file — with a project/level open, goes to Switch project/level to start a fresh one, without touching this level's own content. Press and hold (or right-click) to instead clear THIS level's plan and annotations back to blank in place.">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 2.5h6l3.5 3.5V16a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1z"/><path d="M11 2.5V6h3.5" stroke-linecap="round"/><path d="M10 9.5v4M8 11.5h4" stroke-linecap="round"/></svg>
       New
@@ -881,6 +901,33 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v8"/><path d="M6.5 6.5L10 3l3.5 3.5"/><path d="M4.5 10.5v4a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-4"/></svg>
       Share
     </button>
+    <!-- Viewer-only (2026-09-18, per Andrew: "the viewer can have the
+         choice to change all line colours across the project with a
+         simple colour selector in the menu bar"). Deliberately a
+         VIEW-ONLY preview, never written to any save file -- picking a
+         colour recolors every dimension/line/angle/rectangle-border/
+         callout currently in memory, for this viewing session only. Not
+         applied to the base photo, an inserted image's own optional
+         border, or a text object's own label colour -- none of those are
+         really "line colours" the way a measurement/dimension line is.
+         Since the Viewer already reloads a level/room's saved content
+         fresh from disk on every navigation (see openLevel/openRoom), the
+         override naturally disappears the moment you move to a different
+         level/room, or reopen this same one later -- there's nothing
+         extra to do to keep the Viewer's read-only guarantee intact; see
+         applyViewerLineColor's own comment. "Reset" restores each
+         touched object's own true original colour without needing a
+         reload. Hidden entirely in the editor build (applyViewOnlyModeUI
+         toggles it, same as the brand name/logo swap). -->
+    <div class="tgroup" id="viewerRecolorGroup" style="display:none;">
+      <label class="autobk" id="viewerRecolorLabel" title="Preview every dimension/line/angle/rectangle border/callout in a single colour, for this viewing session only — nothing is saved">
+        Recolour lines
+        <input type="color" id="viewerRecolorInput" value="#e0272d" aria-label="Pick a line colour">
+      </label>
+      <button type="button" class="autobk-lock" id="viewerRecolorResetBtn" title="Reset to each item's own original colour" aria-label="Reset line colours">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a6 6 0 1 1 1.8 4.3"/><path d="M4 15v-4h4"/></svg>
+      </button>
+    </div>
     <!-- A settings-style control, not a file action like New/Open/Save, so
          it reads better tucked away past everything you actually DO with a
          plan, rather than sitting in among them competing for attention. -->
@@ -1152,6 +1199,25 @@
       </div>
     </div>
 
+    <!-- The "save before leaving?" dialog gets its own three-way modal
+         (Cancel / Leave without saving / Save & leave) rather than reusing
+         confirmBackdrop's plain yes/no shape -- requested directly by
+         Andrew, 2026-09-18: "when changing from one page to another ...
+         we need a third option to change without saving." Every other
+         confirm() in the app is a genuine yes/no, so this stays a separate
+         dialog instead of bolting a third button onto the shared one. See
+         showLeaveConfirm/saveActiveWorkBeforeLeaving. -->
+    <div class="modal-backdrop" id="leaveConfirmBackdrop" hidden>
+      <div class="modal-box" role="alertdialog" aria-modal="true" aria-labelledby="leaveConfirmMsg">
+        <p id="leaveConfirmMsg"></p>
+        <div class="modal-actions">
+          <button class="mbtn" id="leaveConfirmCancel">Cancel</button>
+          <button class="mbtn" id="leaveConfirmDiscard">Leave without saving</button>
+          <button class="mbtn mbtn-accent" id="leaveConfirmSave">Save &amp; leave</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-backdrop" id="cropBackdrop" hidden>
       <div class="modal-box crop-box" role="dialog" aria-modal="true" aria-labelledby="cropLabel">
         <p id="cropLabel">Crop this photo before it's added — drag the corners or edges, or skip to use it as-is:</p>
@@ -1224,7 +1290,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v30";
+  var APP_VERSION = "v31";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -2484,6 +2550,7 @@
       // fine regardless, since it only ever needs THIS level's own handle.
       if (switchProjectBtn) switchProjectBtn.style.display = activeProjectHandle ? "" : "none";
       if (roomsBtn) roomsBtn.style.display = "";
+      updateBackBtnVisibility();
       refreshRoomJumpMenu();
       showToast("Opened “" + (activeProjectName ? activeProjectName + " — " : "") + name + "”.");
     });
@@ -2566,6 +2633,7 @@
       hideProjectGate();
       if (switchProjectBtn) switchProjectBtn.style.display = "";
       if (roomsBtn) roomsBtn.style.display = "";
+      updateBackBtnVisibility();
       refreshRoomJumpMenu();
       showToast("Opened “" + activeProjectName + " — " + activeLevelName + " — " + name + "”.");
     });
@@ -2724,13 +2792,47 @@
   // stops the navigation rather than getting swallowed with just a toast --
   // every call site rejects the same way, so nothing ever proceeds to
   // overwrite still-unsaved work.
+  // UPDATED (2026-09-18, per Andrew: "when changing from one page to
+  // another ... we need a third option to change without saving"). The
+  // old two-way confirm (Save-and-leave / Cancel-and-stay) had no way to
+  // actually leave with a mistake left un-saved short of fixing or undoing
+  // it first -- reasonable most of the time, but not when you already know
+  // you don't want to keep whatever's currently on screen (e.g. you opened
+  // the wrong room by accident and drew something on it) and just want out
+  // without it ever touching disk. showLeaveConfirm now offers a genuine
+  // third way: "discard" leaves immediately with nothing written, exactly
+  // as if the edit had been undone first. "cancel" behaves exactly like
+  // declining the old confirm always did.
+  //
+  // Also auto-locks everything (2026-09-18, per Andrew: "when exiting /
+  // saving it needs to auto lock all dimensions etc") -- but ONLY on the
+  // "save" branch, right before the write, and only here at the single
+  // leaving chokepoint every navigation route already funnels through --
+  // deliberately NOT wired into the explicit Save button (saveBtn) itself,
+  // which stays exactly as it's always been for an ordinary mid-work save
+  // while continuing to work on the same level. Locking on every mid-work
+  // save would mean unlocking again just to keep drawing, which isn't what
+  // "when exiting" was actually asking for -- this only fires at the
+  // moment something is genuinely being left behind, the same moment
+  // Andrew's own "Lock all" toolbar button already exists to do by hand,
+  // just no longer something you have to remember to click yourself before
+  // closing out a finished plan. Reuses the same one-way, per-object
+  // `.locked` field lockAll() already uses, so it rides along with the
+  // save/undo/export plumbing that field already has; skips lockAll()
+  // itself (its own pushHistory/renderAll/toast) since state.objects is
+  // about to be replaced wholesale by whatever's being navigated to next
+  // anyway, so there's nothing left on screen for that bookkeeping to mean
+  // anything for. Choosing "discard" never locks anything -- nothing is
+  // being written, so there'd be nothing for the lock to apply to.
   function saveActiveWorkBeforeLeaving(){
     if (VIEW_ONLY_MODE) return Promise.resolve(); // nothing can be dirty; Save is unreachable anyway
     if (!activeWorkSavesHandle() || !state.objects.length) return Promise.resolve();
     if (!unsavedSinceLastSave) return Promise.resolve(); // already exactly what's on disk -- nothing to confirm
     var leavingName = activeWorkName();
-    return showConfirm("Save changes to “" + leavingName + "” before leaving? This writes them straight into “" + leavingName + "”’s own folder. Choose Cancel to stay here instead, if you want to check something first.").then(function(ok){
-      if (!ok) return Promise.reject({ code: "nav_cancelled" });
+    return showLeaveConfirm("Save changes to “" + leavingName + "” before leaving? Saving writes them straight into “" + leavingName + "”’s own folder. Choose Cancel to stay here instead, if you want to check something first, or Leave without saving to discard them.").then(function(choice){
+      if (choice === "cancel") return Promise.reject({ code: "nav_cancelled" });
+      if (choice === "discard") return Promise.resolve();
+      state.objects.forEach(function(o){ o.locked = true; });
       return saveActiveLevelFile();
     });
   }
@@ -5105,6 +5207,47 @@
     btn.title = canLock ? "Lock all items (right-click one item to unlock just that one)" : "Everything is already locked";
   }
 
+  // Viewer-only "recolour lines" preview -- see #viewerRecolorGroup's own
+  // HTML comment for the full request/reasoning. Deliberately touches only
+  // the object types that read as an actual measurement/annotation LINE;
+  // a text object's own .color also drives its label glyph fill (see
+  // renderLabelGroup), and an image's optional borderColor is a different,
+  // separate, off-by-default field -- recoloring either here would read as
+  // "my text/photo changed colour", not "my lines changed colour".
+  var VIEWER_RECOLOR_TYPES = { dimension: true, line: true, angle: true, rect: true, callout: true };
+  // Deliberately does NOT call pushHistory() -- that would mark this dirty
+  // (unsavedSinceLastSave/scheduleAutosave), which would be actively wrong
+  // for something that must never reach disk. state.objects is mutated
+  // directly in memory purely because it's the simplest possible way to
+  // reuse the exact same rendering path every other colour already goes
+  // through, and because that mutation is automatically thrown away the
+  // moment this level/room is next loaded from disk (openLevel/openRoom
+  // always re-read the real saved file fresh) -- there's genuinely nothing
+  // for a real save to ever pick up, in a build where Save itself is
+  // already hidden and unreachable throughout (VIEW_ONLY_MODE).
+  function applyViewerLineColor(hex){
+    if (!VIEW_ONLY_MODE) return; // defensive -- this control is hidden in the editor
+    var touched = 0;
+    state.objects.forEach(function(o){
+      if (!VIEWER_RECOLOR_TYPES[o.type]) return;
+      if (o.__origColor === undefined) o.__origColor = o.color; // remember the TRUE original once, even across repeated colour picks
+      o.color = hex;
+      touched++;
+    });
+    if (!touched) return;
+    renderAll();
+    showToast("Lines recoloured for this viewing session — nothing is saved.");
+  }
+  function resetViewerLineColors(){
+    var any = false;
+    state.objects.forEach(function(o){
+      if (o.__origColor !== undefined){ o.color = o.__origColor; delete o.__origColor; any = true; }
+    });
+    if (!any) return;
+    renderAll();
+    showToast("Colours reset to original.");
+  }
+
   // The right-click (or touch long-press) popover: a single Lock/Unlock
   // button that appears right above whatever item was clicked, so a
   // specific item can be freed without unlocking the whole plan via the
@@ -5150,7 +5293,22 @@
     wrap.appendChild(row);
     return row;
   }
+  // Removed entirely in the Viewer (2026-09-18, per Andrew: "the item by
+  // item menus in the viewer app are not required"). Every single row this
+  // function can ever build is already gated !VIEW_ONLY_MODE except one --
+  // a roomlink's own "Open room" row -- which only ever duplicated what
+  // double-clicking the same marker already does (see the dblclick handler
+  // above, which checks obj.type === "roomlink" before this function is
+  // ever involved and is completely unaffected by this early-out). So a
+  // long-press/right-click on any real object in the Viewer used to open
+  // this popover anyway and simply render with zero rows in it -- a dead,
+  // empty floating box with nothing in it to tap. Bailing out here instead
+  // removes that empty box outright, for every call site (the object/base-
+  // photo/empty-canvas long-press handlers, and the double-click-on-a-
+  // locked-object fallback below), while leaving genuine navigation (the
+  // roomlink double-click itself) untouched.
   function showLockPopover(obj, clientX, clientY){
+    if (VIEW_ONLY_MODE) return;
     hideLockPopover();
     var r = stage.getBoundingClientRect();
     var wrap = document.createElement("div");
@@ -6788,6 +6946,7 @@
     if (switchProjectBtn) switchProjectBtn.style.display = "none";
     if (roomsBtn) roomsBtn.style.display = "none";
     if (roomJumpSelect) roomJumpSelect.style.display = "none";
+    updateBackBtnVisibility();
     populateLevelList().then(function(){
       gateLevelsLabel.textContent = "“" + activeProjectName + "” — choose a level, or start a new one.";
       showGateState("levels");
@@ -6821,6 +6980,7 @@
       if (switchProjectBtn) switchProjectBtn.style.display = "none";
       if (roomsBtn) roomsBtn.style.display = "none";
       if (roomJumpSelect) roomJumpSelect.style.display = "none";
+      updateBackBtnVisibility();
       populateLevelList().then(function(){
         gateLevelsLabel.textContent = "“" + activeProjectName + "” — choose a level, or start a new one.";
         if (backToProjectsBtn) backToProjectsBtn.style.display = projectsRootHandle ? "" : "none";
@@ -6862,6 +7022,45 @@
     });
   }
 
+  // "Back" (toolbar) -- see the button's own HTML comment for why this is
+  // a genuinely different, shallower navigation than either Switch
+  // project/level or Rooms. From inside a room, reopens THIS level's own
+  // main plan directly from its already-known handle (activeLevelHandle/
+  // activeLevelName are left untouched the whole time a room is open --
+  // see openRoom's own comment -- so there's no need to look either back
+  // up through activeProjectHandle at all here). Auto-saves whatever's
+  // currently open first, same chokepoint every other navigation route
+  // already shares.
+  function backToLevelPlan(){
+    saveActiveWorkBeforeLeaving().then(function(){
+      activeRoomName = ""; activeRoomHandle = null;
+      activeRoomSavesHandle = null; activeRoomPdfsHandle = null; activeRoomBackupsHandle = null;
+      return openLevelFromHandle(activeLevelHandle, activeLevelName);
+    }).catch(function(err){
+      if (err && err.code === "nav_cancelled") return; // declined the confirm -- just stay put
+      console.error("Auto-save before going back failed:", err);
+      showToast("Couldn't save “" + activeWorkName() + "” before going back (" + describeError(err) + ") — try Save first, then try again.", 8000);
+    });
+  }
+  // The button itself just picks which of the two targets actually applies
+  // right now -- both are pre-existing, already-tested navigations reused
+  // as-is (backToLevelPlan() above, and switchProject() below).
+  function backBtnClicked(){
+    if (activeRoomName) backToLevelPlan();
+    else if (activeLevelName) switchProject();
+  }
+  // Shown only once there's genuinely somewhere for it to go -- a room is
+  // always a valid back-target regardless of whether the level's own
+  // project is known (rooms live directly under activeLevelHandle, same as
+  // openRoom() itself needs nothing more than that); a level's own main
+  // plan is only a valid back-target when a project is actually known,
+  // exactly the same condition switchProjectBtn's own visibility already
+  // uses, since switchProject() itself has nowhere useful to go otherwise.
+  function updateBackBtnVisibility(){
+    if (!backBtn) return;
+    backBtn.style.display = (activeLevelName && (activeRoomName || activeProjectHandle)) ? "" : "none";
+  }
+
   var confirmBackdrop = document.getElementById("confirmBackdrop");
   var confirmMsg = document.getElementById("confirmMsg");
   var confirmOk = document.getElementById("confirmOk");
@@ -6897,6 +7096,33 @@
   confirmOk.addEventListener("click", function(){ closeConfirm(true); });
   confirmCancel.addEventListener("click", function(){ closeConfirm(false); });
   confirmBackdrop.addEventListener("click", function(e){ if (e.target === confirmBackdrop) closeConfirm(false); });
+
+  // Three-way "save before leaving?" dialog -- see the HTML comment on
+  // leaveConfirmBackdrop above for why this isn't just a third button
+  // bolted onto showConfirm(). Resolves to one of three strings rather
+  // than a boolean: "save" (write it, then leave), "discard" (leave
+  // immediately, whatever's unsaved is thrown away), or "cancel" (stay
+  // put, exactly like declining the old two-way confirm did).
+  var leaveConfirmBackdrop = document.getElementById("leaveConfirmBackdrop");
+  var leaveConfirmMsg = document.getElementById("leaveConfirmMsg");
+  var leaveConfirmSaveBtn = document.getElementById("leaveConfirmSave");
+  var leaveConfirmDiscardBtn = document.getElementById("leaveConfirmDiscard");
+  var leaveConfirmCancelBtn = document.getElementById("leaveConfirmCancel");
+  var leaveConfirmResolve = null;
+  function showLeaveConfirm(msg){
+    leaveConfirmMsg.textContent = msg;
+    leaveConfirmBackdrop.hidden = false;
+    return new Promise(function(resolve){ leaveConfirmResolve = resolve; });
+  }
+  function closeLeaveConfirm(result){
+    leaveConfirmBackdrop.hidden = true;
+    var resolve = leaveConfirmResolve; leaveConfirmResolve = null;
+    if (resolve) resolve(result);
+  }
+  leaveConfirmSaveBtn.addEventListener("click", function(){ closeLeaveConfirm("save"); });
+  leaveConfirmDiscardBtn.addEventListener("click", function(){ closeLeaveConfirm("discard"); });
+  leaveConfirmCancelBtn.addEventListener("click", function(){ closeLeaveConfirm("cancel"); });
+  leaveConfirmBackdrop.addEventListener("click", function(e){ if (e.target === leaveConfirmBackdrop) closeLeaveConfirm("cancel"); });
 
   /* ============================== rename (file name) ============================== */
   // Every export/save/auto-backup filename is built from state.fileBase --
@@ -9087,6 +9313,14 @@
   var switchProjectBtn = document.getElementById("switchProjectBtn");
   switchProjectBtn.addEventListener("click", switchProject);
   roomsBtn.addEventListener("click", openRoomsPicker);
+  var backBtn = document.getElementById("backBtn");
+  if (backBtn) backBtn.addEventListener("click", backBtnClicked);
+  var viewerRecolorInput = document.getElementById("viewerRecolorInput");
+  var viewerRecolorResetBtn = document.getElementById("viewerRecolorResetBtn");
+  // "input" (not "change") so the preview updates live while dragging
+  // around the native colour picker, not just once it's dismissed.
+  if (viewerRecolorInput) viewerRecolorInput.addEventListener("input", function(){ applyViewerLineColor(viewerRecolorInput.value); });
+  if (viewerRecolorResetBtn) viewerRecolorResetBtn.addEventListener("click", resetViewerLineColors);
   var openProjectInput = document.getElementById("openProjectInput");
   document.getElementById("openProjectBtn").addEventListener("click", function(){
     if (!state.objects.length){ openProjectInput.click(); return; }
@@ -9128,6 +9362,12 @@
     var iconSrc = VIEW_ONLY_MODE ? LOGO_ICON_DATA_URL_BLUE : LOGO_ICON_DATA_URL;
     if (brandIconEl) brandIconEl.src = iconSrc;
     if (projectGateIconEl) projectGateIconEl.src = iconSrc;
+    // "Recolour lines" -- shown only in the Viewer (see the group's own
+    // HTML comment); never available in the editor, which already has its
+    // own real, per-object/"Lock all"-style controls for anything that
+    // actually needs to persist.
+    var viewerRecolorGroupEl = document.getElementById("viewerRecolorGroup");
+    if (viewerRecolorGroupEl) viewerRecolorGroupEl.style.display = VIEW_ONLY_MODE ? "" : "none";
   }
   function boot(){
     applyViewOnlyModeUI();

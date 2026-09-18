@@ -125,7 +125,54 @@
 // popover rows stay editor-only, same as before -- nothing in the Viewer
 // writes to a save file, so there's nothing for them to do here. Bumping
 // the cache name to match the editor's release.)
-var CACHE_NAME = "utzline-viewer-cache-v30";
+// (v31: two Viewer-specific requests from Andrew, part of a five-item
+// message also covering three editor-side changes (Back button, a
+// third "leave without saving" choice, and auto-lock-on-leave -- see the
+// editor's own service-worker.js for those, and for the Back
+// button/leave-dialog/auto-lock behaviour that this bundle shares
+// automatically through the same source.html):
+//
+// (1) "the viewer can have the choice to change all line colours across
+// the project with a simple colour selector in the menu bar." A new
+// "Recolour lines" control (a native colour input plus a Reset button),
+// visible only in this build, previews every dimension/line/angle/rect
+// border/callout in the currently-loaded level or room in a single
+// chosen colour. Deliberately scoped to leave a text object's own label
+// colour and an image's own border colour untouched, since neither reads
+// as a "line colour" the way a measurement or callout leader does.
+// Deliberately, and critically, VIEW-ONLY: nothing about it ever writes
+// to a save file, never marks anything dirty, and never calls
+// pushHistory() -- confirmed with Andrew up front that this should be a
+// this-viewing-session-only preview, not a real recolour, precisely
+// because this app must never write to disk (see this file's own v-much-
+// earlier history for why that invariant exists and is guarded so
+// carefully). The preview naturally disappears the moment you navigate
+// to a different level/room or reopen this one later, since the Viewer
+// already reloads saved content fresh from disk on every navigation --
+// nothing extra was needed to keep that guarantee intact.
+//
+// (2) "the item by item menus in the viewer app are not required." The
+// per-object right-click/long-press popover (lock/unlock, bring to
+// front/send to back, delete, mirror, edit text, etc. -- all previously
+// gated off in this build already) is now skipped entirely in viewer
+// mode rather than still opening as an empty floating box with nothing
+// in it, which is all it could ever have shown here since every real row
+// was already editor-only. A real roomlink marker's own "open this room"
+// double-tap is completely unaffected -- that's handled earlier, before
+// the popover is ever involved.
+//
+// New regression test run_viewer_recolor.js covers both: hidden in the
+// editor/shown in the Viewer, correct type-scoping of the recolour,
+// that a second colour pick still recovers the TRUE original (not the
+// first pick) on Reset, that leaving and reopening the level shows the
+// real saved colours with no trace of the preview left behind and no
+// "save before leaving?" prompt ever appearing, and that the function is
+// a defensive no-op outside viewer mode -- sanity-checked via a
+// temporary revert-and-restore cycle. run_viewer_mode.js's existing
+// popover assertion was strengthened to check no popover element exists
+// at all now, not just an empty one. Bumping the cache name to match the
+// editor's release.)
+var CACHE_NAME = "utzline-viewer-cache-v31";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
