@@ -172,7 +172,52 @@
 // popover assertion was strengthened to check no popover element exists
 // at all now, not just an empty one. Bumping the cache name to match the
 // editor's release.)
-var CACHE_NAME = "utzline-viewer-cache-v31";
+// (v32: real regression Andrew reported the same day v31 shipped: "also
+// the viewer now lost the option to select rooms from the dot selector,
+// maybe because its locked." Root cause: v31's own fix for the empty
+// per-object popover in this build (see this file's own v31 entry, item 2)
+// was a blanket "bail out in viewer mode, full stop" -- which also
+// silently took out the ONE row that was never dead here: a room marker's
+// own "Open room" row, a real, working, more discoverable second way into
+// a room besides double-clicking its dot directly. Locking was never
+// actually the cause (a locked roomlink was always still reachable both
+// via long-press and via double-click) -- the real culprit was purely the
+// popover function's own blanket early-return not distinguishing "nothing
+// useful would show" from "we're in the viewer", which are the same thing
+// for every OTHER object type but not this one. Fixed by scoping that
+// early-return to real dead ends only: a roomlink marker still opens its
+// popover here (with only its one real "Open room" row in it, every other
+// row still exactly as gated as before); everything else still shows
+// nothing at all, so the original v31 fix's own guarantee is untouched.
+//
+// Also carries the same day's "Recolour lines" expansion, requested
+// directly by Andrew right after trying the v31 feature: "the colour
+// change selector (all) on the viewer app needs to change colours of
+// everything, borders, text etc." Originally scoped to just the five
+// line-like types' own stroke colour, deliberately leaving text objects,
+// attached labels, and image borders alone -- now sweeps every colour
+// field ANY object happens to carry: a plain top-level colour (whatever it
+// means for that type -- a line/dot/glyph), a separate attached label
+// colour where an object has one (a dimension/angle/callout/room-marker's
+// own text, independent of that object's own line/dot colour), and an
+// image's optional border colour (turned on for the preview even if it was
+// off beforehand). Relabelled "Recolour everything" in the toolbar to
+// match. Same guarantees as before: still a pure in-memory preview, never
+// written to any save file, gone the instant Reset is pressed or the
+// level/room is reopened.
+//
+// The other three v32 changes (a "resume where I was" boot-restore
+// mitigation, a pre-picker autosave flush for the same low-memory-discard
+// scenario, and multi-page PDF insert with auto-resize/collate) are
+// editor-focused -- Insert image, Open, and the project/level/room
+// navigation this covers are already blocked/hidden throughout this build
+// -- but share the exact same source.html, so this bundle picks them up as
+// a no-op in practice. See the editor's own service-worker.js for the full
+// write-up of all three. New regression tests: run_viewer_room_marker_popover.js
+// (this fix) and run_viewer_recolor.js (the expanded recolour scope),
+// each sanity-checked via a temporary revert-and-restore cycle. Bumping
+// the cache name to match the editor's release.)
+var CACHE_NAME = "utzline-viewer-cache-v32";
 var ICON_VERSION = CACHE_NAME.replace("utzline-viewer-cache-", "");
 
 var PRECACHE_URLS = [
