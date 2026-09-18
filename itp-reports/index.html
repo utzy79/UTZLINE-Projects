@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="utf-8">
+<head>
+<!--
+  UTZLINE ITP -- joinery installation checklists.
+
+  A third, separate app in the same family as UTZLINE Site Measure (the
+  editor) and UTZLINE Viewer (the read-only browser). It reuses the SAME
+  Projects folder that those two apps already use -- the same
+  project/level/room folder shape, browsed the same read-only way the
+  Viewer already does -- so nothing about how a project is organized has to
+  change to start using this. It is NOT built from the shared source.html
+  those two apps share: an ITP checklist is a form, not a plan-drawing
+  canvas, so this is a small, purpose-built app of its own rather than a
+  third mode bolted onto that much larger file.
+
+  ---- Data it reads ----
+  - <ProjectsRoot>/<Project>/project-meta.json -- {no, name, contractor},
+    written by Site Measure's own "+ New Project" flow (or its "Project
+    Info" button on an existing project). Read-only here: this app never
+    writes to it. A project with no file yet (created before this feature
+    existed, or "Skip for now" was chosen) just shows blank fields on the
+    checklist's title block rather than an error.
+  - <ProjectsRoot>/<Project>/<Level>/<Room> -- the room folder itself is
+    only ever used to confirm the room exists and to read its name; this
+    app never opens or writes the room's own saves/pdfs/backup content.
+
+  ---- Data it owns ----
+  - <ProjectsRoot>/<Project>/itp/<Level>/<Room>/<joinery-no>.json -- one
+    file per joinery item, the checklist's own saved state (see
+    BLANK_CHECKLIST below for its shape). The "itp" folder sits directly
+    under the PROJECT's own folder (a sibling of the level folders, not
+    nested inside one) with its own Level/Room subfolders mirroring the
+    plan's own structure -- deliberately project-wide rather than
+    per-level, so every joinery item across the whole project ends up
+    under one place. Site Measure's own level list excludes "itp" by name
+    (see listExistingLevels' own comment in source.html) so this folder
+    never shows up there mislabeled as a level.
+  - <ProjectsRoot>/<Project>/itp/<Level>/<Room>/<joinery-no>_<timestamp>.pdf
+    -- one file per PDF export (each export adds a new timestamped file,
+    same convention as Site Measure's own Save-PDF and batch-export
+    actions, rather than overwriting the previous export).
+
+  A joinery item's checklist state autosaves shortly after any change
+  (debounced) and also saves immediately on the explicit Save button and
+  right before a PDF export, so leaving mid-edit or closing the tab loses
+  at most a few seconds of typing, never the item itself.
+-->
+<title>UTZLINE ITP</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="./manifest.json?v=v1">
+<meta name="theme-color" content="#0d1411">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v1">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="UTZLINE ITP">
+<style>
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;src:url('./mono.woff2') format('woff2');}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:500;src:url('./sans.woff2') format('woff2');}
+
+:root{
+  --surface-0:#eef0ee;
+  --surface-1:#ffffff;
+  --surface-2:#dde2e0;
+  --border-strong:#aab3af;
+  --text-primary:#1b2422;
+  --text-secondary:#5c6864;
+  --accent:#1f8a4c;
+  --accent-ink:#146a39;
+  --accent-soft:#d9f2e3;
+  --danger:#c8391c;
+  --shadow:0 10px 30px rgba(0,0,0,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --surface-0:#0d1411;
+    --surface-1:#131b17;
+    --surface-2:#0a100d;
+    --border-strong:#2c3a33;
+    --text-primary:#e9edea;
+    --text-secondary:#93a29a;
+    --accent:#3ddc84;
+    --accent-ink:#b6f5cf;
+    --accent-soft:#163825;
+    --danger:#ff6a5a;
+  }
+}
+:root[data-theme="dark"]{
+  --surface-0:#0d1411;
+  --surface-1:#131b17;
+  --surface-2:#0a100d;
+  --border-strong:#2c3a33;
+  --text-primary:#e9edea;
+  --text-secondary:#93a29a;
+  --accent:#3ddc84;
+  --accent-ink:#b6f5cf;
+  --accent-soft:#163825;
+  --danger:#ff6a5a;
+}
+*{box-sizing:border-box;}
+html,body{margin:0; padding:0; height:100%;}
+body{
+  font-family:'IBM Plex Sans',Arial,sans-serif;
+  background:var(--surface-0); color:var(--text-primary);
+  display:flex; flex-direction:column; min-height:100%;
+}
+button{font-family:inherit;}
+header{
+  display:flex; align-items:center; gap:10px;
+  padding:12px 16px; border-bottom:1px solid var(--border-strong);
+  background:var(--surface-1); position:sticky; top:0; z-index:20;
+}
+header .brand-icon{ width:28px; height:28px; border-radius:6px; flex:none; }
+header .brand-text{ font-weight:700; letter-spacing:.02em; font-size:16px; }
+header .brand-text b{ color:var(--accent); }
+header .crumbs{
+  margin-left:auto; font-size:12px; color:var(--text-secondary);
+  font-family:'IBM Plex Mono',monospace; text-align:right; max-width:60%;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+main{ flex:1; padding:16px; max-width:820px; width:100%; margin:0 auto; }
+.screen{ display:none; }
+.screen.active{ display:block; }
+h2{ font-size:17px; margin:0 0 4px; }
+p.hint{ font-size:13px; color:var(--text-secondary); margin:0 0 16px; line-height:1.5; }
+.mbtn{
+  font:inherit; font-size:13.5px; padding:9px 14px; border-radius:8px;
+  border:1px solid var(--border-strong); background:var(--surface-1);
+  color:var(--text-primary); cursor:pointer;
+}
+.mbtn:hover{ background:var(--surface-2); }
+.mbtn-accent{ background:var(--accent); border-color:var(--accent-ink); color:#04140b; font-weight:600; }
+.mbtn-accent:hover{ filter:brightness(1.08); }
+.mbtn-danger{ color:var(--danger); border-color:var(--danger); }
+.mbtn[disabled]{ opacity:.5; cursor:default; }
+.actions-row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+.back-link{
+  background:none; border:none; color:var(--text-secondary); cursor:pointer;
+  font:inherit; font-size:13px; padding:4px 0 14px; display:block;
+}
+.back-link:hover{ color:var(--text-primary); }
+.list{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.list-row{
+  display:flex; align-items:center; gap:10px; width:100%;
+  padding:12px 14px; border-radius:9px; border:1px solid var(--border-strong);
+  background:var(--surface-1); color:var(--text-primary); cursor:pointer;
+  font:inherit; font-size:14px; text-align:left;
+}
+.list-row:hover{ border-color:var(--accent); }
+.list-row .row-main{ flex:1; min-width:0; }
+.list-row .row-title{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.list-row .row-sub{ font-size:12px; color:var(--text-secondary); margin-top:2px; }
+.list-row .row-chip{
+  font-size:11px; padding:3px 8px; border-radius:999px; flex:none;
+  border:1px solid var(--border-strong); color:var(--text-secondary);
+}
+.list-row .row-chip.done{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-ink); }
+.empty-note{ font-size:13px; color:var(--text-secondary); padding:14px 0; }
+
+/* ---- title block ---- */
+.title-block{
+  border:1px solid var(--border-strong); border-radius:10px; overflow:hidden;
+  margin-bottom:18px; background:var(--surface-1);
+}
+.title-block .tb-head{
+  background:var(--surface-2); padding:10px 14px; font-weight:700; font-size:14px;
+  letter-spacing:.03em;
+}
+.tb-grid{
+  display:grid; grid-template-columns:1fr 1fr; gap:0;
+}
+.tb-field{ padding:9px 14px; border-top:1px solid var(--border-strong); }
+.tb-field:nth-child(odd){ border-right:1px solid var(--border-strong); }
+.tb-field .tb-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-secondary); }
+.tb-field .tb-value{ font-size:13.5px; margin-top:2px; word-break:break-word; }
+.tb-field .tb-value.empty{ color:var(--text-secondary); font-style:italic; }
+@media (max-width:520px){ .tb-grid{ grid-template-columns:1fr; } .tb-field:nth-child(odd){ border-right:none; } }
+
+/* ---- checklist rows ---- */
+.check-row{
+  border:1px solid var(--border-strong); border-radius:9px; padding:10px 12px;
+  margin-bottom:8px; background:var(--surface-1);
+}
+.check-row .cr-top{ display:flex; align-items:flex-start; gap:10px; }
+.check-row .cr-num{
+  flex:none; width:22px; height:22px; border-radius:6px; background:var(--surface-2);
+  color:var(--text-secondary); font-size:11px; font-family:'IBM Plex Mono',monospace;
+  display:flex; align-items:center; justify-content:center; margin-top:1px;
+}
+.check-row .cr-text{ flex:1; font-size:13.5px; line-height:1.4; }
+.tri{ display:flex; gap:6px; margin:8px 0 6px 32px; }
+.tri button{
+  flex:1; font:inherit; font-size:12px; font-weight:600; padding:6px 0;
+  border-radius:6px; border:1px solid var(--border-strong); background:var(--surface-0);
+  color:var(--text-secondary); cursor:pointer;
+}
+.tri button.sel-yes.selected{ background:var(--accent-soft); border-color:var(--accent); color:var(--accent-ink); }
+.tri button.sel-no.selected{ background:#3a1712; border-color:var(--danger); color:var(--danger); }
+.tri button.sel-na.selected{ background:var(--surface-2); border-color:var(--text-secondary); color:var(--text-primary); }
+.cr-comment{
+  margin-left:32px; width:calc(100% - 32px); font:inherit; font-size:12.5px;
+  padding:6px 9px; border-radius:6px; border:1px solid var(--border-strong);
+  background:var(--surface-0); color:var(--text-primary);
+}
+.cr-comment::placeholder{ color:var(--text-secondary); }
+
+textarea.notes-box{
+  width:100%; min-height:110px; font:inherit; font-size:13px; padding:10px 12px;
+  border-radius:9px; border:1px solid var(--border-strong); background:var(--surface-1);
+  color:var(--text-primary); resize:vertical;
+}
+
+/* ---- sign-off ---- */
+.signoff-block{
+  border:1px solid var(--border-strong); border-radius:9px; padding:12px;
+  margin-bottom:10px; background:var(--surface-1);
+}
+.signoff-block .so-role{ font-weight:700; font-size:13.5px; margin-bottom:8px; }
+.so-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.so-field{ flex:1; min-width:140px; }
+.so-field label{ display:block; font-size:11px; color:var(--text-secondary); margin-bottom:3px; }
+.so-field input{
+  width:100%; font:inherit; font-size:13px; padding:7px 9px; border-radius:6px;
+  border:1px solid var(--border-strong); background:var(--surface-0); color:var(--text-primary);
+}
+.sig-pad-wrap{ border:1px dashed var(--border-strong); border-radius:8px; background:var(--surface-0); position:relative; }
+.sig-pad-wrap canvas{ display:block; width:100%; height:120px; touch-action:none; cursor:crosshair; }
+.sig-pad-empty-hint{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:12px; color:var(--text-secondary); pointer-events:none;
+}
+.sig-actions{ display:flex; justify-content:flex-end; margin-top:6px; }
+.sig-actions button{ font-size:11.5px; padding:5px 10px; }
+
+/* ---- setup / reconnect ---- */
+.setup-card{
+  border:1px solid var(--border-strong); border-radius:10px; padding:20px;
+  background:var(--surface-1); max-width:420px; margin:40px auto 0;
+}
+
+/* ---- toast ---- */
+#toast{
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(10px);
+  background:var(--surface-2); color:var(--text-primary); border:1px solid var(--border-strong);
+  padding:10px 16px; border-radius:8px; font-size:13px; box-shadow:var(--shadow);
+  opacity:0; pointer-events:none; transition:opacity .18s ease, transform .18s ease;
+  max-width:90vw; z-index:60;
+}
+#toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ---- generic prompt modal ---- */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.4);
+  display:flex; align-items:center; justify-content:center; z-index:50;
+}
+.modal-backdrop[hidden]{ display:none; }
+.modal-box{
+  background:var(--surface-1); border:1px solid var(--border-strong); border-radius:10px;
+  box-shadow:var(--shadow); padding:18px 20px; max-width:340px; width:calc(100% - 40px);
+}
+.modal-box p{ margin:0 0 14px; font-size:13.5px; line-height:1.45; }
+.modal-box input[type="text"]{
+  display:block; width:100%; box-sizing:border-box; font:inherit; font-size:13.5px;
+  padding:8px 10px; margin-bottom:16px; border-radius:6px; border:1px solid var(--border-strong);
+  background:var(--surface-0); color:var(--text-primary);
+}
+.modal-actions{ display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="brand-icon" src="./icons/icon-192.png?v=v1" alt="">
+  <div class="brand-text">UTZ<b>LINE</b> ITP</div>
+  <div class="crumbs" id="crumbsEl"></div>
+</header>
+
+<main>
+
+  <!-- ---- Setup: no Projects folder chosen yet ---- -->
+  <div class="screen" id="screenSetup">
+    <div class="setup-card">
+      <h2>Choose your Projects folder</h2>
+      <p class="hint">Point this at the same Projects folder Site Measure and the Viewer already use. ITP checklists are saved alongside each project's own levels, in a project-wide "itp" folder.</p>
+      <button class="mbtn mbtn-accent" id="chooseRootBtn">Choose Projects Folder</button>
+    </div>
+  </div>
+
+  <!-- ---- Reconnect: a remembered folder needs permission re-granted ---- -->
+  <div class="screen" id="screenReconnect">
+    <div class="setup-card">
+      <h2>Reconnect to your Projects folder</h2>
+      <p class="hint" id="reconnectLabel"></p>
+      <button class="mbtn mbtn-accent" id="reconnectBtn">Reconnect</button>
+      <div class="actions-row"><button class="mbtn" id="reconnectChooseDifferentBtn">Choose a Different Folder</button></div>
+    </div>
+  </div>
+
+  <!-- ---- Project list ---- -->
+  <div class="screen" id="screenProjects">
+    <h2>Projects</h2>
+    <p class="hint">Choose a project to open its levels, or pick a different Projects folder.</p>
+    <div class="list" id="projectListEl"></div>
+    <div class="actions-row"><button class="mbtn" id="switchRootBtn">Use a Different Projects Folder</button></div>
+  </div>
+
+  <!-- ---- Level list ---- -->
+  <div class="screen" id="screenLevels">
+    <button type="button" class="back-link" id="backToProjectsBtn">← All projects</button>
+    <h2 id="levelsHeading"></h2>
+    <p class="hint">Choose a level to see its rooms.</p>
+    <div class="list" id="levelListEl"></div>
+  </div>
+
+  <!-- ---- Room list ---- -->
+  <div class="screen" id="screenRooms">
+    <button type="button" class="back-link" id="backToLevelsBtn">← All levels</button>
+    <h2 id="roomsHeading"></h2>
+    <p class="hint">Choose a room to see its joinery items.</p>
+    <div class="list" id="roomListEl"></div>
+  </div>
+
+  <!-- ---- Joinery items list ---- -->
+  <div class="screen" id="screenItems">
+    <button type="button" class="back-link" id="backToRoomsBtn">← All rooms</button>
+    <h2 id="itemsHeading"></h2>
+    <p class="hint">Open an existing joinery item's checklist, or start a new one.</p>
+    <div class="list" id="itemListEl"></div>
+    <div class="actions-row"><button class="mbtn mbtn-accent" id="newItemBtn">+ New Joinery Item</button></div>
+  </div>
+
+  <!-- ---- Checklist screen ---- -->
+  <div class="screen" id="screenChecklist">
+    <button type="button" class="back-link" id="backToItemsBtn">← All joinery items in this room</button>
+
+    <div class="title-block">
+      <div class="tb-head">JOINERY INSTALLATION — CHECKLIST</div>
+      <div class="tb-grid">
+        <div class="tb-field"><div class="tb-label">Project No.</div><div class="tb-value" id="tbProjectNo"></div></div>
+        <div class="tb-field"><div class="tb-label">Project</div><div class="tb-value" id="tbProjectName"></div></div>
+        <div class="tb-field"><div class="tb-label">Head Contractor / Builder</div><div class="tb-value" id="tbContractor"></div></div>
+        <div class="tb-field"><div class="tb-label">Level</div><div class="tb-value" id="tbLevel"></div></div>
+        <div class="tb-field"><div class="tb-label">Area / Room</div><div class="tb-value" id="tbRoom"></div></div>
+        <div class="tb-field"><div class="tb-label">Joinery No.</div><div class="tb-value" id="tbJoinery"></div></div>
+      </div>
+    </div>
+
+    <h2 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary);">Install Completion Quality Checks</h2>
+    <div id="checkRowsEl"></div>
+
+    <h2 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary); margin-top:18px;">Notes / Comments / Missing Parts</h2>
+    <textarea class="notes-box" id="notesEl" placeholder="Anything not covered above — missing parts, follow-up needed, etc."></textarea>
+
+    <h2 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary); margin-top:18px;">Sign-off / Approval</h2>
+    <div class="signoff-block" data-role="installer">
+      <div class="so-role">Subcontractor Rep. (Joinery Installer)</div>
+      <div class="so-row">
+        <div class="so-field"><label>Name</label><input type="text" class="so-name" autocomplete="off"></div>
+        <div class="so-field"><label>Date</label><input type="date" class="so-date"></div>
+      </div>
+      <div class="sig-pad-wrap"><canvas class="sig-canvas"></canvas><div class="sig-pad-empty-hint">Sign here</div></div>
+      <div class="sig-actions"><button class="mbtn sig-clear-btn">Clear signature</button></div>
+    </div>
+    <div class="signoff-block" data-role="supervisor">
+      <div class="so-role">Metro Site Supervisor</div>
+      <div class="so-row">
+        <div class="so-field"><label>Name</label><input type="text" class="so-name" autocomplete="off"></div>
+        <div class="so-field"><label>Date</label><input type="date" class="so-date"></div>
+      </div>
+      <div class="sig-pad-wrap"><canvas class="sig-canvas"></canvas><div class="sig-pad-empty-hint">Sign here</div></div>
+      <div class="sig-actions"><button class="mbtn sig-clear-btn">Clear signature</button></div>
+    </div>
+
+    <div class="actions-row">
+      <button class="mbtn mbtn-accent" id="saveChecklistBtn">Save</button>
+      <button class="mbtn" id="exportPdfBtn">Export PDF</button>
+      <button class="mbtn mbtn-danger" id="deleteItemBtn">Delete this item</button>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<div class="modal-backdrop" id="promptBackdrop" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="promptLabel">
+    <p id="promptLabel"></p>
+    <input type="text" id="promptInput" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="modal-actions">
+      <button class="mbtn" id="promptCancel">Cancel</button>
+      <button class="mbtn mbtn-accent" id="promptOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="confirmBackdrop" hidden>
+  <div class="modal-box" role="alertdialog" aria-modal="true" aria-labelledby="confirmMsg">
+    <p id="confirmMsg"></p>
+    <div class="modal-actions">
+      <button class="mbtn" id="confirmCancel">Cancel</button>
+      <button class="mbtn mbtn-danger" id="confirmOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="./jspdf.umd.min.js" onerror="window.__pdfLibFailed = true;"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ============================== the 16-item checklist ============================== */
+  // Verbatim from Metro Joinery's own "JOINERY INSTALLATION – CHECKLIST"
+  // template (supplied 2026-09-18), same order as printed.
+  var CHECK_ITEMS = [
+    "Site safety requirements understood and in place (JSA completed, tools tagged, machinery operation, working at heights)",
+    "Anti-ligature/security hardware fitted correctly where specified - Mental Health",
+    "Hinges - Checked if 110 or 165 degree. Soft close or Non soft close. Restrictors fitted where a clash is imminent",
+    "Benchtops (size, colour, edge profile) match specified documentation and shop drawings & have been installed",
+    "Sink cut-outs completed where required prior to benchtop install",
+    "All exposed edges sealed, edged or laminated to meet infection control requirements",
+    "Kicker face panels and seen-ends returned as per shop drawings",
+    "Splashbacks and pinboards match shop drawings and have been installed",
+    "Fillers, shadowlines and bulkheads (size, colour) match specified documentation and have been installed",
+    "Handles and/or fingerpulls match specified documentation and shop drawings and have been installed",
+    "All materials confirmed defect-free and hardware confirmed fully functional",
+    "No damage or missing items identified, list in notes below",
+    "Fixings and supports installed adequately - Are all screw caps installed (Stemfix only acceptable)",
+    "Caulking and infection control requirements complied with. Including anti pick caulking if required",
+    "Scope of work confirmed 100% complete",
+    "ITP fully and accurately completed prior to signing"
+  ];
+
+  /* ============================== small generic helpers ============================== */
+  function sanitizeFileBase(name){
+    var cleaned = String(name || "")
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
+      .trim()
+      .replace(/^[._]+|[._\s]+$/g, "");
+    return cleaned.slice(0, 80) || "item";
+  }
+  function todayISO(){
+    var d = new Date();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + m + "-" + day;
+  }
+  function timestampForFilename(){
+    var d = new Date();
+    function p(n){ return String(n).padStart(2, "0"); }
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "_" +
+      p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+  }
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 3200);
+  }
+
+  // Every subdirectory of a directory handle, sorted case-insensitively --
+  // same shape as source.html's own listSubdirNames, since it browses the
+  // exact same kind of folder structure.
+  function listSubdirNames(dirHandle){
+    if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
+    var names = [];
+    var iter = dirHandle.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return names;
+        if (res.value && res.value.kind === "directory") names.push(res.value.name);
+        return step();
+      });
+    }
+    return step().then(function(list){
+      list.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+      return list;
+    });
+  }
+  // Every *.json file directly in a directory handle -- used for a room's
+  // own itp folder, where each file is one joinery item's checklist state.
+  function listJsonFileNames(dirHandle){
+    if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
+    var names = [];
+    var iter = dirHandle.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return names;
+        if (res.value && res.value.kind === "file" && /\.json$/i.test(res.value.name)) names.push(res.value.name);
+        return step();
+      });
+    }
+    return step().then(function(list){
+      list.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }); });
+      return list;
+    });
+  }
+
+  /* ============================== tiny IndexedDB kv store ============================== */
+  // Own database/store, separate from Site Measure/Viewer's own -- this app
+  // only ever needs to remember one thing (the Projects root folder handle).
+  var IDB_NAME = "utzline-itp-kv";
+  var IDB_STORE = "kv";
+  function idbOpen(){
+    return new Promise(function(resolve, reject){
+      var req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = function(){ req.result.createObjectStore(IDB_STORE); };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  }
+  function idbGet(key){
+    return idbOpen().then(function(db){
+      return new Promise(function(resolve, reject){
+        var tx = db.transaction(IDB_STORE, "readonly");
+        var req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = function(){ resolve(req.result); };
+        req.onerror = function(){ reject(req.error); };
+      });
+    });
+  }
+  function idbSet(key, value){
+    return idbOpen().then(function(db){
+      return new Promise(function(resolve, reject){
+        var tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = function(){ resolve(); };
+        tx.onerror = function(){ reject(tx.error); };
+      });
+    });
+  }
+  var PROJECTS_ROOT_KEY = "projectsRootHandle";
+
+  /* ============================== screen switching ============================== */
+  var screens = {};
+  ["Setup","Reconnect","Projects","Levels","Rooms","Items","Checklist"].forEach(function(n){
+    screens[n] = document.getElementById("screen" + n);
+  });
+  function showScreen(name){
+    Object.keys(screens).forEach(function(n){ screens[n].classList.toggle("active", n === name); });
+    window.scrollTo(0, 0);
+  }
+  var crumbsEl = document.getElementById("crumbsEl");
+  function updateCrumbs(){
+    var parts = [];
+    if (state.projectName) parts.push(state.projectName);
+    if (state.levelName) parts.push(state.levelName);
+    if (state.roomName) parts.push(state.roomName);
+    if (state.currentJoineryNo) parts.push(state.currentJoineryNo);
+    crumbsEl.textContent = parts.join(" / ");
+  }
+
+  /* ============================== app state ============================== */
+  var state = {
+    rootHandle: null,
+    rootName: "",
+    projectHandle: null,
+    projectName: "",
+    projectMeta: null,       // {no,name,contractor} from project-meta.json, or null
+    levelHandle: null,
+    levelName: "",
+    roomHandle: null,
+    roomName: "",
+    itpRoomHandle: null,     // <root>/<project>/itp/<level>/<room>
+    currentFileHandle: null, // this item's own .json file handle
+    currentJoineryNo: "",
+    currentData: null        // the loaded/blank checklist object
+  };
+
+  /* ============================== project-meta.json (read-only here) ============================== */
+  function readProjectMeta(dirHandle){
+    if (!dirHandle) return Promise.resolve(null);
+    return dirHandle.getFileHandle("project-meta.json").then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{
+        var parsed = JSON.parse(text);
+        return { no: String(parsed.no || ""), name: String(parsed.name || ""), contractor: String(parsed.contractor || "") };
+      }catch(e){ return null; }
+    }, function(){ return null; });
+  }
+
+  /* ============================== folder picking / reconnect ============================== */
+  var reconnectLabel = document.getElementById("reconnectLabel");
+  function afterRootReady(){
+    return populateProjectList().then(function(){ showScreen("Projects"); });
+  }
+  function tryRestoreRoot(){
+    return idbGet(PROJECTS_ROOT_KEY).then(function(handle){
+      if (!handle) { showScreen("Setup"); return; }
+      return handle.queryPermission({ mode: "readwrite" }).then(function(perm){
+        state.rootHandle = handle;
+        state.rootName = handle.name || "";
+        if (perm === "granted"){
+          return afterRootReady();
+        }
+        reconnectLabel.textContent = "Projects folder “" + state.rootName + "” needs permission re-granted (this happens after closing and reopening the browser).";
+        showScreen("Reconnect");
+      });
+    }).catch(function(){ showScreen("Setup"); });
+  }
+  function pickRootFolder(){
+    return window.showDirectoryPicker({ id: "utzline-itp-projects-root", mode: "readwrite" }).then(function(handle){
+      state.rootHandle = handle;
+      state.rootName = handle.name || "";
+      return idbSet(PROJECTS_ROOT_KEY, handle).then(function(){ return afterRootReady(); });
+    });
+  }
+  document.getElementById("chooseRootBtn").addEventListener("click", function(){
+    pickRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+      showToast("Couldn't open that folder — try again.");
+    });
+  });
+  document.getElementById("switchRootBtn").addEventListener("click", function(){
+    pickRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+      showToast("Couldn't open that folder — try again.");
+    });
+  });
+  document.getElementById("reconnectBtn").addEventListener("click", function(){
+    if (!state.rootHandle) return;
+    state.rootHandle.requestPermission({ mode: "readwrite" }).then(function(perm){
+      if (perm !== "granted") return;
+      return afterRootReady();
+    }).catch(function(err){ console.error("Reconnect failed:", err); });
+  });
+  document.getElementById("reconnectChooseDifferentBtn").addEventListener("click", function(){
+    pickRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+    });
+  });
+
+  /* ============================== project list ============================== */
+  var projectListEl = document.getElementById("projectListEl");
+  function populateProjectList(){
+    return listSubdirNames(state.rootHandle).then(function(names){
+      projectListEl.innerHTML = "";
+      if (!names.length){
+        projectListEl.innerHTML = '<div class="empty-note">No projects found in this folder yet — create one in Site Measure first.</div>';
+        return;
+      }
+      // Kick off a readProjectMeta for every project so the list can show
+      // "No. — Name" where available without blocking the list appearing;
+      // each row updates itself once its own meta read resolves.
+      names.forEach(function(name){
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "list-row";
+        row.innerHTML = '<div class="row-main"><div class="row-title"></div><div class="row-sub"></div></div>';
+        row.querySelector(".row-title").textContent = name;
+        row.addEventListener("click", function(){ openProject(name); });
+        projectListEl.appendChild(row);
+        state.rootHandle.getDirectoryHandle(name).then(readProjectMeta).then(function(meta){
+          if (meta && (meta.no || meta.name || meta.contractor)){
+            var bits = [];
+            if (meta.no) bits.push("No. " + meta.no);
+            if (meta.contractor) bits.push(meta.contractor);
+            row.querySelector(".row-sub").textContent = bits.join(" · ");
+          }
+        });
+      });
+    });
+  }
+  function openProject(name){
+    state.projectName = name;
+    state.levelName = ""; state.roomName = ""; state.currentJoineryNo = "";
+    updateCrumbs();
+    return state.rootHandle.getDirectoryHandle(name).then(function(dirH){
+      state.projectHandle = dirH;
+      return readProjectMeta(dirH);
+    }).then(function(meta){
+      state.projectMeta = meta;
+      document.getElementById("levelsHeading").textContent = "“" + name + "” — levels";
+      return populateLevelList();
+    }).then(function(){ showScreen("Levels"); }).catch(function(err){
+      console.error("Open project failed:", err);
+      showToast("Couldn't open that project — try again.");
+    });
+  }
+  document.getElementById("backToProjectsBtn").addEventListener("click", function(){
+    populateProjectList().then(function(){ showScreen("Projects"); });
+  });
+
+  /* ============================== level list ============================== */
+  var levelListEl = document.getElementById("levelListEl");
+  function populateLevelList(){
+    return listSubdirNames(state.projectHandle).then(function(names){
+      // "itp" is this app's own reserved project-wide folder -- never shown
+      // as if it were a level (same exclusion Site Measure's own
+      // listExistingLevels applies).
+      names = names.filter(function(n){ return n !== "itp"; });
+      levelListEl.innerHTML = "";
+      if (!names.length){
+        levelListEl.innerHTML = '<div class="empty-note">No levels in this project yet — add one in Site Measure first.</div>';
+        return;
+      }
+      names.forEach(function(name){
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "list-row";
+        row.innerHTML = '<div class="row-main"><div class="row-title"></div></div>';
+        row.querySelector(".row-title").textContent = name;
+        row.addEventListener("click", function(){ openLevel(name); });
+        levelListEl.appendChild(row);
+      });
+    });
+  }
+  function openLevel(name){
+    state.levelName = name;
+    state.roomName = ""; state.currentJoineryNo = "";
+    updateCrumbs();
+    return state.projectHandle.getDirectoryHandle(name).then(function(dirH){
+      state.levelHandle = dirH;
+      document.getElementById("roomsHeading").textContent = "“" + name + "” — rooms";
+      return populateRoomList();
+    }).then(function(){ showScreen("Rooms"); }).catch(function(err){
+      console.error("Open level failed:", err);
+      showToast("Couldn't open that level — try again.");
+    });
+  }
+  document.getElementById("backToLevelsBtn").addEventListener("click", function(){
+    populateLevelList().then(function(){ showScreen("Levels"); });
+  });
+
+  /* ============================== room list ============================== */
+  var roomListEl = document.getElementById("roomListEl");
+  function populateRoomList(){
+    return listSubdirNames(state.levelHandle).then(function(names){
+      names = names.filter(function(n){ return n !== "saves" && n !== "pdfs" && n !== "backup"; });
+      roomListEl.innerHTML = "";
+      if (!names.length){
+        roomListEl.innerHTML = '<div class="empty-note">No rooms on this level yet — add one in Site Measure first.</div>';
+        return;
+      }
+      names.forEach(function(name){
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "list-row";
+        row.innerHTML = '<div class="row-main"><div class="row-title"></div></div>';
+        row.querySelector(".row-title").textContent = name;
+        row.addEventListener("click", function(){ openRoom(name); });
+        roomListEl.appendChild(row);
+      });
+    });
+  }
+  function ensureItpRoomFolder(){
+    return state.projectHandle.getDirectoryHandle("itp", { create: true }).then(function(itpH){
+      return itpH.getDirectoryHandle(state.levelName, { create: true });
+    }).then(function(levelH){
+      return levelH.getDirectoryHandle(state.roomName, { create: true });
+    });
+  }
+  function openRoom(name){
+    state.roomName = name;
+    state.currentJoineryNo = "";
+    updateCrumbs();
+    return state.levelHandle.getDirectoryHandle(name).then(function(dirH){
+      state.roomHandle = dirH;
+      return ensureItpRoomFolder();
+    }).then(function(itpRoomH){
+      state.itpRoomHandle = itpRoomH;
+      document.getElementById("itemsHeading").textContent = "“" + name + "” — joinery items";
+      return populateItemList();
+    }).then(function(){ showScreen("Items"); }).catch(function(err){
+      console.error("Open room failed:", err);
+      showToast("Couldn't open that room — try again.");
+    });
+  }
+  document.getElementById("backToRoomsBtn").addEventListener("click", function(){
+    populateRoomList().then(function(){ showScreen("Rooms"); });
+  });
+
+  /* ============================== joinery item list ============================== */
+  var itemListEl = document.getElementById("itemListEl");
+  function checklistProgress(data){
+    var answered = 0;
+    data.rows.forEach(function(r){ if (r.status) answered++; });
+    var signed = !!(data.signoff.installer.sig && data.signoff.supervisor.sig);
+    return { answered: answered, total: data.rows.length, signed: signed };
+  }
+  function populateItemList(){
+    return listJsonFileNames(state.itpRoomHandle).then(function(fileNames){
+      itemListEl.innerHTML = "";
+      if (!fileNames.length){
+        itemListEl.innerHTML = '<div class="empty-note">No joinery items checked off in this room yet.</div>';
+        return;
+      }
+      return fileNames.reduce(function(chain, fileName){
+        return chain.then(function(){
+          return state.itpRoomHandle.getFileHandle(fileName).then(function(fh){ return fh.getFile(); })
+            .then(function(file){ return file.text(); })
+            .then(function(text){
+              var data = null;
+              try{ data = JSON.parse(text); }catch(e){ data = null; }
+              var joineryNo = (data && data.joineryNo) || fileName.replace(/\.json$/i, "");
+              var row = document.createElement("button");
+              row.type = "button";
+              row.className = "list-row";
+              var sub = "Not started";
+              var chipClass = "";
+              if (data){
+                var prog = checklistProgress(data);
+                if (prog.signed) { sub = "Signed off"; chipClass = "done"; }
+                else if (prog.answered > 0) sub = prog.answered + " of " + prog.total + " checked";
+              }
+              row.innerHTML =
+                '<div class="row-main"><div class="row-title"></div><div class="row-sub"></div></div>' +
+                '<div class="row-chip ' + chipClass + '"></div>';
+              row.querySelector(".row-title").textContent = joineryNo;
+              row.querySelector(".row-sub").textContent = sub;
+              row.querySelector(".row-chip").textContent = (data && checklistProgress(data).signed) ? "Signed off" : "Open";
+              row.addEventListener("click", function(){ openItem(fileName, joineryNo); });
+              itemListEl.appendChild(row);
+            }).catch(function(){ /* skip an unreadable file rather than failing the whole list */ });
+        });
+      }, Promise.resolve());
+    });
+  }
+  document.getElementById("newItemBtn").addEventListener("click", function(){
+    genericPrompt("Joinery number for this new item:", "").then(function(value){
+      if (value === null) return;
+      var joineryNo = String(value).trim();
+      if (!joineryNo) { showToast("Enter a joinery number first."); return; }
+      var fileName = sanitizeFileBase(joineryNo) + ".json";
+      state.itpRoomHandle.getFileHandle(fileName).then(function(){
+        // Already exists -- open it rather than silently overwriting.
+        showToast("“" + joineryNo + "” already exists — opening it.");
+        return openItem(fileName, joineryNo);
+      }, function(){
+        var blank = blankChecklist(joineryNo);
+        return writeChecklistFile(fileName, blank).then(function(){
+          return populateItemList();
+        }).then(function(){
+          return openItem(fileName, joineryNo);
+        });
+      }).catch(function(err){
+        console.error("Create joinery item failed:", err);
+        showToast("Couldn't create that item — try again.");
+      });
+    });
+  });
+  document.getElementById("backToItemsBtn").addEventListener("click", function(){
+    flushPendingSave().then(function(){
+      return populateItemList();
+    }).then(function(){ showScreen("Items"); });
+  });
+
+  /* ============================== checklist data shape ============================== */
+  function blankChecklist(joineryNo){
+    return {
+      joineryNo: joineryNo,
+      rows: CHECK_ITEMS.map(function(){ return { status: "", comment: "" }; }),
+      notes: "",
+      signoff: {
+        installer: { name: "", date: "", sig: null },
+        supervisor: { name: "", date: "", sig: null }
+      },
+      updatedAt: new Date().toISOString()
+    };
+  }
+  function writeChecklistFile(fileName, data){
+    data.updatedAt = new Date().toISOString();
+    var payload = JSON.stringify(data);
+    return state.itpRoomHandle.getFileHandle(fileName, { create: true }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(w){
+      return w.write(payload).then(function(){ return w.close(); });
+    });
+  }
+
+  /* ============================== signature pad ============================== */
+  function setupSignaturePad(canvas, hintEl){
+    var ctx = canvas.getContext("2d");
+    var drawing = false;
+    var last = null;
+    var hasInk = false;
+    function resize(){
+      var rect = canvas.getBoundingClientRect();
+      var ratio = window.devicePixelRatio || 1;
+      var prevData = hasInk ? canvas.toDataURL("image/png") : null;
+      canvas.width = Math.max(1, Math.round(rect.width * ratio));
+      canvas.height = Math.max(1, Math.round(rect.height * ratio));
+      ctx.scale(ratio, ratio);
+      styleStroke();
+      if (prevData){
+        var img = new Image();
+        img.onload = function(){ ctx.drawImage(img, 0, 0, rect.width, rect.height); };
+        img.src = prevData;
+      }
+    }
+    function styleStroke(){
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--text-primary") || "#000";
+    }
+    function pointFromEvent(e){
+      var rect = canvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+    function down(e){
+      drawing = true; hasInk = true;
+      hintEl.style.display = "none";
+      last = pointFromEvent(e);
+      canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
+    function move(e){
+      if (!drawing) return;
+      var p = pointFromEvent(e);
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      last = p;
+      e.preventDefault();
+    }
+    function up(e){
+      if (!drawing) return;
+      drawing = false;
+      if (pad.onStroke) pad.onStroke();
+      e.preventDefault();
+    }
+    canvas.addEventListener("pointerdown", down);
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+    window.addEventListener("resize", resize);
+    resize();
+    var pad = {
+      onStroke: null,
+      isEmpty: function(){ return !hasInk; },
+      // Exposed so the checklist screen can force a re-measure right after
+      // it becomes visible -- the canvas's internal pixel buffer is sized
+      // off getBoundingClientRect(), which reads 0x0 while its screen is
+      // still display:none (e.g. at page load, before any item is ever
+      // opened), so a resize triggered only by the window "resize" event
+      // would otherwise leave it permanently locked to a 1x1 buffer.
+      resize: resize,
+      clear: function(){
+        hasInk = false;
+        var rect = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        hintEl.style.display = "";
+      },
+      toDataURL: function(){ return hasInk ? canvas.toDataURL("image/png") : null; },
+      loadFromDataURL: function(url){
+        if (!url) { hintEl.style.display = ""; return; }
+        hasInk = true;
+        hintEl.style.display = "none";
+        var img = new Image();
+        img.onload = function(){
+          var rect = canvas.getBoundingClientRect();
+          ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        };
+        img.src = url;
+      }
+    };
+    return pad;
+  }
+
+  /* ============================== checklist screen ============================== */
+  var checkRowsEl = document.getElementById("checkRowsEl");
+  var notesEl = document.getElementById("notesEl");
+  var signoffBlocks = Array.prototype.slice.call(document.querySelectorAll(".signoff-block"));
+  var signaturePads = {}; // role -> pad
+  var rowEls = []; // per-row DOM refs
+  var saveTimer = null;
+  var dirty = false;
+
+  // Build the 16 rows' DOM once; re-populated per item on load.
+  CHECK_ITEMS.forEach(function(text, i){
+    var row = document.createElement("div");
+    row.className = "check-row";
+    row.innerHTML =
+      '<div class="cr-top"><div class="cr-num"></div><div class="cr-text"></div></div>' +
+      '<div class="tri">' +
+        '<button type="button" class="sel-yes" data-status="yes">Yes</button>' +
+        '<button type="button" class="sel-no" data-status="no">No</button>' +
+        '<button type="button" class="sel-na" data-status="na">N/A</button>' +
+      '</div>' +
+      '<input type="text" class="cr-comment" placeholder="Comments">';
+    row.querySelector(".cr-num").textContent = String(i + 1);
+    row.querySelector(".cr-text").textContent = text;
+    var triButtons = Array.prototype.slice.call(row.querySelectorAll(".tri button"));
+    var commentInput = row.querySelector(".cr-comment");
+    triButtons.forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var already = btn.classList.contains("selected");
+        triButtons.forEach(function(b){ b.classList.remove("selected"); });
+        var newStatus = already ? "" : btn.getAttribute("data-status");
+        if (!already) btn.classList.add("selected");
+        if (state.currentData) state.currentData.rows[i].status = newStatus;
+        markDirty();
+      });
+    });
+    commentInput.addEventListener("input", function(){
+      if (state.currentData) state.currentData.rows[i].comment = commentInput.value;
+      markDirty();
+    });
+    checkRowsEl.appendChild(row);
+    rowEls.push({ triButtons: triButtons, commentInput: commentInput });
+  });
+
+  signoffBlocks.forEach(function(block){
+    var role = block.getAttribute("data-role");
+    var nameInput = block.querySelector(".so-name");
+    var dateInput = block.querySelector(".so-date");
+    var canvas = block.querySelector(".sig-canvas");
+    var hint = block.querySelector(".sig-pad-empty-hint");
+    var clearBtn = block.querySelector(".sig-clear-btn");
+    var pad = setupSignaturePad(canvas, hint);
+    pad.onStroke = function(){
+      if (state.currentData) state.currentData.signoff[role].sig = pad.toDataURL();
+      markDirty();
+    };
+    nameInput.addEventListener("input", function(){
+      if (!state.currentData) return;
+      state.currentData.signoff[role].name = nameInput.value;
+      // Auto-populate today's date the moment a name is first typed, but
+      // never override a date someone deliberately set (or changed) --
+      // only fills in while the field is still empty.
+      if (nameInput.value.trim() && !dateInput.value){
+        dateInput.value = todayISO();
+        state.currentData.signoff[role].date = dateInput.value;
+      }
+      markDirty();
+    });
+    dateInput.addEventListener("input", function(){
+      if (state.currentData) state.currentData.signoff[role].date = dateInput.value;
+      markDirty();
+    });
+    clearBtn.addEventListener("click", function(){
+      pad.clear();
+      if (state.currentData) state.currentData.signoff[role].sig = null;
+      markDirty();
+    });
+    signaturePads[role] = { pad: pad, nameInput: nameInput, dateInput: dateInput };
+  });
+
+  notesEl.addEventListener("input", function(){
+    if (state.currentData) state.currentData.notes = notesEl.value;
+    markDirty();
+  });
+
+  function markDirty(){
+    dirty = true;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushPendingSave, 900);
+  }
+  function flushPendingSave(){
+    clearTimeout(saveTimer);
+    if (!dirty || !state.currentData || !state.currentFileHandle) return Promise.resolve();
+    dirty = false;
+    var fileName = state.currentFileHandle.name;
+    return writeChecklistFile(fileName, state.currentData).catch(function(err){
+      console.error("Autosave failed:", err);
+    });
+  }
+
+  function renderChecklistIntoScreen(data){
+    document.getElementById("tbProjectNo").textContent = (state.projectMeta && state.projectMeta.no) || "—";
+    document.getElementById("tbProjectNo").classList.toggle("empty", !(state.projectMeta && state.projectMeta.no));
+    document.getElementById("tbProjectName").textContent = (state.projectMeta && state.projectMeta.name) || state.projectName;
+    document.getElementById("tbContractor").textContent = (state.projectMeta && state.projectMeta.contractor) || "—";
+    document.getElementById("tbContractor").classList.toggle("empty", !(state.projectMeta && state.projectMeta.contractor));
+    document.getElementById("tbLevel").textContent = state.levelName;
+    document.getElementById("tbRoom").textContent = state.roomName;
+    document.getElementById("tbJoinery").textContent = data.joineryNo;
+
+    data.rows.forEach(function(r, i){
+      var refs = rowEls[i];
+      refs.triButtons.forEach(function(btn){
+        btn.classList.toggle("selected", btn.getAttribute("data-status") === r.status);
+      });
+      refs.commentInput.value = r.comment || "";
+    });
+    notesEl.value = data.notes || "";
+    ["installer", "supervisor"].forEach(function(role){
+      var ref = signaturePads[role];
+      ref.nameInput.value = data.signoff[role].name || "";
+      ref.dateInput.value = data.signoff[role].date || "";
+      ref.pad.resize();
+      ref.pad.clear();
+      ref.pad.loadFromDataURL(data.signoff[role].sig);
+    });
+  }
+
+  function openItem(fileName, joineryNo){
+    return flushPendingSave().then(function(){
+      return state.itpRoomHandle.getFileHandle(fileName, { create: true });
+    }).then(function(fh){
+      state.currentFileHandle = fh;
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      var data = null;
+      try{ data = JSON.parse(text); }catch(e){ data = null; }
+      if (!data || !Array.isArray(data.rows) || data.rows.length !== CHECK_ITEMS.length){
+        data = blankChecklist(joineryNo);
+      }
+      state.currentData = data;
+      state.currentJoineryNo = data.joineryNo || joineryNo;
+      updateCrumbs();
+      // Show the screen BEFORE rendering into it: the signature pads size
+      // their internal canvas resolution off getBoundingClientRect(), which
+      // reads zero while the screen is still display:none, so resizing
+      // them has to happen only once the screen is actually laid out.
+      showScreen("Checklist");
+      renderChecklistIntoScreen(data);
+    }).catch(function(err){
+      console.error("Open joinery item failed:", err);
+      showToast("Couldn't open that item — try again.");
+    });
+  }
+
+  document.getElementById("saveChecklistBtn").addEventListener("click", function(){
+    dirty = true;
+    flushPendingSave().then(function(){ showToast("Saved."); });
+  });
+
+  document.getElementById("deleteItemBtn").addEventListener("click", function(){
+    if (!state.currentFileHandle) return;
+    genericConfirm("Delete the checklist for “" + state.currentJoineryNo + "”? This can't be undone.").then(function(ok){
+      if (!ok) return;
+      var fileName = state.currentFileHandle.name;
+      clearTimeout(saveTimer); dirty = false;
+      state.itpRoomHandle.removeEntry(fileName).then(function(){
+        showToast("Deleted “" + state.currentJoineryNo + "”.");
+        return populateItemList();
+      }).then(function(){ showScreen("Items"); }).catch(function(err){
+        console.error("Delete joinery item failed:", err);
+        showToast("Couldn't delete that item — try again.");
+      });
+    });
+  });
+
+  /* ============================== PDF export ============================== */
+  function wrapText(doc, text, maxWidth){
+    return doc.splitTextToSize(text || "", maxWidth);
+  }
+  function exportChecklistPdf(){
+    if (!window.jspdf || !window.jspdf.jsPDF){
+      showToast("PDF library failed to load — check your connection and reload.");
+      return Promise.resolve();
+    }
+    var data = state.currentData;
+    var doc = new window.jspdf.jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 36;
+    var contentW = pageW - margin * 2;
+    var y = margin;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("JOINERY INSTALLATION — CHECKLIST", margin, y);
+    y += 10;
+    doc.setDrawColor(20).setLineWidth(1);
+    doc.line(margin, y, pageW - margin, y);
+    y += 16;
+
+    var meta = state.projectMeta || {};
+    var fields = [
+      ["Project No.", meta.no || "—"], ["Project", meta.name || state.projectName],
+      ["Head Contractor / Builder", meta.contractor || "—"], ["Level", state.levelName],
+      ["Area / Room", state.roomName], ["Joinery No.", data.joineryNo]
+    ];
+    doc.setFontSize(9.5);
+    var colW = contentW / 2;
+    fields.forEach(function(f, i){
+      var col = i % 2, row = Math.floor(i / 2);
+      var fx = margin + col * colW;
+      var fy = y + row * 28;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(90);
+      doc.text(f[0].toUpperCase(), fx, fy);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(20);
+      doc.text(String(f[1]), fx, fy + 13);
+    });
+    y += Math.ceil(fields.length / 2) * 28 + 10;
+    doc.setDrawColor(20).line(margin, y, pageW - margin, y);
+    y += 16;
+
+    // ---- checklist table ----
+    var colNumW = 20, colYnaW = 26, colCommentW = 130;
+    var colTextW = contentW - colNumW - colYnaW * 3 - colCommentW;
+    var headerH = 16;
+    doc.setFillColor(20, 20, 20);
+    doc.rect(margin, y, contentW, headerH, "F");
+    doc.setTextColor(255).setFont("helvetica", "bold").setFontSize(8);
+    var hx = margin + 3;
+    doc.text("#", hx, y + 11); hx += colNumW;
+    doc.text("CHECK ITEM", hx, y + 11); hx += colTextW;
+    ["YES", "NO", "N/A"].forEach(function(lbl){
+      doc.text(lbl, hx + colYnaW / 2, y + 11, { align: "center" }); hx += colYnaW;
+    });
+    doc.text("COMMENTS", hx, y + 11);
+    y += headerH;
+
+    doc.setTextColor(20);
+    CHECK_ITEMS.forEach(function(text, i){
+      var row = data.rows[i];
+      var lines = wrapText(doc, (i + 1) + ". " + text, colTextW - 6);
+      var commentLines = wrapText(doc, row.comment || "", colCommentW - 6);
+      var lineH = 9;
+      var rowH = Math.max(lines.length, commentLines.length, 1) * lineH + 6;
+      if (y + rowH > pageH - 170){
+        doc.addPage();
+        y = margin;
+      }
+      doc.setDrawColor(180).setLineWidth(0.5);
+      doc.rect(margin, y, contentW, rowH);
+      doc.setFont("helvetica", "normal").setFontSize(7.6);
+      var cx = margin + 3;
+      doc.text(String(i + 1), cx, y + 10);
+      cx += colNumW;
+      doc.text(lines, cx, y + 9);
+      cx += colTextW;
+      ["yes", "no", "na"].forEach(function(key){
+        if (row.status === key){
+          doc.setFont("helvetica", "bold");
+          doc.text("X", cx + colYnaW / 2, y + rowH / 2 + 3, { align: "center" });
+          doc.setFont("helvetica", "normal");
+        }
+        cx += colYnaW;
+      });
+      doc.text(commentLines, cx, y + 9);
+      y += rowH;
+    });
+    y += 18;
+
+    // ---- notes ----
+    if (y > pageH - 140){ doc.addPage(); y = margin; }
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("NOTES / COMMENTS / MISSING PARTS", margin, y);
+    y += 8;
+    var notesLines = wrapText(doc, data.notes || "(none)", contentW - 12);
+    var notesH = Math.max(40, notesLines.length * 11 + 12);
+    doc.setDrawColor(180).rect(margin, y, contentW, notesH);
+    doc.setFont("helvetica", "normal").setFontSize(9);
+    doc.text(notesLines, margin + 6, y + 13);
+    y += notesH + 18;
+
+    // ---- sign-off ----
+    if (y > pageH - 150){ doc.addPage(); y = margin; }
+    doc.setFont("helvetica", "bold").setFontSize(10);
+    doc.text("SIGN-OFF / APPROVAL", margin, y);
+    y += 10;
+    var roles = [
+      ["installer", "Subcontractor Rep. (Joinery Installer)"],
+      ["supervisor", "Metro Site Supervisor"]
+    ];
+    roles.forEach(function(r){
+      var role = r[0], label = r[1];
+      var so = data.signoff[role];
+      var blockH = 78;
+      if (y + blockH > pageH - margin){ doc.addPage(); y = margin; }
+      doc.setDrawColor(180).rect(margin, y, contentW, blockH);
+      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(20);
+      doc.text(label, margin + 8, y + 14);
+      doc.setFont("helvetica", "normal").setFontSize(8.5);
+      doc.text("Name: " + (so.name || "—"), margin + 8, y + 30);
+      doc.text("Date: " + (so.date || "—"), margin + 8, y + 44);
+      var sigBoxX = margin + contentW - 200, sigBoxY = y + 10, sigBoxW = 190, sigBoxH = 58;
+      doc.setDrawColor(180).rect(sigBoxX, sigBoxY, sigBoxW, sigBoxH);
+      if (so.sig){
+        try{ doc.addImage(so.sig, "PNG", sigBoxX + 4, sigBoxY + 4, sigBoxW - 8, sigBoxH - 8, undefined, "FAST"); }catch(e){}
+      } else {
+        doc.setFontSize(7.5).setTextColor(150);
+        doc.text("(not signed)", sigBoxX + sigBoxW / 2, sigBoxY + sigBoxH / 2, { align: "center" });
+        doc.setTextColor(20);
+      }
+      y += blockH + 10;
+    });
+
+    doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(140);
+    doc.text("Generated by UTZLINE ITP — " + new Date().toLocaleString(), margin, pageH - 16);
+
+    var fileName = sanitizeFileBase(data.joineryNo) + "_" + timestampForFilename() + ".pdf";
+    var blob = doc.output("blob");
+    return state.itpRoomHandle.getFileHandle(fileName, { create: true }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(w){
+      return w.write(blob).then(function(){ return w.close(); });
+    }).then(function(){
+      showToast("Exported “" + fileName + "”.");
+    });
+  }
+  document.getElementById("exportPdfBtn").addEventListener("click", function(){
+    flushPendingSave().then(exportChecklistPdf).catch(function(err){
+      console.error("Export PDF failed:", err);
+      showToast("Couldn't export the PDF — try again.");
+    });
+  });
+
+  /* ============================== generic prompt / confirm modals ============================== */
+  var promptBackdrop = document.getElementById("promptBackdrop");
+  var promptLabelEl = document.getElementById("promptLabel");
+  var promptInput = document.getElementById("promptInput");
+  var promptOk = document.getElementById("promptOk");
+  var promptCancel = document.getElementById("promptCancel");
+  var promptResolve = null;
+  function genericPrompt(label, initial){
+    promptLabelEl.textContent = label;
+    promptInput.value = initial || "";
+    promptBackdrop.hidden = false;
+    promptInput.focus();
+    promptInput.select();
+    return new Promise(function(resolve){ promptResolve = resolve; });
+  }
+  function closePrompt(value){
+    promptBackdrop.hidden = true;
+    var r = promptResolve; promptResolve = null;
+    if (r) r(value);
+  }
+  promptOk.addEventListener("click", function(){ closePrompt(promptInput.value); });
+  promptCancel.addEventListener("click", function(){ closePrompt(null); });
+  promptBackdrop.addEventListener("click", function(e){ if (e.target === promptBackdrop) closePrompt(null); });
+  promptInput.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); closePrompt(promptInput.value); }
+    else if (e.key === "Escape"){ e.preventDefault(); closePrompt(null); }
+  });
+
+  var confirmBackdrop = document.getElementById("confirmBackdrop");
+  var confirmMsgEl = document.getElementById("confirmMsg");
+  var confirmOk = document.getElementById("confirmOk");
+  var confirmCancel = document.getElementById("confirmCancel");
+  var confirmResolve = null;
+  function genericConfirm(msg){
+    confirmMsgEl.textContent = msg;
+    confirmBackdrop.hidden = false;
+    return new Promise(function(resolve){ confirmResolve = resolve; });
+  }
+  function closeConfirm(value){
+    confirmBackdrop.hidden = true;
+    var r = confirmResolve; confirmResolve = null;
+    if (r) r(value);
+  }
+  confirmOk.addEventListener("click", function(){ closeConfirm(true); });
+  confirmCancel.addEventListener("click", function(){ closeConfirm(false); });
+  confirmBackdrop.addEventListener("click", function(e){ if (e.target === confirmBackdrop) closeConfirm(false); });
+
+  /* ============================== boot ============================== */
+  if (!window.showDirectoryPicker){
+    document.body.innerHTML = '<main><div class="setup-card"><h2>Browser not supported</h2>' +
+      '<p class="hint">UTZLINE ITP needs a browser with File System Access support (Chrome, Edge, or the installed Android/desktop app). Please open it there instead.</p></div></main>';
+  } else {
+    tryRestoreRoot();
+  }
+
+  window.addEventListener("beforeunload", function(){
+    // Best-effort only -- a synchronous flush isn't possible here, but this
+    // at least stops a stale timer from firing after the page is gone.
+    if (dirty) flushPendingSave();
+  });
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./service-worker.js").catch(function (err) {
+      console.warn("UTZLINE ITP: service worker registration failed", err);
+    });
+  });
+}
+</script>
+</html>
