@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v31">
+<link rel="manifest" href="./manifest.json?v=v32">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v31">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v31">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v32">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v32">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -453,6 +453,7 @@
     gap:10px; max-height:min(60vh, 440px); overflow-y:auto; margin-bottom:14px;
   }
   .pdf-page-cell{
+    position:relative;
     display:flex; flex-direction:column; align-items:center; gap:5px;
     background:var(--surface-2); border:1.5px solid var(--border-strong); border-radius:8px;
     padding:6px; cursor:pointer; font:inherit; color:var(--text-primary);
@@ -460,6 +461,21 @@
   .pdf-page-cell:hover{border-color:var(--accent); background:var(--surface-0);}
   .pdf-page-cell img{width:100%; display:block; border-radius:3px; box-shadow:0 0 0 1px rgba(0,0,0,0.15); background:#fff;}
   .pdf-page-cell span{font-size:11px; color:var(--text-secondary);}
+  /* Multi-select mode (Insert image, v32) -- a selected page's own
+     accent-coloured border/badge, distinct from the plain hover state
+     above so "picked" reads clearly even once the pointer moves on. The
+     badge shows this page's place in the CURRENT selection (see
+     renderPdfPickerBadges), always in ascending page order regardless of
+     click order, matching the order the pages actually get collated onto
+     the canvas in. */
+  .pdf-page-cell.selected{border-color:var(--accent); background:var(--surface-0);}
+  .pdf-page-cell.selected img{box-shadow:0 0 0 2px var(--accent);}
+  .pdf-page-badge{
+    position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%;
+    background:var(--accent); color:#fff; font-size:11px; font-weight:600;
+    display:flex; align-items:center; justify-content:center; line-height:1;
+    box-shadow:0 0 0 1.5px var(--surface-2);
+  }
 
   /* ---------- toast ---------- */
   .toast{
@@ -903,28 +919,32 @@
     </button>
     <!-- Viewer-only (2026-09-18, per Andrew: "the viewer can have the
          choice to change all line colours across the project with a
-         simple colour selector in the menu bar"). Deliberately a
-         VIEW-ONLY preview, never written to any save file -- picking a
-         colour recolors every dimension/line/angle/rectangle-border/
-         callout currently in memory, for this viewing session only. Not
-         applied to the base photo, an inserted image's own optional
-         border, or a text object's own label colour -- none of those are
-         really "line colours" the way a measurement/dimension line is.
-         Since the Viewer already reloads a level/room's saved content
-         fresh from disk on every navigation (see openLevel/openRoom), the
-         override naturally disappears the moment you move to a different
-         level/room, or reopen this same one later -- there's nothing
-         extra to do to keep the Viewer's read-only guarantee intact; see
-         applyViewerLineColor's own comment. "Reset" restores each
-         touched object's own true original colour without needing a
-         reload. Hidden entirely in the editor build (applyViewOnlyModeUI
-         toggles it, same as the brand name/logo swap). -->
+         simple colour selector in the menu bar"; EXPANDED same day per his
+         own direct follow-up: "the colour change selector (all) on the
+         viewer app needs to change colours of everything, borders, text
+         etc"). Deliberately a VIEW-ONLY preview, never written to any save
+         file -- picking a colour now recolors EVERY visible colour on the
+         plan: every object's own colour (a dimension/line/angle/rectangle/
+         callout/room-marker's stroke or dot, a text object's own glyph
+         colour), every object's own attached label colour (a dimension/
+         angle/callout/room-marker's separate text, distinct from its own
+         line/dot colour), and an inserted image's optional border colour
+         (turned on for the preview even if it was off beforehand). Since
+         the Viewer already reloads a level/room's saved content fresh from
+         disk on every navigation (see openLevel/openRoom), the override
+         naturally disappears the moment you move to a different level/
+         room, or reopen this same one later -- there's nothing extra to do
+         to keep the Viewer's read-only guarantee intact; see
+         applyViewerLineColor's own comment. "Reset" restores each touched
+         object's own true original colour(s) without needing a reload.
+         Hidden entirely in the editor build (applyViewOnlyModeUI toggles
+         it, same as the brand name/logo swap). -->
     <div class="tgroup" id="viewerRecolorGroup" style="display:none;">
-      <label class="autobk" id="viewerRecolorLabel" title="Preview every dimension/line/angle/rectangle border/callout in a single colour, for this viewing session only — nothing is saved">
-        Recolour lines
-        <input type="color" id="viewerRecolorInput" value="#e0272d" aria-label="Pick a line colour">
+      <label class="autobk" id="viewerRecolorLabel" title="Preview every colour on the plan -- lines, borders, text, room markers -- in a single colour, for this viewing session only — nothing is saved">
+        Recolour everything
+        <input type="color" id="viewerRecolorInput" value="#e0272d" aria-label="Pick a colour">
       </label>
-      <button type="button" class="autobk-lock" id="viewerRecolorResetBtn" title="Reset to each item's own original colour" aria-label="Reset line colours">
+      <button type="button" class="autobk-lock" id="viewerRecolorResetBtn" title="Reset to each item's own original colour(s)" aria-label="Reset colours">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a6 6 0 1 1 1.8 4.3"/><path d="M4 15v-4h4"/></svg>
       </button>
     </div>
@@ -1272,7 +1292,9 @@
         <p id="pdfPickerMsg">This PDF has multiple pages — pick one to import.</p>
         <div class="pdf-page-grid" id="pdfPickerGrid"></div>
         <div class="modal-actions">
+          <button class="mbtn" id="pdfPickerSelectAllBtn" style="display:none;">Select all</button>
           <button class="mbtn" id="pdfPickerCancel">Cancel</button>
+          <button class="mbtn mbtn-accent" id="pdfPickerInsertBtn" style="display:none;">Insert</button>
         </div>
       </div>
     </div>
@@ -1290,7 +1312,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v31";
+  var APP_VERSION = "v32";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -1869,6 +1891,84 @@
         rq.onsuccess = function(){ res(rq.result); };
         rq.onerror = function(){ rej(rq.error); };
       });
+    });
+  }
+  // ---- "resume where I was" pointer ----
+  // Added (v32, 2026-09-18) after Andrew reported that taking a photo
+  // sometimes "goes back to the home page" instead of inserting it.
+  // Investigation found nothing wrong in the insert-photo pipeline itself,
+  // but did find that boot() ALWAYS lands on the top project list with
+  // nothing remembered beyond the Projects-root folder handle -- so if the
+  // OS ever reclaims this app's tab/process while a heavier foreground
+  // activity (the phone's own camera app) is running, which Android is
+  // known to do under memory pressure, coming back looks exactly like
+  // that: a full, silent reboot with no memory of which project/level/room
+  // was open. Nothing in JS can stop the OS from reclaiming a tab -- this
+  // doesn't attempt to -- but it CAN make a reload land back where you
+  // actually were instead of at the very top of the list, so a photo
+  // that's already reached its own autosave (see autosaveLevelPlanIfActive)
+  // isn't ALSO buried behind having to renavigate there by hand. A photo
+  // whose capture never even made it back to this app at all -- the OS
+  // discarding the pending picker result along with everything else -- is
+  // NOT something this (or anything in JavaScript) can recover; that one
+  // still has to be retaken.
+  //
+  // Deliberately mirrors the existing projectsRootHandle persistence: same
+  // idbSet/idbGet mechanism, storing only the PROJECT's own folder handle
+  // (never the level's or room's) plus their plain names -- openLevel(name)
+  // /openRoom(name) already know how to re-derive everything else from a
+  // project handle, so there's no separate level/room handle here that
+  // could go stale on its own.
+  var LAST_ACTIVE_WORK_KEY = "lastActiveWork";
+  function persistLastActiveWorkPointer(){
+    // Viewer never writes anything; the plain single-file fallback mode
+    // (no project/level system at all -- Firefox/Safari, or any browser
+    // without the File System Access API) has no folder handles to
+    // persist in the first place. A bare level opened directly with no
+    // known parent project (the viewer's own shape-detection picker, see
+    // detectFolderShape) has no project handle to anchor a restore on
+    // either -- left unpersisted rather than half-restored; this only
+    // ever covers the normal project -> level [-> room] shape.
+    if (VIEW_ONLY_MODE || !PROJECTS_ROOT_SUPPORTED) return;
+    if (!activeProjectHandle || !activeLevelName){
+      idbSet(LAST_ACTIVE_WORK_KEY, null).catch(function(){});
+      return;
+    }
+    idbSet(LAST_ACTIVE_WORK_KEY, {
+      projectHandle: activeProjectHandle,
+      projectName: activeProjectName,
+      levelName: activeLevelName,
+      roomName: activeRoomName || ""
+    }).catch(function(){});
+  }
+  // Called once at boot, right after the top project list is confirmed
+  // reachable (see bootIntoProjectGate) -- tries to step straight back down
+  // into whatever project/level/room was last open, using the exact same
+  // openProjectFromHandle/openLevel/openRoom functions a person tapping
+  // their own way down would use, so this can't drift out of sync with
+  // what those already do. Silent and best-effort throughout: no
+  // permission PROMPT is ever triggered here (queryPermission only checks
+  // what's already been granted -- requestPermission needs a user gesture
+  // this boot-time call doesn't have anyway), and any failure at any step
+  // (permission not already granted, the folder renamed/moved/deleted
+  // since, or anything else) just leaves the person on the project list
+  // they'd have landed on regardless, with no error toast -- this is a
+  // convenience on top of normal boot, not a user-initiated action.
+  function tryRestoreLastActiveWork(){
+    return idbGet(LAST_ACTIVE_WORK_KEY).then(function(saved){
+      if (!saved || !saved.projectHandle || !saved.levelName) return;
+      return saved.projectHandle.queryPermission({ mode: "readwrite" }).then(function(perm){
+        if (perm !== "granted") return;
+        return openProjectFromHandle(saved.projectHandle, saved.projectName).then(function(){
+          return openLevel(saved.levelName);
+        }).then(function(){
+          if (saved.roomName) return openRoom(saved.roomName);
+        });
+      });
+    }).catch(function(){
+      // Stale/broken pointer (folder moved/deleted/renamed, permission
+      // revoked, etc.) -- nothing to do but leave the person on the
+      // project list, same as if this had never run.
     });
   }
   // ---- periodic local backup ----
@@ -2552,6 +2652,7 @@
       if (roomsBtn) roomsBtn.style.display = "";
       updateBackBtnVisibility();
       refreshRoomJumpMenu();
+      persistLastActiveWorkPointer();
       showToast("Opened “" + (activeProjectName ? activeProjectName + " — " : "") + name + "”.");
     });
   }
@@ -2635,6 +2736,7 @@
       if (roomsBtn) roomsBtn.style.display = "";
       updateBackBtnVisibility();
       refreshRoomJumpMenu();
+      persistLastActiveWorkPointer();
       showToast("Opened “" + activeProjectName + " — " + activeLevelName + " — " + name + "”.");
     });
   }
@@ -2856,6 +2958,16 @@
     state.selectedId = null;
     history = [deepClone(state.objects)]; historyIndex = 0;
     unsavedSinceLastSave = false;
+    // Every real "step back out to a list" call site already updates
+    // activeProjectHandle/activeLevelName/activeRoomName to reflect where
+    // this lands BEFORE calling this function (a plain level->project-list
+    // step clears the level itself; a room->rooms-list step only clears
+    // the room, leaving the level in place) -- so re-deriving the resume
+    // pointer from those globals right here, in the one function every one
+    // of those call sites already shares, keeps it accurate everywhere
+    // without needing its own copy of the same clearing logic. See
+    // persistLastActiveWorkPointer's own comment for why this exists.
+    persistLastActiveWorkPointer();
   }
 
   // Bringing a real plan/photo into an open level (Open, drag-drop, or
@@ -2871,6 +2983,25 @@
   // still gets a toast, same as every other folder write in this app --
   // going quiet here specifically would be the one place an autosave
   // failure could hide.
+  //
+  // ALSO called (v32, 2026-09-18) right before "Open"/"Insert image" ever
+  // hands off to the OS's own file/camera picker (see those two click
+  // handlers below), not just afterward. Andrew's own follow-up on the
+  // "taking photos... goes back to the home page" report confirmed what
+  // the earlier investigation suspected but couldn't prove from inside the
+  // app alone: Android/Chrome told him outright it reloaded the tab due to
+  // low memory -- exactly the "OS reclaims a backgrounded tab" mechanism
+  // the resume-on-boot mitigation (persistLastActiveWorkPointer/
+  // tryRestoreLastActiveWork) was already built for. That mitigation
+  // recovers your PLACE after a reload; it does nothing for edits still
+  // only sitting in memory the moment the native picker took over and the
+  // tab got discarded out from under you. No web app's JavaScript can stop
+  // the OS from discarding a backgrounded tab under memory pressure -- this
+  // doesn't attempt to -- but flushing whatever's currently drawn to disk
+  // in the instant BEFORE handing off to that picker (rather than only
+  // after a photo successfully comes back) means the worst a discard can
+  // now cost you is the one photo that was mid-capture, never any earlier
+  // annotation work on the same plan.
   function autosaveLevelPlanIfActive(){
     if (!(activeWorkSavesHandle() && state.imageW)) return;
     saveActiveLevelFile().catch(function(err){
@@ -5207,14 +5338,27 @@
     btn.title = canLock ? "Lock all items (right-click one item to unlock just that one)" : "Everything is already locked";
   }
 
-  // Viewer-only "recolour lines" preview -- see #viewerRecolorGroup's own
-  // HTML comment for the full request/reasoning. Deliberately touches only
-  // the object types that read as an actual measurement/annotation LINE;
-  // a text object's own .color also drives its label glyph fill (see
-  // renderLabelGroup), and an image's optional borderColor is a different,
-  // separate, off-by-default field -- recoloring either here would read as
-  // "my text/photo changed colour", not "my lines changed colour".
-  var VIEWER_RECOLOR_TYPES = { dimension: true, line: true, angle: true, rect: true, callout: true };
+  // Viewer-only "recolour everything" preview -- see #viewerRecolorGroup's
+  // own HTML comment for the full request/reasoning. Originally scoped
+  // (2026-09-18) to just the five line-like types' own .color, deliberately
+  // leaving text objects, attached labels, and image borders alone --
+  // Andrew's own direct follow-up the same day asked for exactly those too
+  // ("needs to change colours of everything, borders, text etc"), so this
+  // now sweeps every colour field ANY object happens to carry, generically,
+  // rather than checking type by type: a plain top-level .color (a line's
+  // stroke, a rect's stroke, a room-marker's dot, a text object's own glyph
+  // -- whatever that field means for that particular type), a nested
+  // .label.color for any object with its own separate attached label (a
+  // dimension/angle/callout/room-marker's text sits in its own object,
+  // independent of that object's line/dot colour, so it needs its own
+  // remember/restore), and an image's optional .borderColor -- turned ON
+  // for the duration of the preview even if it was off (null) beforehand,
+  // same as everything else here: gone the moment Reset is pressed or the
+  // level/room is reopened. remember()/restore() share one "__orig<Field>"
+  // naming scheme so any future colour-carrying field added to an object
+  // type is picked up automatically without this function needing to know
+  // that type or field name in advance.
+  //
   // Deliberately does NOT call pushHistory() -- that would mark this dirty
   // (unsavedSinceLastSave/scheduleAutosave), which would be actively wrong
   // for something that must never reach disk. state.objects is mutated
@@ -5225,23 +5369,33 @@
   // always re-read the real saved file fresh) -- there's genuinely nothing
   // for a real save to ever pick up, in a build where Save itself is
   // already hidden and unreachable throughout (VIEW_ONLY_MODE).
+  function rememberOrigColorField(target, field){
+    var key = "__orig" + field.charAt(0).toUpperCase() + field.slice(1);
+    if (target[key] === undefined) target[key] = target[field]; // remember the TRUE original once, even across repeated colour picks
+    return key;
+  }
   function applyViewerLineColor(hex){
     if (!VIEW_ONLY_MODE) return; // defensive -- this control is hidden in the editor
     var touched = 0;
     state.objects.forEach(function(o){
-      if (!VIEWER_RECOLOR_TYPES[o.type]) return;
-      if (o.__origColor === undefined) o.__origColor = o.color; // remember the TRUE original once, even across repeated colour picks
-      o.color = hex;
-      touched++;
+      if (o.color !== undefined){ rememberOrigColorField(o, "color"); o.color = hex; touched++; }
+      if (o.label && o.label.color !== undefined){ rememberOrigColorField(o.label, "color"); o.label.color = hex; touched++; }
+      if (o.type === "image"){ rememberOrigColorField(o, "borderColor"); o.borderColor = hex; touched++; }
     });
     if (!touched) return;
     renderAll();
-    showToast("Lines recoloured for this viewing session — nothing is saved.");
+    showToast("Colours recoloured for this viewing session — nothing is saved.");
   }
   function resetViewerLineColors(){
     var any = false;
+    function restoreField(target, field){
+      var key = "__orig" + field.charAt(0).toUpperCase() + field.slice(1);
+      if (target[key] !== undefined){ target[field] = target[key]; delete target[key]; any = true; }
+    }
     state.objects.forEach(function(o){
-      if (o.__origColor !== undefined){ o.color = o.__origColor; delete o.__origColor; any = true; }
+      restoreField(o, "color");
+      if (o.label) restoreField(o.label, "color");
+      if (o.type === "image") restoreField(o, "borderColor");
     });
     if (!any) return;
     renderAll();
@@ -5296,19 +5450,33 @@
   // Removed entirely in the Viewer (2026-09-18, per Andrew: "the item by
   // item menus in the viewer app are not required"). Every single row this
   // function can ever build is already gated !VIEW_ONLY_MODE except one --
-  // a roomlink's own "Open room" row -- which only ever duplicated what
-  // double-clicking the same marker already does (see the dblclick handler
-  // above, which checks obj.type === "roomlink" before this function is
-  // ever involved and is completely unaffected by this early-out). So a
-  // long-press/right-click on any real object in the Viewer used to open
-  // this popover anyway and simply render with zero rows in it -- a dead,
-  // empty floating box with nothing in it to tap. Bailing out here instead
-  // removes that empty box outright, for every call site (the object/base-
-  // photo/empty-canvas long-press handlers, and the double-click-on-a-
-  // locked-object fallback below), while leaving genuine navigation (the
-  // roomlink double-click itself) untouched.
+  // a roomlink's own "Open room" row. Every OTHER row below is already
+  // gated on its own (!VIEW_ONLY_MODE), so a long-press/right-click on any
+  // ordinary object in the Viewer used to open this popover anyway and
+  // simply render with zero rows in it -- a dead, empty floating box with
+  // nothing in it to tap.
+  //
+  // BUG FOUND AND FIXED (v32, 2026-09-18, reported by Andrew: "the viewer
+  // now lost the option to select rooms from the dot selector"). The first
+  // fix for the empty-box problem was a blanket "bail out in viewer mode,
+  // full stop" -- which also silently took out the ONE row that was never
+  // dead in the viewer: a room marker's own "Open room" row a few lines
+  // down (`isRealObject && obj.type === "roomlink"`, deliberately never
+  // gated on !VIEW_ONLY_MODE, since it's navigation, not a mutation) --
+  // long-press/right-click on a room's dot was a real, working, more
+  // discoverable second way into a room besides double-clicking the dot
+  // itself, and the blanket early-return removed it along with the actual
+  // dead boxes. Root cause: the early-out didn't distinguish "nothing
+  // useful would show" from "we're in the viewer" -- it assumed those were
+  // the same condition, and for every object type except roomlink they are.
+  // Fixed by scoping the bail-out to real dead ends only: a roomlink marker
+  // still opens its popover in the Viewer (with only its one real row in
+  // it -- every other row below stays exactly as gated as before); a
+  // right-click/long-press on anything else (a dimension, the base photo,
+  // empty canvas, a locked non-roomlink object) still shows nothing, same
+  // as the original v31 fix intended.
   function showLockPopover(obj, clientX, clientY){
-    if (VIEW_ONLY_MODE) return;
+    if (VIEW_ONLY_MODE && !(obj && obj.type === "roomlink")) return;
     hideLockPopover();
     var r = stage.getBoundingClientRect();
     var wrap = document.createElement("div");
@@ -7239,8 +7407,12 @@
     });
   });
   document.getElementById("openBtn").addEventListener("click", function(){
-    if (!state.objects.length){ fileInput.click(); return; }
-    showConfirmSync("Open a new image? This replaces the current plan and its " + state.objects.length + " annotation(s).", function(){ fileInput.click(); });
+    // Flush whatever's currently drawn to disk BEFORE handing off to the
+    // OS's own file/camera picker -- see autosaveLevelPlanIfActive's own
+    // comment on why this now happens here too, not just after a photo
+    // comes back in.
+    if (!state.objects.length){ autosaveLevelPlanIfActive(); fileInput.click(); return; }
+    showConfirmSync("Open a new image? This replaces the current plan and its " + state.objects.length + " annotation(s).", function(){ autosaveLevelPlanIfActive(); fileInput.click(); });
   });
   fileInput.addEventListener("change", function(){
     var f = fileInput.files && fileInput.files[0];
@@ -7484,9 +7656,23 @@
   // multiple tiles even if it wanted to. Inserted reference photos/PDF
   // pages are also typically much smaller than a full drawing sheet, so
   // this was never the case the blur report was actually about.
+  // Shared by pdfFileToImage and pdfFileToImages below -- both need pdf.js
+  // ready before doing anything real, and the exact same wait/fail/retry
+  // handling around that. Runs `proceed` immediately if the libraries are
+  // already loaded, otherwise waits up to 8s for them (see
+  // waitForPdfImportLibs's own comment on why that wait exists at all).
+  function withPdfImportLibsReady(proceed){
+    if (pdfImportLibsReady()) return proceed();
+    if (window.__pdfImportLibFailed) return Promise.reject({ code: "pdf_import_failed" });
+    return waitForPdfImportLibs(8000).then(function(ready){
+      if (window.__pdfImportLibFailed) return Promise.reject({ code: "pdf_import_failed" });
+      if (!ready) return Promise.reject({ code: "pdf_import_loading" });
+      return proceed();
+    });
+  }
   function pdfFileToImage(file, allowTiling){
     var tiling = allowTiling !== false;
-    function proceed(){
+    return withPdfImportLibsReady(function(){
       ensurePdfWorker();
       // Computed per-call (not hoisted to a top-level constant) because
       // PX_TO_PT is declared further down in this same script -- by the
@@ -7513,13 +7699,49 @@
           });
         });
       });
-    }
-    if (pdfImportLibsReady()) return proceed();
-    if (window.__pdfImportLibFailed) return Promise.reject({ code: "pdf_import_failed" });
-    return waitForPdfImportLibs(8000).then(function(ready){
-      if (window.__pdfImportLibFailed) return Promise.reject({ code: "pdf_import_failed" });
-      if (!ready) return Promise.reject({ code: "pdf_import_loading" });
-      return proceed();
+    });
+  }
+  // "Insert image"'s own multi-page entry point, added per Andrew's request
+  // (v32, 2026-09-18): a single-page PDF behaves exactly like
+  // pdfFileToImage above (one-element array back, so callers don't need a
+  // separate code path for that case); a multi-page one shows the SAME
+  // thumbnail picker in its multi-select mode (see showPdfPagePicker) and
+  // renders every page the person picked, sequentially -- one page at a
+  // time, never Promise.all -- for the same peak-memory reason the
+  // picker's own thumbnails render sequentially. Always uses the
+  // single-canvas/downscale-to-fit path (never tiling), same reasoning as
+  // pdfFileToImage's own allowTiling=false branch: each page becomes its
+  // own resizable image OBJECT, which has nowhere to put multiple tiles.
+  function pdfFileToImages(file){
+    return withPdfImportLibsReady(function(){
+      ensurePdfWorker();
+      var importScale = 1 / PX_TO_PT;
+      function renderOnePage(pdfDoc, pageNum){
+        return renderPdfPage(pdfDoc, pageNum, importScale, PDF_INSERT_MAX_DIM);
+      }
+      return file.arrayBuffer().then(function(buf){
+        return window.pdfjsLib.getDocument({ data: buf }).promise;
+      }).then(function(pdfDoc){
+        if (pdfDoc.numPages <= 1){
+          return renderOnePage(pdfDoc, 1).then(function(res){
+            res.pageCount = 1; res.pageNum = 1; return [res];
+          });
+        }
+        return showPdfPagePicker(pdfDoc, true).then(function(pageNums){
+          if (!pageNums || !pageNums.length) return Promise.reject({ code: "pdf_import_cancelled" });
+          var results = [];
+          var chain = Promise.resolve();
+          pageNums.forEach(function(pageNum){
+            chain = chain.then(function(){
+              return renderOnePage(pdfDoc, pageNum).then(function(res){
+                res.pageCount = pdfDoc.numPages; res.pageNum = pageNum;
+                results.push(res);
+              });
+            });
+          });
+          return chain.then(function(){ return results; });
+        });
+      });
     });
   }
   function pdfImportErrorToast(err){
@@ -7884,14 +8106,72 @@
 
   /* ---- multi-page picker: a thumbnail grid modal, reusing the same
      modal-backdrop pattern as the Open confirm dialog. Renders every page at
-     a small scale up front (fine for a normal drawing set's page count) and
-     resolves with the chosen 1-based page number, or null if the person
-     backs out. ---- */
+     a small scale up front (fine for a normal drawing set's page count).
+     Two modes: plain "Open" (multi falsy) resolves with a single chosen
+     1-based page number the moment a cell is tapped, exactly as before;
+     "Insert image" (multi truthy) lets several pages be toggled on/off and
+     only resolves once "Insert N pages" is pressed, with an ordered array
+     of 1-based page numbers. Either mode resolves null if the person backs
+     out (Cancel or the backdrop). ----
+     MULTI-SELECT ADDED (v32, 2026-09-18) per Andrew: "when inserting a
+     multi page pdf file, i want to be able to select multiple pages and
+     they all get inserted into the canvas, even better if they can be auto
+     resized and collated." Before this, "Insert image" could only ever
+     bring in ONE page from a multi-page PDF at a time -- a real drawing set
+     handed over as a single PDF with every sheet inside it meant repeating
+     the whole Insert-image flow once per sheet. See pdfFileToImages below
+     for the multi-page render path, and placeInsertedImagesCollated for
+     the auto-resize/collate placement this feeds into. */
   var pdfPickerBackdrop = document.getElementById("pdfPickerBackdrop");
   var pdfPickerGrid = document.getElementById("pdfPickerGrid");
+  var pdfPickerMsg = document.getElementById("pdfPickerMsg");
   var pdfPickerCancelBtn = document.getElementById("pdfPickerCancel");
+  var pdfPickerSelectAllBtn = document.getElementById("pdfPickerSelectAllBtn");
+  var pdfPickerInsertBtn = document.getElementById("pdfPickerInsertBtn");
   var pdfPickerResolve = null;
-  function showPdfPagePicker(pdfDoc){
+  var pdfPickerMulti = false;
+  // Ascending 1-based page numbers currently selected (multi mode only) --
+  // kept sorted regardless of click order, so the badges shown here and the
+  // eventual on-canvas collation both always read in true page order.
+  var pdfPickerSelected = [];
+  function pdfPickerCellFor(pageNum){
+    return pdfPickerGrid.children[pageNum - 1];
+  }
+  function renderPdfPickerBadges(){
+    Array.prototype.forEach.call(pdfPickerGrid.children, function(cell){
+      var existing = cell.querySelector(".pdf-page-badge");
+      if (existing) existing.parentNode.removeChild(existing);
+    });
+    pdfPickerSelected.forEach(function(pageNum, i){
+      var cell = pdfPickerCellFor(pageNum);
+      if (!cell) return;
+      var badge = document.createElement("span");
+      badge.className = "pdf-page-badge";
+      badge.textContent = String(i + 1);
+      cell.appendChild(badge);
+    });
+  }
+  function refreshPdfPickerControls(){
+    var n = pdfPickerGrid.children.length;
+    var k = pdfPickerSelected.length;
+    pdfPickerSelectAllBtn.textContent = (k === n && n > 0) ? "Clear all" : "Select all";
+    pdfPickerInsertBtn.disabled = k === 0;
+    pdfPickerInsertBtn.textContent = k ? ("Insert " + k + (k === 1 ? " page" : " pages")) : "Insert";
+  }
+  function togglePdfPickerPage(pageNum, cell){
+    var idx = pdfPickerSelected.indexOf(pageNum);
+    if (idx === -1){
+      pdfPickerSelected.push(pageNum);
+      pdfPickerSelected.sort(function(a, b){ return a - b; });
+      cell.classList.add("selected");
+    } else {
+      pdfPickerSelected.splice(idx, 1);
+      cell.classList.remove("selected");
+    }
+    renderPdfPickerBadges();
+    refreshPdfPickerControls();
+  }
+  function showPdfPagePicker(pdfDoc, multi){
     var n = pdfDoc.numPages;
     // Rendered ONE PAGE AT A TIME, not all at once via Promise.all -- a
     // real drawing set can easily be dozens of sheets, and firing every
@@ -7912,26 +8192,53 @@
     return chain.then(function(){
       return new Promise(function(resolve){
         pdfPickerResolve = resolve;
+        pdfPickerMulti = !!multi;
+        pdfPickerSelected = [];
+        pdfPickerMsg.textContent = pdfPickerMulti
+          ? "This PDF has multiple pages — pick one or more to insert."
+          : "This PDF has multiple pages — pick one to import.";
+        pdfPickerSelectAllBtn.style.display = pdfPickerMulti ? "" : "none";
+        pdfPickerInsertBtn.style.display = pdfPickerMulti ? "" : "none";
         pdfPickerGrid.innerHTML = "";
         thumbs.forEach(function(t, idx){
+          var pageNum = idx + 1;
           var cell = document.createElement("button");
           cell.type = "button"; cell.className = "pdf-page-cell";
-          var img = document.createElement("img"); img.src = t.dataUrl; img.alt = "Page " + (idx + 1);
-          var lab = document.createElement("span"); lab.textContent = "Page " + (idx + 1);
+          var img = document.createElement("img"); img.src = t.dataUrl; img.alt = "Page " + pageNum;
+          var lab = document.createElement("span"); lab.textContent = "Page " + pageNum;
           cell.appendChild(img); cell.appendChild(lab);
-          cell.addEventListener("click", function(){ closePdfPicker(idx + 1); });
+          cell.addEventListener("click", function(){
+            if (!pdfPickerMulti){ closePdfPicker(pageNum); return; }
+            togglePdfPickerPage(pageNum, cell);
+          });
           pdfPickerGrid.appendChild(cell);
         });
+        refreshPdfPickerControls();
         pdfPickerBackdrop.hidden = false;
       });
     });
   }
-  function closePdfPicker(pageNumOrNull){
+  function closePdfPicker(result){
     pdfPickerBackdrop.hidden = true;
-    if (pdfPickerResolve){ var r = pdfPickerResolve; pdfPickerResolve = null; r(pageNumOrNull); }
+    if (pdfPickerResolve){ var r = pdfPickerResolve; pdfPickerResolve = null; r(result); }
   }
   pdfPickerCancelBtn.addEventListener("click", function(){ closePdfPicker(null); });
   pdfPickerBackdrop.addEventListener("click", function(e){ if (e.target === pdfPickerBackdrop) closePdfPicker(null); });
+  pdfPickerSelectAllBtn.addEventListener("click", function(){
+    var n = pdfPickerGrid.children.length;
+    var selectingAll = pdfPickerSelected.length !== n;
+    pdfPickerSelected = [];
+    Array.prototype.forEach.call(pdfPickerGrid.children, function(cell, idx){
+      if (selectingAll){ pdfPickerSelected.push(idx + 1); cell.classList.add("selected"); }
+      else cell.classList.remove("selected");
+    });
+    renderPdfPickerBadges();
+    refreshPdfPickerControls();
+  });
+  pdfPickerInsertBtn.addEventListener("click", function(){
+    if (!pdfPickerSelected.length) return;
+    closePdfPicker(pdfPickerSelected.slice());
+  });
 
   function loadImageFile(file){
     if (VIEW_ONLY_MODE) return; // defensive -- the Open button is hidden in viewer mode
@@ -8014,6 +8321,11 @@
   var insertImageInput = document.getElementById("insertImageInput");
   document.getElementById("insertImageBtn").addEventListener("click", function(){
     if (!state.imageW){ showToast("Open a plan or photo first."); return; }
+    // Flush whatever's currently drawn to disk BEFORE handing off to the
+    // OS's own file/camera picker -- see autosaveLevelPlanIfActive's own
+    // comment on why this now happens here too, not just after a photo
+    // comes back in.
+    autosaveLevelPlanIfActive();
     insertImageInput.click();
   });
   insertImageInput.addEventListener("change", function(){
@@ -8042,11 +8354,22 @@
   function insertImageFile(file){
     if (VIEW_ONLY_MODE) return; // defensive -- Insert image (button and Ctrl+V paste) is hidden/blocked in viewer mode
     if (isPdfFile(file)){
-      showToast("Inserting PDF page…");
-      pdfFileToImage(file, false).then(function(res){
-        placeInsertedImage(res.dataUrl, res.w, res.h);
+      showToast("Inserting PDF page(s)…");
+      // MULTI-PAGE INSERT ADDED (v32, 2026-09-18) per Andrew: "when
+      // inserting a multi page pdf file, i want to be able to select
+      // multiple pages and they all get inserted into the canvas, even
+      // better if they can be auto resized and collated." pdfFileToImages
+      // always resolves with an ARRAY now (one entry for a single-page PDF,
+      // several for a multi-page one with more than one page picked) --
+      // placeInsertedImagesCollated below handles both the same way,
+      // falling straight through to the original single-image placement
+      // when there's only one.
+      pdfFileToImages(file).then(function(pages){
+        placeInsertedImagesCollated(pages);
         autosaveLevelPlanIfActive();
-        showToast(res.pageCount > 1 ? "Inserted page " + res.pageNum + " of " + res.pageCount + " — drag a corner to resize, or drag it to move." : "Image inserted — drag a corner to resize/stretch, or drag it to move.");
+        var first = pages[0];
+        if (pages.length > 1) showToast("Inserted " + pages.length + " pages, auto-resized and arranged in a grid — drag any one to move, or drag a corner to resize it.");
+        else showToast(first.pageCount > 1 ? "Inserted page " + first.pageNum + " of " + first.pageCount + " — drag a corner to resize, or drag it to move." : "Image inserted — drag a corner to resize/stretch, or drag it to move.");
       }).catch(function(err){ if (err && err.code === "pdf_import_cancelled") return; showToast(pdfImportErrorToast(err)); });
       return;
     }
@@ -8089,6 +8412,74 @@
     if (firstAnnotationIdx === -1) state.objects.push(obj);
     else state.objects.splice(firstAnnotationIdx, 0, obj);
     state.selectedId = obj.id;
+    setTool("select");
+    pushHistory();
+    renderAll();
+  }
+  // Multi-page counterpart to placeInsertedImage above, added per Andrew's
+  // request (v32, 2026-09-18) alongside the PDF picker's own multi-select
+  // mode: "select multiple pages and they all get inserted into the
+  // canvas... auto resized and collated." pages is an array of
+  // {dataUrl, w, h, ...} in ascending page order (see pdfFileToImages/the
+  // picker's own badge numbering). A single-page array falls straight
+  // through to the ordinary single-image placement -- no behaviour change
+  // for the always-been-one-page case.
+  //
+  // "Auto resized": every page is scaled to fit within the SAME cell
+  // bounding box (never upscaled past its own native size, same rule as a
+  // single insert), so a tall portrait sheet and a wide landscape sheet
+  // land visually comparable in size on screen instead of one dwarfing the
+  // other -- each keeps its own true aspect ratio, letterboxed within its
+  // cell, never stretched non-uniformly.
+  //
+  // "Collated": laid out together as one roughly-square grid (columns =
+  // ceil(sqrt(pageCount)), same contact-sheet shape regardless of page
+  // count) centered in whatever's currently on screen, in ascending page
+  // order left-to-right/top-to-bottom -- instead of every page landing in
+  // an identical spot needing to be manually dragged apart one at a time.
+  // Every page still becomes its own independent, fully resizable/movable
+  // "image" object afterward -- this only decides where each one starts
+  // out -- and the whole batch is one single Undo step, same as any other
+  // one deliberate action in this app.
+  function placeInsertedImagesCollated(pages){
+    if (!pages || !pages.length) return;
+    if (pages.length === 1){ placeInsertedImage(pages[0].dataUrl, pages[0].w, pages[0].h); return; }
+
+    var r = svgRoot.getBoundingClientRect();
+    var center = screenToWorld(r.left + r.width / 2, r.top + r.height / 2);
+    var viewSpanW = r.width / state.view.scale, viewSpanH = r.height / state.view.scale;
+
+    var cols = Math.ceil(Math.sqrt(pages.length));
+    var rows = Math.ceil(pages.length / cols);
+    var totalW = viewSpanW * 0.85, totalH = viewSpanH * 0.85;
+    var gap = Math.min(viewSpanW, viewSpanH) * 0.02;
+    var cellW = (totalW - gap * (cols - 1)) / cols;
+    var cellH = (totalH - gap * (rows - 1)) / rows;
+    var startX = center.x - totalW / 2, startY = center.y - totalH / 2;
+
+    var newObjs = pages.map(function(p, idx){
+      var col = idx % cols, row = Math.floor(idx / cols);
+      var s = Math.min(cellW / p.w, cellH / p.h, 1);
+      var w = p.w * s, h = p.h * s;
+      // Centered within its own cell, not just top-left-anchored, so a
+      // smaller sheet doesn't visually hug one corner of a taller/wider
+      // neighbour's cell.
+      var cx = startX + col * (cellW + gap) + cellW / 2;
+      var cy = startY + row * (cellH + gap) + cellH / 2;
+      return makeImage(cx - w / 2, cy - h / 2, w, h, p.dataUrl);
+    });
+
+    // Same "below annotations, above earlier images" placement rule as a
+    // single insert (see placeInsertedImage above) -- the whole batch
+    // lands together, in page order, just before the first non-image
+    // object already on the plan.
+    var firstAnnotationIdx = state.objects.findIndex(function(o){ return o.type !== "image"; });
+    if (firstAnnotationIdx === -1) state.objects = state.objects.concat(newObjs);
+    else state.objects = state.objects.slice(0, firstAnnotationIdx).concat(newObjs, state.objects.slice(firstAnnotationIdx));
+    // Nothing selected afterward -- picking one of several new images as
+    // "the" selection would misleadingly suggest only it landed; leaving
+    // selection empty reads more honestly as "several things just arrived".
+    state.selectedId = null;
     setTool("select");
     pushHistory();
     renderAll();
@@ -9428,7 +9819,7 @@
           return populateProjectList().then(function(){
             gateListFolderLabel.textContent = "Projects folder: “" + projectsRootName + "”";
             showGateState("list");
-          });
+          }).then(tryRestoreLastActiveWork);
         }
         gateReconnectName.textContent = projectsRootName;
         showGateState("reconnect");

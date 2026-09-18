@@ -564,7 +564,70 @@
 // auto-lock-on-leave behaviour (e.g. a marker an earlier test in the same
 // file expected to still be unlocked, since it had by then been through a
 // real leave itself).
-var CACHE_NAME = "utzline-sitemeasure-cache-v31";
+//
+// (v32: three real bugs/requests from Andrew, reported the same day v31
+// shipped, across three messages. (1) "taking photos on the app no longer
+// inserts the image, it goes back the the home page instead." Investigated
+// first per his own explicit "don't action, investigate" instruction:
+// found nothing wrong in the insert-photo pipeline itself, but did find
+// that boot() always lands on the bare top project list with nothing
+// remembered -- so if the OS reclaims this app's tab/process while the
+// phone's own camera app is in the foreground (a known Android behaviour
+// under memory pressure), coming back looks exactly like a silent reboot.
+// Added a "resume where I was" pointer (persistLastActiveWorkPointer/
+// tryRestoreLastActiveWork), persisted the same way projectsRootHandle
+// already is, that steps a fresh boot straight back down into whatever
+// project/level/room was last open via the same openProjectFromHandle/
+// openLevel/openRoom a person tapping their own way down would use. This
+// can't recover a photo whose capture never made it back to the app at all
+// -- nothing in JavaScript can stop the OS reclaiming a tab -- but it does
+// mean anything already autosaved up to that point isn't ALSO buried
+// behind having to renavigate there by hand. Andrew's own direct follow-up
+// the same day confirmed the mechanism outright: Android/Chrome told him
+// the tab reloaded due to low memory. On top of the boot-restore mitigation
+// above, "Open" and "Insert image" now also flush whatever's currently
+// drawn to disk (autosaveLevelPlanIfActive()) the instant BEFORE handing
+// off to the OS's own file/camera picker, not only after a photo
+// successfully comes back -- so the worst a mid-capture discard can now
+// cost is the one photo that was in flight, never any earlier annotation
+// work already on the same plan.
+//
+// (2) "also the viewer now lost the option to select rooms from the dot
+// selector, maybe because its locked" -- a real regression from v31's own
+// popover fix, on this app's shared source.html but only visible in the
+// Viewer build; documented in full in that app's own service-worker.js.
+//
+// (3) "add in a multi page selector (when inserting a multi page pdf
+// file, i want to be able to select multiple pages and they all get
+// inserted into the canvas, even better if they can be auto resized and
+// collated)." "Insert image" on a multi-page PDF now shows the same
+// thumbnail picker in a new multi-select mode (Select all / per-page
+// toggle badges numbered in true ascending page order regardless of click
+// order / "Insert N pages") instead of forcing one page at a time. Every
+// selected page is rendered (sequentially, same peak-memory reasoning as
+// the picker's own thumbnails), auto-resized to fit a shared grid-cell
+// bounding box while keeping its own true aspect ratio (never upscaled
+// past its native size), and laid out as one roughly-square collated grid
+// centered on screen -- all landing as ONE single Undo step, same as any
+// other one deliberate action here. The "Open" (replace-plan) flow is
+// completely unaffected -- still single-select, one page number back.
+//
+// New regression tests: run_viewer_room_marker_popover.js (fix 1's own
+// test lives in the Viewer's service-worker.js, since that's the only
+// build it's visible in -- but the source.html fix and this test are
+// shared), run_pdf_multi_insert_collate.js, run_resume_on_boot.js (using a
+// small in-memory fake IndexedDB for this one specifically -- this
+// harness's fake directory/file handles aren't structured-cloneable, so a
+// real idbSet() storing one silently fails exactly like it would for any
+// other non-cloneable value, which would otherwise make the resume pointer
+// unobservable in tests even though it works correctly for real), and
+// run_flush_before_picker.js (the pre-picker flush, driven through the
+// real "Open"/"Insert image" toolbar buttons without ever completing the
+// file input's own change event, since there's no real file to pick in a
+// headless test). Each sanity-checked via a temporary revert-and-restore
+// cycle. The full pre-existing test suite was re-run afterward with zero
+// regressions.
+var CACHE_NAME = "utzline-sitemeasure-cache-v32";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
