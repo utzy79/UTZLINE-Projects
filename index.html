@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v33">
+<link rel="manifest" href="./manifest.json?v=v34">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v33">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v33">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v34">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v34">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -538,6 +538,12 @@
     background:var(--surface-0); color:var(--text-primary);
   }
   .modal-actions{ display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+  /* ---------- project info dialog (Project No. / Name / Head Contractor) ---------- */
+  #projectInfoBackdrop .modal-box{ max-width:360px; }
+  .project-info-field-label{
+    display:block; font-size:12px; font-weight:600; color:var(--text-secondary);
+    margin:0 0 4px;
+  }
   /* ---------- crop-before-insert dialog ---------- */
   .crop-box{ max-width:min(92vw, 600px); }
   .crop-stage{
@@ -791,7 +797,7 @@
      a mutation, and stays available. */
   body.viewer-mode #newProjectBtn, body.viewer-mode #newLevelBtn,
   body.viewer-mode #newRoomBtn, body.viewer-mode #exportAllRoomPdfsBtn,
-  body.viewer-mode #exportAllProjectPdfsBtn{
+  body.viewer-mode #exportAllProjectPdfsBtn, body.viewer-mode #editProjectInfoBtn{
     display: none !important;
   }
   /* Viewer-only accent recolor: the same in-app blue used for the Viewer's
@@ -1186,6 +1192,7 @@
           <div class="project-gate-actions">
             <button class="mbtn mbtn-accent" id="newLevelBtn">+ New Level</button>
             <button class="mbtn" id="exportAllProjectPdfsBtn" title="Re-renders and saves a fresh PDF for every level's own main plan AND every room under every level in this project, straight into each one's own pdfs folder — without opening each one by hand first.">Export all PDFs (whole project)</button>
+            <button class="mbtn" id="editProjectInfoBtn" title="Project No., Project Name, and Head Contractor / Builder — used to auto-fill the title block on ITP checklists for this project.">Project Info</button>
           </div>
         </div>
 
@@ -1268,6 +1275,22 @@
       </div>
     </div>
 
+    <div class="modal-backdrop" id="projectInfoBackdrop" hidden>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="projectInfoLabel">
+        <p id="projectInfoLabel">Project info — used to auto-fill ITP checklist title blocks for this project:</p>
+        <label class="project-info-field-label" for="projectInfoNoInput">Project No.</label>
+        <input type="text" class="rename-input" id="projectInfoNoInput" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <label class="project-info-field-label" for="projectInfoNameInput">Project name</label>
+        <input type="text" class="rename-input" id="projectInfoNameInput" maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <label class="project-info-field-label" for="projectInfoContractorInput">Head Contractor / Builder</label>
+        <input type="text" class="rename-input" id="projectInfoContractorInput" maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="modal-actions">
+          <button class="mbtn" id="projectInfoSkip">Skip for now</button>
+          <button class="mbtn mbtn-accent" id="projectInfoSave">Save</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-backdrop" id="shareChoiceBackdrop" hidden>
       <div class="modal-box share-choice-box" role="dialog" aria-modal="true" aria-labelledby="shareChoiceLabel">
         <p id="shareChoiceLabel">Share as:</p>
@@ -1312,7 +1335,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v33";
+  var APP_VERSION = "v34";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -2511,7 +2534,17 @@
     });
   }
   function listExistingProjects(){ return listSubdirNames(projectsRootHandle); }
-  function listExistingLevels(){ return listSubdirNames(activeProjectHandle); }
+  // "itp" is a reserved project-wide folder (see writeProjectMeta's own
+  // comment on project-meta.json) written by the separate UTZLINE ITP app
+  // directly under a project's own folder, alongside its level folders --
+  // excluded here the same way listExistingRooms excludes saves/pdfs/backup,
+  // so it never shows up mislabeled as a level someone could open and start
+  // drawing into.
+  function listExistingLevels(){
+    return listSubdirNames(activeProjectHandle).then(function(names){
+      return names.filter(function(n){ return n !== "itp"; });
+    });
+  }
 
   function startBlankPlan(name){
     var blank = generateBlank();
@@ -7045,10 +7078,20 @@
     showRenameDialog("", "Name your new project:").then(function(value){
       if (value === null) return; // cancelled
       var clean = sanitizeFileBase(value);
-      createNewProject(clean).catch(function(err){
-        console.error("Create project failed:", err);
-        showToast("Couldn't create that project — try again.");
+      return createNewProject(clean).then(function(){
+        // The project folder now exists and activeProjectHandle/activeProjectName
+        // point at it (openProjectFromHandle, called at the end of
+        // createNewProject, sets both) -- prompt for its info right away,
+        // prefilled with the just-chosen name, entirely optional ("Skip for
+        // now" writes nothing, same as never having opened this dialog).
+        return showProjectInfoDialog({ no: "", name: activeProjectName, contractor: "" }, "Skip for now");
+      }).then(function(meta){
+        if (!meta) return; // skipped -- can be filled in later via "Project Info"
+        return writeProjectMeta(activeProjectHandle, meta);
       });
+    }).catch(function(err){
+      console.error("Create project failed:", err);
+      showToast("Couldn't create that project — try again.");
     });
   });
   switchProjectsRootBtn.addEventListener("click", function(){
@@ -7409,6 +7452,108 @@
     if (e.key === "Enter"){ e.preventDefault(); closeRename(renameInput.value); }
     else if (e.key === "Escape"){ e.preventDefault(); closeRename(null); }
   });
+
+  /* ---- Project info (Project No. / Project Name / Head Contractor) ----
+     A small per-project metadata file, "project-meta.json", written into
+     the PROJECT's own folder (a sibling of its level folders, not inside
+     any of them) -- deliberately just a plain JSON file rather than a
+     directory, so it's invisible to every existing shape-detection/
+     listSubdirNames call, which only ever look at subdirectories. Read by
+     the (separate) UTZLINE ITP app to auto-fill a checklist's title block;
+     this app itself never displays these fields anywhere else. Editing is
+     Site-Measure-only (never in the read-only Viewer, same convention as
+     every other write) -- the ITP app only ever reads this file. */
+  function projectMetaFilename(){ return "project-meta.json"; }
+  function readProjectMeta(dirHandle){
+    if (!dirHandle) return Promise.resolve(null);
+    return dirHandle.getFileHandle(projectMetaFilename()).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{
+        var parsed = JSON.parse(text);
+        return {
+          no: String(parsed.no || ""),
+          name: String(parsed.name || ""),
+          contractor: String(parsed.contractor || "")
+        };
+      }catch(e){ return null; }
+    }, function(){ return null; }); // no file yet -- not an error
+  }
+  function writeProjectMeta(dirHandle, meta){
+    if (VIEW_ONLY_MODE || !dirHandle) return Promise.reject({ code: "view_only" });
+    var payload = JSON.stringify({
+      no: String((meta && meta.no) || ""),
+      name: String((meta && meta.name) || ""),
+      contractor: String((meta && meta.contractor) || "")
+    });
+    return dirHandle.getFileHandle(projectMetaFilename(), { create: true }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(w){
+      return w.write(payload).then(function(){ return w.close(); });
+    });
+  }
+  var projectInfoBackdrop = document.getElementById("projectInfoBackdrop");
+  var projectInfoNoInput = document.getElementById("projectInfoNoInput");
+  var projectInfoNameInput = document.getElementById("projectInfoNameInput");
+  var projectInfoContractorInput = document.getElementById("projectInfoContractorInput");
+  var projectInfoSave = document.getElementById("projectInfoSave");
+  var projectInfoSkip = document.getElementById("projectInfoSkip");
+  var projectInfoResolve = null;
+  // skipLabel lets the same dialog read as "Skip for now" right after
+  // creating a brand-new project (nothing's been entered yet, entirely
+  // optional) vs. "Cancel" when reopened later to edit already-saved info.
+  function showProjectInfoDialog(current, skipLabel){
+    projectInfoNoInput.value = (current && current.no) || "";
+    projectInfoNameInput.value = (current && current.name) || "";
+    projectInfoContractorInput.value = (current && current.contractor) || "";
+    projectInfoSkip.textContent = skipLabel || "Cancel";
+    projectInfoBackdrop.hidden = false;
+    projectInfoNoInput.focus();
+    return new Promise(function(resolve){ projectInfoResolve = resolve; });
+  }
+  function closeProjectInfo(value){
+    projectInfoBackdrop.hidden = true;
+    var resolve = projectInfoResolve; projectInfoResolve = null;
+    if (resolve) resolve(value);
+  }
+  function currentProjectInfoValue(){
+    return {
+      no: projectInfoNoInput.value,
+      name: projectInfoNameInput.value,
+      contractor: projectInfoContractorInput.value
+    };
+  }
+  projectInfoSave.addEventListener("click", function(){ closeProjectInfo(currentProjectInfoValue()); });
+  projectInfoSkip.addEventListener("click", function(){ closeProjectInfo(null); });
+  projectInfoBackdrop.addEventListener("click", function(e){ if (e.target === projectInfoBackdrop) closeProjectInfo(null); });
+  [projectInfoNoInput, projectInfoNameInput, projectInfoContractorInput].forEach(function(inp){
+    inp.addEventListener("keydown", function(e){
+      if (e.key === "Enter"){ e.preventDefault(); closeProjectInfo(currentProjectInfoValue()); }
+      else if (e.key === "Escape"){ e.preventDefault(); closeProjectInfo(null); }
+    });
+  });
+  // "Project Info" button on the levels-list screen -- lets info be added
+  // to a project that skipped it when created, or fixed later; hidden in
+  // the Viewer (CSS) alongside every other create/edit action there.
+  var editProjectInfoBtn = document.getElementById("editProjectInfoBtn");
+  if (editProjectInfoBtn){
+    editProjectInfoBtn.addEventListener("click", function(){
+      if (VIEW_ONLY_MODE || !activeProjectHandle) return;
+      readProjectMeta(activeProjectHandle).then(function(existing){
+        return showProjectInfoDialog(existing || { no: "", name: activeProjectName, contractor: "" }, "Cancel");
+      }).then(function(meta){
+        if (!meta) return; // cancelled -- leave whatever was saved before untouched
+        return writeProjectMeta(activeProjectHandle, meta).then(function(){
+          showToast("Project info saved.");
+        });
+      }).catch(function(err){
+        console.error("Save project info failed:", err);
+        showToast("Couldn't save project info — try again.");
+      });
+    });
+  }
 
   /* ============================== open / drop image ============================== */
   // "New" used to always wipe THIS plan's content back to blank in place --
