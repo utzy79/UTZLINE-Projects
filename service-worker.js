@@ -513,7 +513,58 @@
 // explicitly sanity-checked (temporarily reintroducing the old reorder,
 // confirming the test correctly fails, then restoring the fix) to be a
 // real guard.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v30";
+//
+// (v31: five requests from Andrew in one message: "we need a back button
+// on the menu. also when changing from one page to another, (rooms
+// etc...) we need a third option to change without saving. another thing,
+// when exiting / saving it needs to auto lock all dimensions etc. the
+// viewer can have the choice to change all line colours across the
+// project with a simple colour selector in the menu bar. the item by item
+// menus in the viewer app are not required." The last two are Viewer-only
+// and are documented in that app's own service-worker.js; this app picks
+// up the first three (the Viewer shares this exact same source.html, so
+// its cache-bust below covers them too).
+//
+// (1) New "Back" toolbar button, next to Switch project/level. Clarified
+// with Andrew up front (three genuinely different readings were possible)
+// that this means a plain one-step-back: from inside a room, straight to
+// that level's own main plan (previously only reachable in two steps, via
+// Rooms then its own "open main floor plan" row); from a level's own main
+// plan, up to the project's level list (identical to what Switch
+// project/level already does from there). Hidden whenever there's
+// genuinely nowhere for it to go -- plain single-file mode, or a bare
+// level folder opened directly with no known parent project and no room
+// open either -- mirroring Switch project/level's own visibility rule
+// exactly, since that's the function Back defers to in that case.
+//
+// (2) The existing "save before leaving?" dialog (shown whenever you
+// navigate away from a level/room with unsaved edits) gains a third
+// choice -- "Leave without saving" -- alongside Save & leave / Cancel, so
+// a mistaken or unwanted edit doesn't have to be saved just to get out.
+// A new three-way modal (leaveConfirmBackdrop/-Save/-Discard/-Cancel)
+// replaces the old boolean confirm for this one flow only; every other
+// confirm dialog in the app (Delete, "Add a room here", etc.) is
+// untouched.
+//
+// (3) Leaving a level/room via Save & leave (or the new Back button, or
+// Rooms, or Switch project/level) now auto-locks every object on the way
+// out, reusing the existing one-way "Lock all" mechanism -- confirmed
+// with Andrew this means only on an actual departure, NOT on an ordinary
+// mid-work Save while staying put on the same level/room, so you can
+// still keep editing normally between saves without everything locking
+// under you.
+//
+// New regression test run_back_button.js covers the Back button (hidden
+// when there's nowhere to go, one-step navigation from both a room and a
+// level, and that it auto-saves through the same chokepoint as every
+// other navigation route), explicitly sanity-checked via a temporary
+// revert-and-restore cycle. The pre-existing 59-test suite was re-run in
+// full afterward with zero regressions beyond a few of its own tests'
+// assumptions needing updates for the new dialog IDs and the new
+// auto-lock-on-leave behaviour (e.g. a marker an earlier test in the same
+// file expected to still be unlocked, since it had by then been through a
+// real leave itself).
+var CACHE_NAME = "utzline-sitemeasure-cache-v31";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [
