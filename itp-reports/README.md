@@ -79,16 +79,18 @@ the editor and Viewer already live on, so all three install as
 separate, independent apps from one repo:
 
 1. In the `UTZLINE-Site-Measure` repo, add everything from this folder
-   under an `itp/` subfolder — so it ends up live at
-   `https://utzy79.github.io/UTZLINE-Site-Measure/itp/`. Keep the
-   `icons/` folder structure intact.
+   under an
+   [`itp-reports/`](https://github.com/utzy79/UTZLINE-Site-Measure/tree/main/itp-reports)
+   subfolder — so it ends up live at
+   [`https://utzy79.github.io/UTZLINE-Site-Measure/itp-reports/`](https://utzy79.github.io/UTZLINE-Site-Measure/itp-reports/).
+   Keep the `icons/` folder structure intact.
 2. Open that URL once in a normal browser tab while online, so the
    service worker can cache it for offline use.
 3. Install it: Chrome/Edge's install icon in the address bar ("Install
-   this site as an app") while on the `itp/` URL specifically. Because
-   it has its own `manifest.json` (its own name and icons — green, to
-   tell it apart from the editor's orange and the Viewer's blue),
-   Chrome and Windows/Android treat it as a wholly separate,
+   this site as an app") while on the `itp-reports/` URL specifically.
+   Because it has its own `manifest.json` (its own name and icons —
+   green, to tell it apart from the editor's orange and the Viewer's
+   blue), Chrome and Windows/Android treat it as a wholly separate,
    independently installable app.
 4. On a phone or tablet — the main way this one's meant to be used —
    "Install this site as an app" is under the browser's own menu
@@ -97,10 +99,10 @@ separate, independent apps from one repo:
 ## Updating this app
 
 Same process as the other two: unzip whatever's shared in chat, upload
-the files into this app's own `itp/` folder in the repo (overwriting
-existing ones, keeping `icons/` intact), commit, wait for GitHub Pages
-to redeploy, then close and reopen the installed app to pick up the
-change. Bump `service-worker.js`'s `CACHE_NAME` (and the version note
+the files into this app's own `itp-reports/` folder in the repo
+(overwriting existing ones, keeping `icons/` intact), commit, wait for
+GitHub Pages to redeploy, then close and reopen the installed app to
+pick up the change. Bump `service-worker.js`'s `CACHE_NAME` (and the version note
 at the top of that file) with every change that ships, same convention
 as the other two apps, so installed copies actually pick up the update
 instead of serving a stale cached copy forever.
