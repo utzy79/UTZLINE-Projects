@@ -627,7 +627,30 @@
 // headless test). Each sanity-checked via a temporary revert-and-restore
 // cycle. The full pre-existing test suite was re-run afterward with zero
 // regressions.
-var CACHE_NAME = "utzline-sitemeasure-cache-v36";
+//
+// (v37, 2026-09-19: BUG FIX -- reported directly by Andrew: even after v32's
+// resume-on-boot/pre-picker-flush work and v36's autosave tuning, "still
+// crashes back to the main screen if trying to insert a photo using camera
+// on my tablet." Confirmed against Chrome's own File System Access
+// documentation that this genuinely couldn't be fixed from the "recover
+// afterward" side: choosing Camera from Android's file-picker sheet hands
+// the whole tab to the native Camera app, which a memory-constrained tablet
+// can and does kill outright -- and critically, the folder PERMISSION this
+// app needs to keep saving does NOT survive that kind of reload on Android
+// (Chrome's "persistent permissions" feature is desktop-only), so there's
+// no gesture-free way to silently reacquire it once lost, no matter how
+// good the autosave/resume logic is. The real fix: "Insert image" now
+// offers an in-page camera capture (getUserMedia + a live <video> feed +
+// a canvas snapshot) as an alternative to the OS file/camera picker -- the
+// whole capture happens without this tab ever losing foreground focus, so
+// there's nothing left for Android to background or kill. Falls straight
+// back to the exact v36 "Choose file" behaviour on any device/browser
+// without camera capability at all. New regression test
+// run_camera_capture.js drives the whole flow with Chromium's fake-camera
+// flags (no real webcam in this environment); run_flush_before_picker.js
+// updated for the one extra click this adds in front of the existing
+// pre-picker flush.)
+var CACHE_NAME = "utzline-sitemeasure-cache-v37";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v36">
+<link rel="manifest" href="./manifest.json?v=v37">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v36">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v36">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v37">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v37">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -652,6 +652,52 @@
   .share-choice-opt:hover, .share-choice-opt:focus-visible{ background:var(--surface-0); }
   .share-choice-title{ font-size:13.5px; font-weight:600; }
   .share-choice-sub{ font-size:11.5px; color:var(--text-secondary); line-height:1.35; }
+
+  /* ---------- in-page camera capture ----------
+     Added in v37 (2026-09-19) so taking a photo to insert never leaves the
+     page at all -- see the JS side's own comment on openCameraCapture() for
+     the full story on why (Android backgrounding/killing this tab while its
+     native Camera app is in the foreground, which no amount of autosave/
+     resume-on-boot work from v32/v36 can fully paper over). Deliberately
+     styled full-bleed/dark like a native camera app, not like the app's own
+     light modal dialogs -- this is meant to feel like "the camera", not
+     "a dialog about the camera". */
+  .camera-backdrop{
+    position:absolute; inset:0; z-index:42; background:#000;
+    display:flex; flex-direction:column;
+  }
+  .camera-backdrop[hidden]{ display:none; }
+  .camera-stage{
+    flex:1; min-height:0; position:relative; overflow:hidden;
+    background:#000; display:flex; align-items:center; justify-content:center;
+  }
+  .camera-stage video, .camera-stage canvas{ max-width:100%; max-height:100%; display:block; }
+  .camera-stage canvas[hidden], .camera-stage video[hidden]{ display:none; }
+  .camera-hint{
+    position:absolute; top:0; left:0; right:0; padding:10px 14px;
+    font-size:12.5px; color:#fff; text-align:center; text-shadow:0 1px 3px rgba(0,0,0,.6);
+    background:linear-gradient(rgba(0,0,0,.45), rgba(0,0,0,0));
+  }
+  .camera-controls{
+    flex:none; display:flex; align-items:center; justify-content:space-between;
+    gap:14px; padding:16px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .camera-side-btn{
+    background:none; border:none; color:#fff; font:inherit; font-size:14px;
+    padding:10px 6px; cursor:pointer; min-width:64px;
+  }
+  .camera-side-btn:disabled{ opacity:.4; cursor:default; }
+  .camera-shutter-btn{
+    width:66px; height:66px; border-radius:50%; flex:none;
+    background:#fff; border:4px solid rgba(255,255,255,.4); cursor:pointer;
+  }
+  .camera-shutter-btn:active{ background:#ccc; }
+  .camera-shutter-btn:disabled{ opacity:.4; cursor:default; }
+  .camera-review-actions{
+    flex:none; display:flex; align-items:center; justify-content:center; gap:14px;
+    padding:16px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .camera-review-actions .mbtn{ min-width:110px; }
 
   /* ---------- inline text editor ---------- */
   .inline-edit{
@@ -1344,6 +1390,42 @@
         </div>
       </div>
     </div>
+
+    <div class="modal-backdrop" id="insertSourceBackdrop" hidden>
+      <div class="modal-box share-choice-box" role="dialog" aria-modal="true" aria-labelledby="insertSourceLabel">
+        <p id="insertSourceLabel">Insert image from:</p>
+        <div class="share-choice-options">
+          <button type="button" class="share-choice-opt" id="insertSourceCameraBtn">
+            <span class="share-choice-title">Take photo</span>
+            <span class="share-choice-sub">Opens the camera right here in the app — won't lose your place if the tablet is low on memory</span>
+          </button>
+          <button type="button" class="share-choice-opt" id="insertSourceFileBtn">
+            <span class="share-choice-title">Choose file</span>
+            <span class="share-choice-sub">An existing photo, PDF, or your device's own camera app</span>
+          </button>
+        </div>
+        <div class="modal-actions">
+          <button class="mbtn" id="insertSourceCancelBtn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="camera-backdrop" id="cameraBackdrop" hidden>
+      <div class="camera-stage">
+        <div class="camera-hint" id="cameraHint">Line up the shot, then tap the shutter</div>
+        <video id="cameraVideo" autoplay playsinline muted></video>
+        <canvas id="cameraCanvas" hidden></canvas>
+      </div>
+      <div class="camera-controls" id="cameraLiveControls">
+        <button type="button" class="camera-side-btn" id="cameraCancelBtn">Cancel</button>
+        <button type="button" class="camera-shutter-btn" id="cameraShutterBtn" aria-label="Take photo"></button>
+        <span class="camera-side-btn" style="visibility:hidden;">Cancel</span>
+      </div>
+      <div class="camera-review-actions" id="cameraReviewControls" hidden>
+        <button class="mbtn" id="cameraRetakeBtn">Retake</button>
+        <button class="mbtn mbtn-accent" id="cameraUseBtn">Use photo</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1358,7 +1440,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v36";
+  var APP_VERSION = "v37";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -8673,6 +8755,146 @@
     }
   }
 
+  /* ============================== in-page camera capture ============================== */
+  // Added in v37 (2026-09-19), reported directly by Andrew: even with v32's
+  // resume-on-boot/pre-picker-flush and v36's autosave tuning, "still
+  // crashes back to the main screen if trying to insert a photo using
+  // camera on my tablet". Root cause, confirmed by checking Chrome's own
+  // File System Access documentation: tapping "Insert image" and choosing
+  // "Camera" from Android's file-picker sheet launches the OS's native
+  // Camera app as a separate foreground activity, backgrounding this tab --
+  // and on a memory-constrained tablet, Android can and does simply KILL
+  // that backgrounded tab outright. When the camera hands control back,
+  // Android does a full fresh page load of the same URL, not a resume of
+  // the same JS state -- and critically, the FOLDER PERMISSION this app
+  // needs to keep saving is granted per browsing session, not persisted
+  // across a real reload like that on Android (Chrome's "persistent
+  // permissions" work is desktop-only; queryPermission() on Android comes
+  // back "prompt" after a reload like this, and requestPermission() cannot
+  // silently re-prompt without a user gesture the boot code doesn't have --
+  // see tryRestoreLastActiveWork() above). So no amount of autosave/resume
+  // engineering on THIS side can fix it: v32/v36 make sure no drawing is
+  // lost, but the app still has to land back on "choose your Projects
+  // folder" because there's no way to silently reacquire permission for it.
+  //
+  // The only real fix is to stop leaving the tab at all. This section adds
+  // a genuine in-page camera capture (getUserMedia + <video> + a canvas
+  // snapshot) as an alternative to the OS file/camera picker -- the whole
+  // capture happens without Chrome ever losing foreground focus, so there's
+  // nothing for Android to background or kill. "Insert image" now asks
+  // which source to use (skipped entirely, falling straight back to the
+  // exact v36 behaviour, on any browser/device without camera support at
+  // all -- e.g. desktop without a webcam permission prompt available, or an
+  // older browser). The existing OS file/camera picker stays available
+  // as "Choose file", since it's still the right tool for picking an
+  // EXISTING photo from the gallery, or a PDF.
+  var CAMERA_CAPTURE_SUPPORTED = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  var CAMERA_CAPTURE_MAX_DIM = 2400; // plenty for a reference photo dropped onto a plan; keeps the embedded base64 payload (and so every future autosave of this plan -- see v36) from ballooning with a full 12MP+ tablet camera image
+  var insertSourceBackdrop = document.getElementById("insertSourceBackdrop");
+  var insertSourceResolve = null;
+  function openInsertSourceChoice(){
+    insertSourceBackdrop.hidden = false;
+    return new Promise(function(resolve){ insertSourceResolve = resolve; });
+  }
+  function closeInsertSourceChoice(mode){
+    insertSourceBackdrop.hidden = true;
+    var resolve = insertSourceResolve; insertSourceResolve = null;
+    if (resolve) resolve(mode);
+  }
+  document.getElementById("insertSourceCameraBtn").addEventListener("click", function(){ closeInsertSourceChoice("camera"); });
+  document.getElementById("insertSourceFileBtn").addEventListener("click", function(){ closeInsertSourceChoice("file"); });
+  document.getElementById("insertSourceCancelBtn").addEventListener("click", function(){ closeInsertSourceChoice(null); });
+  insertSourceBackdrop.addEventListener("click", function(e){ if (e.target === insertSourceBackdrop) closeInsertSourceChoice(null); });
+
+  var cameraBackdrop = document.getElementById("cameraBackdrop");
+  var cameraVideo = document.getElementById("cameraVideo");
+  var cameraCanvas = document.getElementById("cameraCanvas");
+  var cameraLiveControls = document.getElementById("cameraLiveControls");
+  var cameraReviewControls = document.getElementById("cameraReviewControls");
+  var cameraShutterBtn = document.getElementById("cameraShutterBtn");
+  var cameraCancelBtn = document.getElementById("cameraCancelBtn");
+  var cameraRetakeBtn = document.getElementById("cameraRetakeBtn");
+  var cameraUseBtn = document.getElementById("cameraUseBtn");
+  var cameraStream = null;
+  var cameraResolve = null;
+  function stopCameraStream(){
+    if (cameraStream){
+      cameraStream.getTracks().forEach(function(t){ t.stop(); });
+      cameraStream = null;
+    }
+    cameraVideo.srcObject = null;
+  }
+  function closeCameraCapture(blob){
+    stopCameraStream();
+    cameraBackdrop.hidden = true;
+    cameraVideo.hidden = false;
+    cameraCanvas.hidden = true;
+    cameraLiveControls.hidden = false;
+    cameraReviewControls.hidden = true;
+    var resolve = cameraResolve; cameraResolve = null;
+    if (resolve) resolve(blob || null);
+  }
+  // Opens the in-page capture UI and resolves a JPEG Blob once the person
+  // taps "Use photo", or null if they cancel/it fails for any reason --
+  // callers treat null exactly like "cancelled the file picker" already
+  // does, so nothing downstream needs a separate error path for this.
+  function openCameraCapture(){
+    if (!CAMERA_CAPTURE_SUPPORTED) return Promise.resolve(null);
+    cameraBackdrop.hidden = false;
+    cameraVideo.hidden = false;
+    cameraCanvas.hidden = true;
+    cameraLiveControls.hidden = false;
+    cameraReviewControls.hidden = true;
+    cameraShutterBtn.disabled = false;
+    return navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false
+    }).then(function(stream){
+      cameraStream = stream;
+      cameraVideo.srcObject = stream;
+      return new Promise(function(resolve){ cameraResolve = resolve; });
+    }).catch(function(err){
+      console.error("Camera access failed:", err);
+      cameraBackdrop.hidden = true;
+      var msg = (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError"))
+        ? "Camera access was blocked — check the site's camera permission, or use “Choose file” instead."
+        : "Couldn't open the camera — use “Choose file” instead.";
+      showToast(msg);
+      return null;
+    });
+  }
+  cameraShutterBtn.addEventListener("click", function(){
+    var vw = cameraVideo.videoWidth, vh = cameraVideo.videoHeight;
+    if (!vw || !vh) return;
+    var scale = Math.min(1, CAMERA_CAPTURE_MAX_DIM / Math.max(vw, vh));
+    cameraCanvas.width = Math.round(vw * scale);
+    cameraCanvas.height = Math.round(vh * scale);
+    cameraCanvas.getContext("2d").drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
+    // Freeze on the still frame while reviewing -- stopping the live stream
+    // here (rather than only on final close) means a phone/tablet isn't
+    // holding an active camera sensor open a moment longer than it needs
+    // to, which matters on exactly the low-memory devices this feature
+    // exists for.
+    stopCameraStream();
+    cameraVideo.hidden = true;
+    cameraCanvas.hidden = false;
+    cameraLiveControls.hidden = true;
+    cameraReviewControls.hidden = false;
+  });
+  cameraRetakeBtn.addEventListener("click", function(){
+    cameraCanvas.hidden = true;
+    cameraVideo.hidden = false;
+    cameraLiveControls.hidden = false;
+    cameraReviewControls.hidden = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .then(function(stream){ cameraStream = stream; cameraVideo.srcObject = stream; })
+      .catch(function(){ closeCameraCapture(null); showToast("Couldn't reopen the camera — use “Choose file” instead."); });
+  });
+  cameraUseBtn.addEventListener("click", function(){
+    cameraCanvas.toBlob(function(blob){ closeCameraCapture(blob); }, "image/jpeg", 0.9);
+  });
+  cameraCancelBtn.addEventListener("click", function(){ closeCameraCapture(null); });
+
   /* ============================== insert a second image ============================== */
   // Distinct from Open above: this ADDS a photo as a new, independent
   // "image" object rather than replacing the main plan/photo -- so a second
@@ -8682,12 +8904,27 @@
   var insertImageInput = document.getElementById("insertImageInput");
   document.getElementById("insertImageBtn").addEventListener("click", function(){
     if (!state.imageW){ showToast("Open a plan or photo first."); return; }
-    // Flush whatever's currently drawn to disk BEFORE handing off to the
-    // OS's own file/camera picker -- see autosaveLevelPlanIfActive's own
-    // comment on why this now happens here too, not just after a photo
-    // comes back in.
-    autosaveLevelPlanIfActive();
-    insertImageInput.click();
+    if (!CAMERA_CAPTURE_SUPPORTED){
+      // No camera capability to offer at all (desktop without a webcam
+      // permission path, or an older browser) -- unchanged v36 behaviour.
+      autosaveLevelPlanIfActive();
+      insertImageInput.click();
+      return;
+    }
+    openInsertSourceChoice().then(function(mode){
+      if (mode === "file"){
+        // Flush whatever's currently drawn to disk BEFORE handing off to
+        // the OS's own file/camera picker -- see autosaveLevelPlanIfActive's
+        // own comment on why this now happens here too, not just after a
+        // photo comes back in. (The in-page camera path below never needs
+        // this: it never leaves this tab, so there's no OS hand-off moment
+        // for Android to interrupt in the first place.)
+        autosaveLevelPlanIfActive();
+        insertImageInput.click();
+      } else if (mode === "camera"){
+        openCameraCapture().then(function(blob){ if (blob) insertImageFile(blob); });
+      }
+    });
   });
   insertImageInput.addEventListener("change", function(){
     var f = insertImageInput.files && insertImageInput.files[0];
