@@ -650,7 +650,29 @@
 // flags (no real webcam in this environment); run_flush_before_picker.js
 // updated for the one extra click this adds in front of the existing
 // pre-picker flush.)
-var CACHE_NAME = "utzline-sitemeasure-cache-v37";
+//
+// (v38, 2026-09-19: two fixes, both reported directly by Andrew.
+// 1) RELIABILITY BUG FIX -- "i do get alot of 'brought that in, but couldnt
+// auto save.' empty write messages." Traced to verifiedHandleWrite()'s
+// single, immediate post-close file-size check -- on Android, a
+// Dropbox-synced folder is backed by a third-party Storage Access
+// Framework provider, and that provider's own document-metadata cache can
+// briefly still report a file's OLD size for a moment right after close()
+// resolves, especially for the multi-MB level-save payloads v36 found this
+// app now writes on every save. That's a transient read-side race, not a
+// failed write, but the old single-check code had no way to tell the two
+// apart. Fixed by retrying the size check a couple of times (250ms, then
+// 750ms) before actually giving up -- filters out the transient race while
+// still catching a genuinely failed/hollowed-out write (which stays wrong
+// on every retry). New regression test run_empty_write_retry.js proves
+// both halves via a new fake-filesystem test hook
+// (window.__setFlakyGetFileMissesForTest). 2) Header/project-gate wordmark
+// now colors "LINE" with the app's own accent (orange here, blue in the
+// Viewer) instead of one flat text color -- matching UTZLINE ITP's own
+// header styling and every app's own icon-*.png artwork, per Andrew's
+// note: "i want all logos to look like this (UTZ text colours to match the
+// logo like the itp one does)".)
+var CACHE_NAME = "utzline-sitemeasure-cache-v38";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v37">
+<link rel="manifest" href="./manifest.json?v=v38">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v37">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v37">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v38">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v38">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -148,6 +148,14 @@
     height:28px; width:28px;
     flex:none;
   }
+  /* Andrew (2026-09-19): "I want all logos to look like this (UTZ text
+     colours to match the logo like the itp one does)" -- ITP's own header
+     already splits its wordmark into "UTZ" + an accent-colored "LINE" (see
+     redline-itp-pwa/index.html's ".brand-text b{color:var(--accent)}"),
+     matching the same UTZ/LINE color split baked into every app's own
+     icon-*.png artwork. This app's header/gate title used to be one flat
+     color with no split at all -- brought into line with both of those. */
+  .brand b, .project-gate-brand h1 b{ color:var(--accent); font-weight:inherit; }
   .brand small{
     display:block;
     font-family:'IBM Plex Mono',monospace;
@@ -902,7 +910,7 @@
          huge monitors, where there's enough room for that to actually help
          instead of just being a coincidence of window width. -->
     <div class="toolbar-row" id="toolbarRowFile">
-    <div class="brand"><img class="brand-icon" id="brandIcon" src="" alt="" aria-hidden="true"><span><span id="brandName">UTZLINE Site Measure</span><small id="brandSubtitle">plan markup</small></span></div>
+    <div class="brand"><img class="brand-icon" id="brandIcon" src="" alt="" aria-hidden="true"><span><span id="brandName">UTZ<b>LINE</b> Site Measure</span><small id="brandSubtitle">plan markup</small></span></div>
     <div class="sep"></div>
 
     <!-- Requested directly by Andrew, 2026-09-18: "we need a back button on
@@ -1169,7 +1177,7 @@
 
     <div class="project-gate" id="projectGate" hidden>
       <div class="project-gate-box">
-        <div class="project-gate-brand"><img id="projectGateIcon" src="" alt="" aria-hidden="true"><h1 id="projectGateTitle">UTZLINE Site Measure</h1></div>
+        <div class="project-gate-brand"><img id="projectGateIcon" src="" alt="" aria-hidden="true"><h1 id="projectGateTitle">UTZ<b>LINE</b> Site Measure</h1></div>
 
         <!-- "My projects" (Viewer only), added 2026-09-17 at Andrew's request
              ("the open files on the viewer needs the ability to look in
@@ -1440,7 +1448,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v37";
+  var APP_VERSION = "v38";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -1604,13 +1612,43 @@
   // written file's size back against the blob's own size catches that
   // silently-empty case so the caller can react (fall back to a plain
   // download) instead of reporting a false "saved".
+  // Retry schedule for the immediate post-close size check below -- added
+  // 2026-09-19 after Andrew reported getting "a lot" of "brought that in,
+  // but couldn't auto-save (empty_write)" toasts. Root cause: close() on a
+  // FileSystemWritableFileStream is SUPPOSED to mean the write is fully
+  // flushed before it resolves, but on Android the folder is often backed
+  // by a third-party Storage Access Framework provider (Dropbox's own SAF
+  // integration, in Andrew's case) rather than a real local filesystem --
+  // and a provider's own document-metadata cache can briefly still report
+  // the FILE'S OLD size for a moment after close() resolves, especially for
+  // the multi-MB payloads v36 found this app now writes on every save (a
+  // level's own project JSON always embeds the current base plan's full
+  // image data). That's a transient read-side staleness, not a real failed
+  // write -- the original single immediate check couldn't tell the two
+  // apart, so it was almost certainly flagging real, successful writes as
+  // "empty_write" purely because it happened to re-read the file too soon
+  // afterward. Retrying a couple of times with a short delay before
+  // actually giving up filters out exactly that race while still catching
+  // a genuinely failed/hollowed-out write (which stays wrong on every
+  // retry, not just the first read) -- and the existing delayed 3-second
+  // re-check further below (a DIFFERENT, later-firing safety net for a
+  // sync client rewriting the file well after this function has already
+  // returned "saved") is completely unchanged by this.
+  var EMPTY_WRITE_RETRY_DELAYS_MS = [250, 750];
+  function verifyWrittenSize(handle, expectedSize, attempt){
+    return handle.getFile().then(function(f){
+      if (f && f.size === expectedSize) return f;
+      if (attempt >= EMPTY_WRITE_RETRY_DELAYS_MS.length) return Promise.reject({ code: "empty_write" });
+      return new Promise(function(resolve){ setTimeout(resolve, EMPTY_WRITE_RETRY_DELAYS_MS[attempt]); })
+        .then(function(){ return verifyWrittenSize(handle, expectedSize, attempt + 1); });
+    });
+  }
   function verifiedHandleWrite(handle, blob){
     return handle.createWritable().then(function(w){
       return w.write(blob).then(function(){ return w.close(); });
     }).then(function(){
-      return handle.getFile();
+      return verifyWrittenSize(handle, blob.size, 0);
     }).then(function(f){
-      if (!f || f.size !== blob.size) return Promise.reject({ code: "empty_write" });
       // A cloud-sync client watching this folder (Dropbox, OneDrive, etc)
       // can still step in and rewrite or hollow out the file a moment
       // AFTER this check already passed -- outside anything the browser
@@ -10332,7 +10370,12 @@
   function applyViewOnlyModeUI(){
     document.body.classList.toggle("viewer-mode", VIEW_ONLY_MODE);
     var brandNameEl = document.getElementById("brandName");
-    if (brandNameEl) brandNameEl.textContent = VIEW_ONLY_MODE ? "UTZLINE Viewer" : "UTZLINE Site Measure";
+    // innerHTML, not textContent (2026-09-19) -- splits "UTZ"/"LINE" into
+    // separate elements so the "LINE" half can be accent-colored via the
+    // new ".brand b" CSS rule above, matching ITP's own header wordmark and
+    // every app's own icon-*.png artwork. document.title stays plain text
+    // (an OS tab/window title can't render HTML anyway).
+    if (brandNameEl) brandNameEl.innerHTML = VIEW_ONLY_MODE ? "UTZ<b>LINE</b> Viewer" : "UTZ<b>LINE</b> Site Measure";
     document.title = VIEW_ONLY_MODE ? "UTZLINE Viewer" : document.title;
     // The project-gate's own big title (separate element from the small
     // header brand name above) -- missed when the Viewer first shipped
@@ -10341,7 +10384,7 @@
     // (v21) a leftover "UTZLINE Site Measure" title right under a blue
     // logo actually reads as wrong. Fixed alongside it.
     var projectGateTitleEl = document.getElementById("projectGateTitle");
-    if (projectGateTitleEl) projectGateTitleEl.textContent = VIEW_ONLY_MODE ? "UTZLINE Viewer" : "UTZLINE Site Measure";
+    if (projectGateTitleEl) projectGateTitleEl.innerHTML = VIEW_ONLY_MODE ? "UTZ<b>LINE</b> Viewer" : "UTZ<b>LINE</b> Site Measure";
     // Blue recolor of the same mark (same hue-rotation used for the
     // Viewer's own installed icon set, see redline-viewer-pwa/icons) in
     // place of the orange original -- alongside the accent-color swap the
