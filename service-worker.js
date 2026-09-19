@@ -627,7 +627,7 @@
 // headless test). Each sanity-checked via a temporary revert-and-restore
 // cycle. The full pre-existing test suite was re-run afterward with zero
 // regressions.
-var CACHE_NAME = "utzline-sitemeasure-cache-v35";
+var CACHE_NAME = "utzline-sitemeasure-cache-v36";
 var ICON_VERSION = CACHE_NAME.replace("utzline-sitemeasure-cache-", "");
 
 var PRECACHE_URLS = [

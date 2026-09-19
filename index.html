@@ -3,10 +3,10 @@
 <meta charset="utf-8">
 <title>UTZLINE Site Measure</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="./manifest.json?v=v35">
+<link rel="manifest" href="./manifest.json?v=v36">
 <meta name="theme-color" content="#1b2224">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v35">
-<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v35">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=v36">
+<link rel="apple-touch-icon" href="./icons/icon-192.png?v=v36">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1358,7 +1358,7 @@
   // change, at the same time as service-worker.js's CACHE_NAME and the
   // delivered zip's filename, so all three always agree on the same number
   // instead of drifting out of sync with each other.
-  var APP_VERSION = "v35";
+  var APP_VERSION = "v36";
   // Read-only "viewer" mode -- a distinct standalone build (own manifest,
   // own icon/name -- see the viewer PWA's start_url) for the drafting
   // office to browse projects/levels/rooms without any ability to edit,
@@ -3135,17 +3135,63 @@
   //      next tick, a minute later at most -- once the gesture ends,
   //      unsavedSinceLastSave is still true and the very next tick (or the
   //      next real trigger -- Save, leaving, a picker) catches it.
-  var PERIODIC_LEVEL_AUTOSAVE_INTERVAL_MS = 60 * 1000; // 60s: frequent enough
-  // to matter for the low-memory/crash scenario this exists for, spaced out
-  // enough that the resulting file-sync traffic on a Dropbox-synced tier
-  // stays negligible (a single small JSON overwrite once a minute, only
-  // when something has actually changed).
+  //
+  // MITIGATION (2026-09-19, reported by Andrew: periodic autosave "smashing
+  // the cache and causing crashing" on a brand-new 4GB-RAM Android tablet):
+  // this comment block's own claim above -- "a single small JSON overwrite"
+  // -- turned out to be wrong for Andrew's REAL plans specifically.
+  // saveActiveLevelFile()/projectPayload() write ONE combined file that
+  // always embeds the plan's own base photo (imageDataURL, or every
+  // imageTiles entry) in full, every single time, because image and
+  // annotation data have never been split into separate files. For an
+  // ordinary small photo that's genuinely cheap; for a real large
+  // architectural scan (Andrew's normal case -- e.g. the Mount Barker
+  // Hospital fitout scans) that base64 string alone can run into several
+  // megabytes, so a tick every 60 seconds during ordinary editing meant
+  // repeatedly re-serializing and rewriting several MB of string data just
+  // because a small annotation changed elsewhere on the same plan -- real,
+  // repeated large-allocation churn, exactly the kind of pressure that can
+  // crash a memory-constrained tablet's tab over a long session even with
+  // plenty of disk space free. Not a "small JSON overwrite" for these
+  // plans at all.
+  //
+  // Proper fix (splitting the image bytes from the frequently-changing
+  // object/annotation data into their own files, so a periodic tick only
+  // ever touches the small part) is a real file-format change touching
+  // Site Measure, the Viewer, AND UTZLINE ITP's own reader, plus back-
+  // compat with every already-saved project -- deliberately not rushed in
+  // here. Immediate, low-risk mitigation instead, while that's designed
+  // properly: (1) the interval is lengthened threefold (60s -> 3 minutes),
+  // cutting write frequency for every plan, not just large ones; (2) the
+  // periodic tick now skips its write ENTIRELY once the plan's own base
+  // image payload crosses a size threshold -- a large plan falls back to
+  // only the existing TRIGGER-based autosaves (before a file/camera
+  // picker, after an import, on navigating away), none of which repeat
+  // every few minutes regardless of plan size, so none of them carry this
+  // same repeated-large-write risk. A large plan does lose the "protect a
+  // long stretch of continuous editing with no trigger" safety net this
+  // periodic tick was built for in v33 -- an explicit Save is still the
+  // real safety net for that case until the proper split-file fix lands.
+  var PERIODIC_LEVEL_AUTOSAVE_INTERVAL_MS = 3 * 60 * 1000; // was 60s
+  var PERIODIC_AUTOSAVE_MAX_IMAGE_CHARS = 4 * 1024 * 1024; // ~4M base64 chars (~3MB raw binary) -- above this, skip the periodic tick and rely on the trigger-based autosaves instead
+  function currentBaseImagePayloadChars(){
+    if (state.imageTiles && state.imageTiles.length){
+      var total = 0;
+      for (var i = 0; i < state.imageTiles.length; i++){
+        var t = state.imageTiles[i];
+        total += (t && t.dataUrl && t.dataUrl.length) || 0;
+      }
+      return total;
+    }
+    return (state.imageDataURL && state.imageDataURL.length) || 0;
+  }
   function periodicLevelAutosaveTick(){
     if (VIEW_ONLY_MODE) return; // nothing can be dirty; also the real
     // folder-write chokepoint (saveActiveLevelFile) already refuses this,
     // but there's no reason to even try on every tick in the Viewer.
     if (!unsavedSinceLastSave) return;
     if (dragMode || state.drawing || editingId) return; // mid-gesture -- try again next tick
+    if (currentBaseImagePayloadChars() > PERIODIC_AUTOSAVE_MAX_IMAGE_CHARS) return; // large plan -- see mitigation comment above
     autosaveLevelPlanIfActive();
   }
   setInterval(periodicLevelAutosaveTick, PERIODIC_LEVEL_AUTOSAVE_INTERVAL_MS);
