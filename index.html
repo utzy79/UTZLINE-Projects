@@ -10,8 +10,14 @@
   utzline-projects-v1-plan.md (published to the project) for the full
   rationale and build sequence this follows.
 
-  It reads and writes the SAME Projects folder structure every other app in
-  the family already uses:
+  FOLDER STRUCTURE (as of the 2026-09-22 Release 3 "full flat structure"
+  cutover -- see utzline-overlay-current-vs-target.md section 9 for the
+  full history and Andrew's sign-off). Levels and Rooms are DATA now, not
+  folders -- a project that predates this cutover still has its old real
+  Level/Room folders on disk (never deleted or renamed), and the first
+  time it's opened post-cutover, migrateLegacyLevelsIfNeeded reads them
+  once into levels.json/base-plan/ and leaves the originals alone, frozen,
+  as read-only legacy data:
 
     <Projects root>/
       company-logo.png            <- single company-wide logo (Projects owns
@@ -23,36 +29,36 @@
         project-meta.json         <- {no, name, contractor} today; this app
                                       extends it with client/builder/site
                                       address/project manager fields
-        <Level>/
-          saves/<name>.utzline.json   <- the level's own floorplan + objects,
-                                          written in EXACTLY the shape
-                                          Site Measure/Viewer already read
-                                          (see projectPayload() in
-                                          source.html) -- no format change
-          pdfs/, backup/
-          <Room>/
-            saves/, pdfs/, backup/    <- same shape, one folder deeper
-        itp/                     <- UTZLINE Install ITP's own project-wide
-                                     folder, a sibling of level folders
-        itp-manufacture/         <- UTZLINE Manufacture ITP's own, likewise
+        joinery-items.json        <- project-wide {joineryId, description,
+                                      level, room, status} records
+        levels.json               <- NEW: the record of what Levels/Rooms/
+                                      roomlink markers exist, replacing
+                                      folder listing entirely
+        base-plan/<Level>/manifest.json  <- NEW: one shared, versioned
+                                      floorplan photo per Level (never per
+                                      Room)
+        Project Saves/, PDF Files/, Backups/  <- app-grouped, project-wide
+                                      (Site Measure's own overlay saves,
+                                      ITP, Progress Viewer) -- Projects
+                                      itself doesn't write into these
+        <Level>/, <Room>/          <- LEGACY ONLY: real folders from before
+                                      this cutover (saves/<name>.utzline.json
+                                      + pdfs/, backup/), read once by
+                                      migrateLegacyLevelsIfNeeded and then
+                                      left alone -- never written to again
+        itp/, itp-manufacture/     <- LEGACY ONLY: the two ITP apps' own
+                                      pre-cutover project-wide folders
 
   v1 was step 1 of the build sequence: the Projects-root folder-picker/
   reconnect flow, and READ-ONLY Project -> Level -> Room browsing, all
-  lifted from Site Measure's own
-  detectFolderShape/listSubdirNames/listExistingProjects/listExistingLevels/
-  listExistingRooms logic (same functions, same behaviour, copied rather
-  than re-derived so this app's shape-detection can never quietly drift
-  from what Site Measure/Viewer/the ITP apps already expect).
-
-  v2 (this file) adds step 2: Create Project (same numbered-suffix dedupe
-  as Site Measure's own createNewProject), a Project info dialog (Project
-  name/number/Client/Builder/Site address/Project manager -- extending
-  project-meta.json with three new, additive keys while keeping Site
-  Measure's existing no/name/contractor keys untouched), and the single
-  company-wide logo setting (company-logo.png, a FILE at the Projects
-  root). Create Level/Create Room, floorplan import, joinery markers/
-  items/Register/Item Pages, and Status Overview are later steps in the
-  same build sequence, each its own version bump.
+  lifted from Site Measure's own detectFolderShape/listSubdirNames/
+  listExistingProjects logic (copied rather than re-derived so this app's
+  shape-detection can never quietly drift from what Site Measure/Viewer/
+  the ITP apps already expect). v2 added step 2: Create Project, a Project
+  info dialog, and the company-wide logo setting. Release 3 (this pass)
+  replaces Level/Room folders with levels.json + base-plan/ for THIS app;
+  Site Measure/Viewer/both ITP apps get their own matching changes as
+  separate, coordinated pieces of the same release.
 -->
 <html lang="en">
 <head>
@@ -480,13 +486,7 @@
     <div class="backrow"><button class="btn secondary" id="backToRoomsBtn">&larr; Rooms</button></div>
     <h1 id="roomDetailLabel">Room</h1>
     <div class="card">
-      <div class="status-line" id="roomPlanStatus"></div>
-      <div class="plan-preview" id="roomPlanPreview" hidden></div>
-      <button class="btn secondary" id="roomImportPlanBtn" style="margin-top:12px;">Import floor plan</button>
-      <input type="file" id="roomPlanFileInput" accept="image/*,.pdf,application/pdf" hidden>
-    </div>
-    <div class="card">
-      <p class="sub" style="margin:0;">Joinery markers are placed from the level's own plan (open the level, then "Place joinery items"), and every joinery item has its own page (see the Joinery Register or Status Overview, from the level list).</p>
+      <p class="sub" style="margin:0;">Rooms share their level's own floor plan -- there's no separate photo for this room. Joinery markers are placed from the level's own plan (open the level, then "Place joinery items"), and every joinery item has its own page (see the Joinery Register or Status Overview, from the level list).</p>
     </div>
   </section>
 
@@ -745,11 +745,15 @@
   }
 
   /* ============================== folder shape / listing ==============================
-     Lifted essentially verbatim from redline-projects/source.html so this
-     app's own idea of "what's a project / level / room" can never quietly
-     drift from what Site Measure, Viewer, Install ITP and Manufacture ITP
-     already expect. See that file's own comments on each of these for the
-     full reasoning; kept short here to avoid duplicating it at length. */
+     A PROJECT is still a real folder (still discovered by listing the
+     Projects root). Levels and Rooms are NOT folders any more, as of the
+     2026-09-22 "full flat structure" cutover Andrew confirmed directly
+     (utzline-overlay-current-vs-target.md section 9) -- what Levels/Rooms
+     exist is now data (levels.json), the same way it always should have
+     been rather than the folder listing itself being the only record.
+     `listSubdirNames` is kept because it's still exactly how the Projects
+     ROOT's own project list, and each PROJECT's own top-level listing (for
+     shape detection), are discovered -- both of those really are folders. */
   function listSubdirNames(dirHandle){
     if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
     var names = [];
@@ -766,12 +770,6 @@
       return list;
     });
   }
-  function hasReservedWorkSubfolders(names){
-    return names.indexOf("saves") !== -1 && names.indexOf("pdfs") !== -1 && names.indexOf("backup") !== -1;
-  }
-  function isLevelShaped(dirHandle){
-    return listSubdirNames(dirHandle).then(hasReservedWorkSubfolders);
-  }
   function anySubfolderMatches(dirHandle, names, predicate, i){
     i = i || 0;
     if (i >= names.length) return Promise.resolve(false);
@@ -782,36 +780,133 @@
       return anySubfolderMatches(dirHandle, names, predicate, i + 1);
     });
   }
+  // A project folder is recognised by having ANY ONE of its three
+  // project-wide files -- project-meta.json (written the moment a project
+  // is created, before it has a single Level), joinery-items.json, or
+  // levels.json. Replaces the old "does a child folder have saves/pdfs/
+  // backup" test, which stops meaning anything once Levels/Rooms aren't
+  // folders. A LEGACY project (real Level folders, created before this
+  // cutover) still has project-meta.json -- Projects always wrote that on
+  // creation -- so it's still detected correctly and still migrates
+  // (migrateLegacyLevelsIfNeeded below) the first time it's opened.
+  function isProjectShaped(dirHandle){
+    return dirHandle.getFileHandle("project-meta.json").then(function(){ return true; }, function(){
+      return dirHandle.getFileHandle("joinery-items.json").then(function(){ return true; }, function(){
+        return dirHandle.getFileHandle("levels.json").then(function(){ return true; }, function(){ return false; });
+      });
+    });
+  }
   function detectFolderShape(dirHandle){
-    return listSubdirNames(dirHandle).then(function(names){
-      if (hasReservedWorkSubfolders(names)) return "level";
-      if (!names.length) return "empty";
-      return anySubfolderMatches(dirHandle, names, isLevelShaped).then(function(hasLevelChild){
-        if (hasLevelChild) return "project";
-        return anySubfolderMatches(dirHandle, names, function(childHandle){
-          return listSubdirNames(childHandle).then(function(grandNames){
-            if (!grandNames.length) return false;
-            return anySubfolderMatches(childHandle, grandNames, isLevelShaped);
-          });
-        }).then(function(hasProjectChild){
+    return isProjectShaped(dirHandle).then(function(isProject){
+      if (isProject) return "project";
+      return listSubdirNames(dirHandle).then(function(names){
+        if (!names.length) return "empty";
+        return anySubfolderMatches(dirHandle, names, isProjectShaped).then(function(hasProjectChild){
           return hasProjectChild ? "root" : "unknown";
         });
       });
     });
   }
   function listExistingProjects(rootHandle){ return listSubdirNames(rootHandle); }
-  // "itp"/"itp-manufacture" are the two ITP apps' own project-wide folders --
-  // excluded the same way Site Measure/Install ITP/Manufacture ITP already
-  // exclude each other's, so neither ever shows up here mislabeled as a
-  // level someone could open.
-  function listExistingLevels(projectHandle){
+
+  /* ---- levels.json: the data record of what Levels/Rooms/markers exist,
+     replacing folder listing entirely (2026-09-22 cutover). Shape:
+       [ { name, rooms: [ { name } ], markers: [ <roomlink object>, ... ] } ]
+     `markers` holds exactly the roomlink object shape Site Measure/Viewer
+     already understand ({id, type:"roomlink", x, y, r, roomName,
+     joineryCode, color, label}) -- this used to live inside a Level's own
+     saves/<Level>.utzline.json objects array; it moves here because that
+     file no longer exists. See utzline-overlay-current-vs-target.md
+     section 9's approved note on this placement. */
+  function levelsFilename(){ return "levels.json"; }
+  // Returns null (not []) when no levels.json file exists yet -- callers
+  // that care about migration (migrateLegacyLevelsIfNeeded) rely on being
+  // able to tell "never written" apart from "written, currently empty".
+  function readLevelsRaw(projectHandle){
+    if (!projectHandle) return Promise.resolve(null);
+    return projectHandle.getFileHandle(levelsFilename(), { create: false }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
+    }, function(){ return null; });
+  }
+  function writeLevelsFile(projectHandle, levels){
+    return projectHandle.getFileHandle(levelsFilename(), { create: true }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(w){
+      return w.write(JSON.stringify(levels)).then(function(){ return w.close(); });
+    });
+  }
+  function findLevelEntry(levels, name){
+    var lower = String(name || "").toLowerCase();
+    for (var i = 0; i < levels.length; i++){
+      if (levels[i].name.toLowerCase() === lower) return levels[i];
+    }
+    return null;
+  }
+  // One-time, READ-triggered migration for a project created before this
+  // cutover: real Level folders (each shaped like a room -- saves/pdfs/
+  // backup) with no levels.json at all. Reads those folder names, each
+  // level's Room folder names, and each level's existing roomlink markers
+  // (embedded in its old saves/<Level>.utzline.json) into a brand-new
+  // levels.json -- written ONCE, the first time this runs for a given
+  // project. Also migrates that level's embedded floorplan image into
+  // base-plan/<Level>/ version 1 (migrateLevelBasePlanIfAny). Never
+  // deletes, renames, or overwrites anything already on disk -- purely
+  // additive, per utzline-overlay-current-vs-target.md section 7's agreed
+  // strategy. If levels.json already exists, this is a no-op passthrough
+  // (covers both an already-migrated project and one born flat).
+  function legacyLevelFolderNames(projectHandle){
     return listSubdirNames(projectHandle).then(function(names){
       return names.filter(function(n){ return n !== "itp" && n !== "itp-manufacture"; });
     });
   }
-  function listExistingRooms(levelHandle){
-    return listSubdirNames(levelHandle).then(function(names){
-      return names.filter(function(n){ return n !== "saves" && n !== "pdfs" && n !== "backup"; });
+  function migrateLegacyLevelsIfNeeded(projectHandle){
+    return readLevelsRaw(projectHandle).then(function(levels){
+      if (levels !== null) return levels;
+      return legacyLevelFolderNames(projectHandle).then(function(levelNames){
+        if (!levelNames.length) return writeLevelsFile(projectHandle, []).then(function(){ return []; });
+        return levelNames.reduce(function(chain, levelName){
+          return chain.then(function(acc){
+            return projectHandle.getDirectoryHandle(levelName).then(function(levelDirH){
+              return listSubdirNames(levelDirH).then(function(childNames){
+                var roomNames = childNames.filter(function(n){ return n !== "saves" && n !== "pdfs" && n !== "backup"; });
+                return readSavedPlanRaw(levelDirH, levelName).then(function(saved){
+                  var markers = (saved && Array.isArray(saved.objects)) ? saved.objects.filter(function(o){ return o && o.type === "roomlink"; }) : [];
+                  return migrateLevelBasePlanIfAny(projectHandle, levelName, saved).then(function(){
+                    acc.push({ name: levelName, rooms: roomNames.map(function(r){ return { name: r }; }), markers: markers });
+                    return acc;
+                  });
+                });
+              });
+            }).catch(function(err){
+              // One bad level shouldn't lose every other level in this
+              // project's migration -- keep it as a bare, room/marker-less
+              // entry (still openable, still browsable) rather than
+              // failing the whole migration.
+              console.error("Migrating level to levels.json failed, keeping a bare entry:", levelName, err);
+              acc.push({ name: levelName, rooms: [], markers: [] });
+              return acc;
+            });
+          });
+        }, Promise.resolve([])).then(function(built){
+          return writeLevelsFile(projectHandle, built).then(function(){ return built; });
+        });
+      });
+    });
+  }
+  function listExistingLevels(projectHandle){
+    return migrateLegacyLevelsIfNeeded(projectHandle).then(function(levels){
+      return levels.map(function(l){ return l.name; }).sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+    });
+  }
+  function listExistingRoomsInLevel(projectHandle, levelName){
+    return migrateLegacyLevelsIfNeeded(projectHandle).then(function(levels){
+      var entry = findLevelEntry(levels, levelName);
+      var names = entry ? entry.rooms.map(function(r){ return r.name; }) : [];
+      return names.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
     });
   }
   function sanitizeFileBase(name){
@@ -823,49 +918,72 @@
   }
   function projectSaveFilename(name){ return sanitizeFileBase(name) + ".utzline.json"; }
 
-  // Same as Site Measure's own ensureWorkFolders: resolves (creating if
-  // missing) a level/room's three reserved subfolders. Called every time a
-  // level/room is opened here -- browsed to OR just created -- exactly like
-  // Site Measure's own openLevelFromHandle/openRoom already do, since this
-  // app is never in a read-only mode the way the Viewer is.
-  function ensureWorkFolders(dirHandle){
-    return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
-      return dirHandle.getDirectoryHandle("pdfs", { create: true }).then(function(pdfsH){
-        return dirHandle.getDirectoryHandle("backup", { create: true }).then(function(backupH){
-          return { savesHandle: savesH, pdfsHandle: pdfsH, backupsHandle: backupH };
-        });
-      });
+  /* ---- base-plan/<LEVEL>/: one shared, versioned floorplan photo per
+     Level (never per Room -- Andrew confirmed this directly, overriding
+     this app's own earlier per-Room recommendation, 2026-09-22), replacing
+     the old per-folder saves/<name>.utzline.json floorplan file entirely.
+     manifest.json shape: { versions: [ {version, createdAt, imageDataURL,
+     imageTiles, imageW, imageH}, ... ] } -- images stay embedded as before
+     (base64), just relocated; converting them to real binary files is a
+     later-pass idea, not part of this cutover. Only the LATEST version is
+     read for normal display; older versions are kept for history/undo,
+     never pruned automatically. */
+  function basePlanManifestFilename(){ return "manifest.json"; }
+  function basePlanDirName(levelName){ return sanitizeFileBase(levelName); }
+  function getBasePlanLevelDir(projectHandle, levelName, create){
+    return projectHandle.getDirectoryHandle("base-plan", { create: !!create }).then(function(baseH){
+      return baseH.getDirectoryHandle(basePlanDirName(levelName), { create: !!create });
     });
   }
-
-  // Whether a level/room's own folder already has a saved floorplan. A
-  // folder whose "saves" subfolder doesn't even exist yet resolves to "no
-  // plan", same as one that has "saves" but no save file inside it yet.
-  function workFolderHasPlan(dirHandle, name){
-    if (!dirHandle) return Promise.resolve(false);
-    return dirHandle.getDirectoryHandle("saves", { create: false }).then(function(savesH){
-      return savesH.getFileHandle(projectSaveFilename(name)).then(function(){ return true; }, function(){ return false; });
-    }, function(){ return false; });
-  }
-  // Reads back an existing floorplan save file (written by this app or by
-  // Site Measure -- same file, same shape) so the static preview can show
-  // it immediately on opening a level/room that already has one, not only
-  // right after a fresh import.
-  function readFloorplan(dirHandle, name){
-    if (!dirHandle) return Promise.resolve(null);
-    return dirHandle.getDirectoryHandle("saves", { create: false }).then(function(savesH){
-      return savesH.getFileHandle(projectSaveFilename(name));
+  // Reads a Level's current (latest) shared floorplan photo, or null if
+  // this Level has never had one imported.
+  function readBasePlan(projectHandle, levelName){
+    if (!projectHandle) return Promise.resolve(null);
+    return getBasePlanLevelDir(projectHandle, levelName, false).then(function(dirH){
+      return dirH.getFileHandle(basePlanManifestFilename());
     }).then(function(fh){
       return fh.getFile();
     }).then(function(file){
       return file.text();
     }).then(function(text){
       try{
-        var saved = JSON.parse(text);
-        if (!saved || !(saved.utzlineProject || saved.redlineProject)) return null;
-        return { imageDataURL: saved.imageDataURL || null, imageTiles: saved.imageTiles || null, imageW: saved.imageW || 0, imageH: saved.imageH || 0 };
+        var manifest = JSON.parse(text);
+        var versions = (manifest && Array.isArray(manifest.versions)) ? manifest.versions : [];
+        if (!versions.length) return null;
+        var latest = versions[versions.length - 1];
+        return { imageDataURL: latest.imageDataURL || null, imageTiles: latest.imageTiles || null, imageW: latest.imageW || 0, imageH: latest.imageH || 0 };
       }catch(e){ return null; }
     }, function(){ return null; });
+  }
+  // Appends a new version to the Level's base-plan manifest (creating the
+  // manifest, and base-plan/<Level>/, if this is the first import for that
+  // Level). Never overwrites or drops earlier versions.
+  function writeBasePlan(projectHandle, levelName, imageDataURL, imageW, imageH, imageTiles){
+    return getBasePlanLevelDir(projectHandle, levelName, true).then(function(dirH){
+      return dirH.getFileHandle(basePlanManifestFilename(), { create: true }).then(function(fh){
+        return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
+          try{ var parsed = JSON.parse(text); return (parsed && Array.isArray(parsed.versions)) ? parsed : { versions: [] }; }catch(e){ return { versions: [] }; }
+        }, function(){ return { versions: [] }; }).then(function(manifest){
+          manifest.versions.push({ version: manifest.versions.length + 1, createdAt: new Date().toISOString(), imageDataURL: imageDataURL || null, imageTiles: imageTiles || null, imageW: imageW || 0, imageH: imageH || 0 });
+          return fh.createWritable().then(function(w){
+            return w.write(JSON.stringify(manifest)).then(function(){ return w.close(); });
+          });
+        });
+      });
+    });
+  }
+  // Migration helper: a legacy Level's old saves/<Level>.utzline.json
+  // (already read into `saved` by the caller via readSavedPlanRaw) may
+  // carry an embedded floorplan image -- if so, seed it as base-plan/
+  // <Level>/ version 1 so the photo isn't lost when folders go away. A
+  // Level with no embedded image, or one that already has a base-plan
+  // manifest (re-running migration is a no-op), is left untouched.
+  function migrateLevelBasePlanIfAny(projectHandle, levelName, saved){
+    if (!saved || !saved.imageDataURL) return Promise.resolve();
+    return readBasePlan(projectHandle, levelName).then(function(existing){
+      if (existing) return; // already migrated (or already re-imported fresh) -- don't duplicate
+      return writeBasePlan(projectHandle, levelName, saved.imageDataURL, saved.imageW, saved.imageH, saved.imageTiles);
+    });
   }
 
   // Project metadata -- {no, name, contractor} today (Site Measure's
@@ -1458,36 +1576,6 @@
       snapToGrid: false, hvSnap: false
     };
   }
-  // Writes the level/room's own save file in EXACTLY the shape Site
-  // Measure/Viewer already read (projectPayload() in source.html) -- no
-  // format change. bareName is the level/room's own folder name (the save
-  // FILENAME is sanitizeFileBase(bareName) + ".utzline.json"); fullFileBase
-  // is the "<Project>_<Level>[_<Room>]" identity string that goes INSIDE
-  // the payload's own fileBase field -- the two are deliberately different
-  // strings, same distinction Site Measure's own openLevelFromHandle/
-  // openRoom draw. Objects always start empty: importing/replacing a
-  // floorplan is a Projects responsibility; annotating it is Site
-  // Measure's, later.
-  function writeFloorplanSaveFile(dirHandle, bareName, fullFileBase, imageDataURL, imageW, imageH, imageTiles){
-    return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
-      var payload = JSON.stringify({
-        utzlineProject: 1,
-        imageDataURL: imageTiles ? null : imageDataURL,
-        imageW: imageW,
-        imageH: imageH,
-        imageTiles: imageTiles || null,
-        fileBase: fullFileBase,
-        objects: [],
-        style: defaultStyleObject(),
-        savedBy: ""
-      });
-      return savesH.getFileHandle(projectSaveFilename(bareName), { create: true }).then(function(fh){
-        return fh.createWritable();
-      }).then(function(w){
-        return w.write(payload).then(function(){ return w.close(); });
-      });
-    });
-  }
   // Static, non-interactive preview -- confirms an import (especially a
   // tiled one) actually landed correctly. The real pan/zoom/marker-drop
   // canvas is a later build-sequence step.
@@ -1534,12 +1622,15 @@
     });
   }
 
+  // One shared floor plan photo per LEVEL (never per Room, per Andrew's
+  // 2026-09-22 confirmation) -- stored in base-plan/<Level>/, keyed off
+  // activeProjectHandle + activeLevelName, no folder handle of its own.
   var levelImportPlanBtn = document.getElementById("levelImportPlanBtn");
   var levelPlanFileInput = document.getElementById("levelPlanFileInput");
   var levelPlanPreview = document.getElementById("levelPlanPreview");
   levelImportPlanBtn.addEventListener("click", function(){
-    workFolderHasPlan(activeLevelHandle, activeLevelName).then(function(hasPlan){
-      if (!hasPlan){ levelPlanFileInput.click(); return; }
+    readBasePlan(activeProjectHandle, activeLevelName).then(function(plan){
+      if (!plan){ levelPlanFileInput.click(); return; }
       showConfirmDialog("Replace this level's floor plan? This won't affect any rooms.").then(function(ok){
         if (ok) levelPlanFileInput.click();
       });
@@ -1550,8 +1641,7 @@
     levelPlanFileInput.value = "";
     if (!file) return;
     importFloorplanFromFile(file).then(function(res){
-      var fullFileBase = sanitizeFileBase(activeProjectName + "_" + activeLevelName);
-      return writeFloorplanSaveFile(activeLevelHandle, activeLevelName, fullFileBase, res.imageDataURL, res.imageW, res.imageH, res.imageTiles).then(function(){
+      return writeBasePlan(activeProjectHandle, activeLevelName, res.imageDataURL, res.imageW, res.imageH, res.imageTiles).then(function(){
         renderPlanStatus(levelPlanStatus, true, "This level");
         renderPlanPreview(levelPlanPreview, res.imageDataURL, res.imageTiles, res.imageW, res.imageH);
         openPlanCanvasBtn.hidden = false;
@@ -1564,35 +1654,11 @@
     });
   });
 
-  var roomImportPlanBtn = document.getElementById("roomImportPlanBtn");
-  var roomPlanFileInput = document.getElementById("roomPlanFileInput");
-  var roomPlanPreview = document.getElementById("roomPlanPreview");
-  var activeRoomHandleForImport = null;
-  roomImportPlanBtn.addEventListener("click", function(){
-    workFolderHasPlan(activeRoomHandleForImport, activeRoomName).then(function(hasPlan){
-      if (!hasPlan){ roomPlanFileInput.click(); return; }
-      showConfirmDialog("Replace this room's floor plan?").then(function(ok){
-        if (ok) roomPlanFileInput.click();
-      });
-    });
-  });
-  roomPlanFileInput.addEventListener("change", function(){
-    var file = roomPlanFileInput.files && roomPlanFileInput.files[0];
-    roomPlanFileInput.value = "";
-    if (!file) return;
-    importFloorplanFromFile(file).then(function(res){
-      var fullFileBase = sanitizeFileBase(activeProjectName + "_" + activeLevelName + "_" + activeRoomName);
-      return writeFloorplanSaveFile(activeRoomHandleForImport, activeRoomName, fullFileBase, res.imageDataURL, res.imageW, res.imageH, res.imageTiles).then(function(){
-        renderPlanStatus(roomPlanStatus, true, "This room");
-        renderPlanPreview(roomPlanPreview, res.imageDataURL, res.imageTiles, res.imageW, res.imageH);
-        showToast("Floor plan saved.");
-      });
-    }).catch(function(err){
-      if (err && err.code === "pdf_import_cancelled") return;
-      console.error("Floorplan import failed:", err);
-      showToast(err && err.code ? (isPdfFile(file) ? pdfImportErrorToast(err) : imageReadErrorToast(err)) : "Couldn't import that floor plan.");
-    });
-  });
+  // Rooms no longer have a floor plan of their own -- Andrew confirmed one
+  // shared photo per Level (2026-09-22), which is also consistent with
+  // Rooms already being pure navigation containers rather than owning any
+  // storage. The Room detail screen's own "Import floor plan" card was
+  // removed from the HTML (see openRoom below for what replaced it).
 
   /* ============================== joinery items (project-wide record store) ==============================
      Andrew's final approved shape (2026-09-22), exactly:
@@ -1631,14 +1697,15 @@
     });
   }
 
-  /* ============================== plan canvas: reading/writing a level's roomlink markers ==============================
-     A marker is added to the LEVEL's own save file's objects array --
-     never the room's -- same as Site Measure's own makeRoomLink/
-     promptAddRoomAt place it: a marker lives on the level's plan and
-     points AT a room, it doesn't live inside the room's own plan. Adding
-     one must preserve everything else already in that save file (image
-     data, any other objects, style, savedBy) -- this is read-modify-write
-     on the whole file, not a blind overwrite. */
+  /* ============================== legacy plan reading (migration only) ==============================
+     As of the 2026-09-22 flat-structure cutover, a Level's roomlink
+     markers live in levels.json and its floorplan photo lives in
+     base-plan/<Level>/ -- readSavedPlanRaw's only remaining job is reading
+     a PRE-cutover Level's old saves/<Level>.utzline.json (image + objects
+     together, in the same shape Site Measure/Viewer's projectPayload()
+     writes) so migrateLegacyLevelsIfNeeded (above) can pull both out of it
+     once, into the new files. There is no write side any more -- nothing
+     writes this old per-folder shape going forward. */
   function readSavedPlanRaw(dirHandle, name){
     if (!dirHandle) return Promise.resolve(null);
     return dirHandle.getDirectoryHandle("saves", { create: false }).then(function(savesH){
@@ -1654,26 +1721,6 @@
         return saved;
       }catch(e){ return null; }
     }, function(){ return null; });
-  }
-  function writeSavedPlanRaw(dirHandle, bareName, fullFileBase, saved){
-    return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
-      var payload = JSON.stringify({
-        utzlineProject: 1,
-        imageDataURL: saved.imageTiles ? null : (saved.imageDataURL || null),
-        imageW: saved.imageW || 0,
-        imageH: saved.imageH || 0,
-        imageTiles: saved.imageTiles || null,
-        fileBase: saved.fileBase || fullFileBase,
-        objects: saved.objects || [],
-        style: saved.style || defaultStyleObject(),
-        savedBy: saved.savedBy || ""
-      });
-      return savesH.getFileHandle(projectSaveFilename(bareName), { create: true }).then(function(fh){
-        return fh.createWritable();
-      }).then(function(w){
-        return w.write(payload).then(function(){ return w.close(); });
-      });
-    });
   }
   // Site Measure's own uid()/makeRoomLink() (source.html) -- same object
   // shape, so a marker placed here is indistinguishable, once opened in
@@ -1874,7 +1921,7 @@
   addItemRoomSelect.addEventListener("change", updateAddItemNewRoomVisibility);
   function openAddJoineryItemDialog(worldX, worldY){
     addItemPendingWorldPoint = { x: worldX, y: worldY };
-    listExistingRooms(activeLevelHandle).then(function(existing){
+    listExistingRoomsInLevel(activeProjectHandle, activeLevelName).then(function(existing){
       addItemRoomSelect.innerHTML = "";
       existing.forEach(function(name){
         var opt = document.createElement("option");
@@ -1901,8 +1948,15 @@
     var worldPt = addItemPendingWorldPoint;
     var joineryIdRaw = addItemJoineryIdInput.value.trim();
     var description = addItemDescriptionInput.value.trim();
-    listExistingRooms(activeLevelHandle).then(function(existing){
-      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+    // Everything about "where does this room/marker live" now goes
+    // through levels.json (2026-09-22 cutover) -- no folder handle, no
+    // per-level save file. migrateLegacyLevelsIfNeeded is safe to call
+    // every time (no-op once a project's already migrated), so this
+    // doesn't need its own separate "is this project migrated yet" check.
+    migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(levels){
+      var entry = findLevelEntry(levels, activeLevelName);
+      if (!entry){ entry = { name: activeLevelName, rooms: [], markers: [] }; levels.push(entry); }
+      var existingLower = entry.rooms.map(function(r){ return r.name.toLowerCase(); });
       var finalRoomName;
       if (isNewRoom){
         var roomRaw = addItemNewRoomInput.value.trim();
@@ -1911,28 +1965,26 @@
         finalRoomName = clean;
         var n = 2;
         while (existingLower.indexOf(finalRoomName.toLowerCase()) !== -1){ finalRoomName = clean + " " + n; n++; }
+        entry.rooms.push({ name: finalRoomName });
       } else {
         finalRoomName = addItemRoomSelect.value;
       }
       // Dedupe the joinery ID against sibling markers already in this same
       // room on this level -- same numbered-suffix convention as
       // Site Measure's own promptAddRoomAt.
-      var siblingCodesLower = (planSaved.objects || []).filter(function(o){
+      var siblingCodesLower = (entry.markers || []).filter(function(o){
         return o.type === "roomlink" && o.roomName && o.roomName.toLowerCase() === finalRoomName.toLowerCase();
       }).map(function(o){ return (o.joineryCode || "").toLowerCase(); });
       var finalCode = joineryIdRaw, cn = 2;
       while (finalCode && siblingCodesLower.indexOf(finalCode.toLowerCase()) !== -1){ finalCode = joineryIdRaw + " " + cn; cn++; }
 
       var marker = makeRoomLinkObject(worldPt.x, worldPt.y, finalRoomName, finalCode);
+      entry.markers = entry.markers || [];
+      entry.markers.push(marker);
       planSaved.objects = planSaved.objects || [];
       planSaved.objects.push(marker);
 
-      var levelFullFileBase = sanitizeFileBase(activeProjectName + "_" + activeLevelName);
-      return writeSavedPlanRaw(activeLevelHandle, activeLevelName, levelFullFileBase, planSaved).then(function(){
-        return isNewRoom ? activeLevelHandle.getDirectoryHandle(finalRoomName, { create: true }).then(function(dirH){
-          return ensureWorkFolders(dirH);
-        }) : Promise.resolve();
-      }).then(function(){
+      return writeLevelsFile(activeProjectHandle, levels).then(function(){
         return addJoineryItem(activeProjectHandle, {
           joineryId: finalCode, description: description, level: activeLevelName, room: finalRoomName, status: "created"
         });
@@ -1956,8 +2008,30 @@
   function openPlanCanvasForLevel(centerOnMarker){
     planCanvasTitle.textContent = activeProjectName + " — " + activeLevelName;
     showScreen("planCanvas");
-    return readSavedPlanRaw(activeLevelHandle, activeLevelName).then(function(saved){
-      planSaved = saved || { utzlineProject: 1, imageDataURL: null, imageTiles: null, imageW: 0, imageH: 0, objects: [], style: defaultStyleObject(), savedBy: "" };
+    // planSaved keeps EXACTLY the shape the rendering/hit-testing code
+    // below already expects (imageDataURL/imageTiles/imageW/imageH +
+    // objects array of roomlink markers) regardless of the fact that, as
+    // of the 2026-09-22 cutover, the image comes from base-plan/<Level>/
+    // and the markers come from levels.json rather than from one combined
+    // per-level save file -- isolates this rewrite to just this function.
+    return Promise.all([
+      readBasePlan(activeProjectHandle, activeLevelName),
+      migrateLegacyLevelsIfNeeded(activeProjectHandle)
+    ]).then(function(results){
+      var plan = results[0];
+      var levels = results[1];
+      var entry = findLevelEntry(levels, activeLevelName);
+      var markers = entry ? entry.markers || [] : [];
+      planSaved = {
+        utzlineProject: 1,
+        imageDataURL: plan ? plan.imageDataURL : null,
+        imageTiles: plan ? plan.imageTiles : null,
+        imageW: plan ? plan.imageW : 0,
+        imageH: plan ? plan.imageH : 0,
+        objects: markers.slice(),
+        style: defaultStyleObject(),
+        savedBy: ""
+      };
       planImageW = planSaved.imageW || 0;
       planImageH = planSaved.imageH || 0;
       planRenderTiles();
@@ -2130,17 +2204,16 @@
     if (!activeJoineryItem) return;
     var item = activeJoineryItem;
     planCanvasReturnScreen = "joineryItem";
-    activeProjectHandle.getDirectoryHandle(item.level, { create: false }).then(function(lvlHandle){
-      activeLevelHandle = lvlHandle;
-      activeLevelName = item.level;
-      // Keep the rooms screen's own state consistent too, in case some
-      // later navigation lands there directly instead of retracing back
-      // through this page -- this item came from a marker on this level's
-      // plan, so the level definitely already has one.
-      roomsLevelLabel.textContent = activeProjectName + " — " + item.level;
-      openPlanCanvasBtn.hidden = false;
-      return openPlanCanvasForLevel({ room: item.room, joineryId: item.joineryId });
-    }).catch(function(err){
+    // Levels aren't folders any more (2026-09-22 cutover) -- no handle to
+    // resolve, just the name itself.
+    activeLevelName = item.level;
+    // Keep the rooms screen's own state consistent too, in case some
+    // later navigation lands there directly instead of retracing back
+    // through this page -- this item came from a marker on this level's
+    // plan, so the level definitely already has one.
+    roomsLevelLabel.textContent = activeProjectName + " — " + item.level;
+    openPlanCanvasBtn.hidden = false;
+    openPlanCanvasForLevel({ room: item.room, joineryId: item.joineryId }).catch(function(err){
       console.error("Opening plan for joinery item failed:", err);
       showToast("Couldn't open that level's plan — it may have been moved or renamed.");
     });
@@ -2207,7 +2280,10 @@
 
   var projectsRootHandle = null, projectsRootName = "";
   var activeProjectHandle = null, activeProjectName = "";
-  var activeLevelHandle = null, activeLevelName = "";
+  // Levels and Rooms are pure data (levels.json) as of the 2026-09-22 flat-
+  // structure cutover, not folders -- so, unlike activeProjectHandle,
+  // there's no activeLevelHandle/activeRoomHandle any more, just names.
+  var activeLevelName = "";
   var activeRoomName = "";
 
   /* ============================== setup / reconnect ============================== */
@@ -2380,30 +2456,34 @@
 
   // {create:false} for an ordinary browse-to-an-existing-level click;
   // {create:true} only from createNewLevel() just below, right after it's
-  // confirmed the (possibly-deduped) name doesn't already exist -- either
-  // way, ensureWorkFolders is what actually makes the reserved saves/pdfs/
-  // backup subfolders exist, same as Site Measure's own openLevelFromHandle.
+  // confirmed the (possibly-deduped) name doesn't already exist. Levels
+  // are entries in levels.json now, not folders (2026-09-22 cutover) --
+  // migrateLegacyLevelsIfNeeded both loads that data and, for a project
+  // that predates this cutover, builds it from the old real folders the
+  // first time it's needed.
   function openLevel(name, opts){
     var create = !!(opts && opts.create);
-    return activeProjectHandle.getDirectoryHandle(name, { create: create }).then(function(dirH){
-      activeLevelHandle = dirH;
-      activeLevelName = name;
-      roomsLevelLabel.textContent = activeProjectName + " — " + name;
-      return ensureWorkFolders(dirH);
+    activeLevelName = name;
+    roomsLevelLabel.textContent = activeProjectName + " — " + name;
+    return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(levels){
+      var entry = findLevelEntry(levels, name);
+      if (entry) return;
+      if (!create) throw new Error("Level not found: " + name);
+      levels.push({ name: name, rooms: [], markers: [] });
+      return writeLevelsFile(activeProjectHandle, levels);
     }).then(function(){
-      return workFolderHasPlan(activeLevelHandle, name);
-    }).then(function(hasPlan){
+      return readBasePlan(activeProjectHandle, name);
+    }).then(function(plan){
+      var hasPlan = !!plan;
       renderPlanStatus(levelPlanStatus, hasPlan, "This level");
       // Placing a joinery marker needs an actual plan underneath it to tap
       // on -- so this button only appears once a floorplan import has
       // landed for this level.
       openPlanCanvasBtn.hidden = !hasPlan;
       if (!hasPlan){ renderPlanPreview(levelPlanPreview, null, null, 0, 0); return; }
-      return readFloorplan(activeLevelHandle, name).then(function(plan){
-        if (plan) renderPlanPreview(levelPlanPreview, plan.imageDataURL, plan.imageTiles, plan.imageW, plan.imageH);
-      });
+      renderPlanPreview(levelPlanPreview, plan.imageDataURL, plan.imageTiles, plan.imageW, plan.imageH);
     }).then(function(){
-      return listExistingRooms(activeLevelHandle);
+      return listExistingRoomsInLevel(activeProjectHandle, name);
     }).then(function(names){
       roomListItems.innerHTML = "";
       roomListEmpty.hidden = names.length > 0;
@@ -2453,26 +2533,25 @@
 
   /* ============================== room detail ============================== */
   var roomDetailLabel = document.getElementById("roomDetailLabel");
-  var roomPlanStatus = document.getElementById("roomPlanStatus");
   var backToRoomsBtn = document.getElementById("backToRoomsBtn");
 
-  // Same {create:false}/{create:true} split as openLevel, one folder deeper.
+  // Rooms are pure navigation containers with no folder or floor plan of
+  // their own (they share their level's one shared photo) -- so opening
+  // one is just recording its name/breadcrumb and, for a genuinely new
+  // room, adding it to the level's own entry in levels.json.
   function openRoom(name, opts){
     var create = !!(opts && opts.create);
-    return activeLevelHandle.getDirectoryHandle(name, { create: create }).then(function(dirH){
-      activeRoomName = name;
-      activeRoomHandleForImport = dirH;
-      roomDetailLabel.textContent = activeProjectName + " — " + activeLevelName + " — " + name;
-      return ensureWorkFolders(dirH).then(function(){ return dirH; });
-    }).then(function(dirH){
-      return workFolderHasPlan(dirH, name);
-    }).then(function(hasPlan){
-      renderPlanStatus(roomPlanStatus, hasPlan, "This room");
-      if (!hasPlan){ renderPlanPreview(roomPlanPreview, null, null, 0, 0); showScreen("roomDetail"); return; }
-      return readFloorplan(activeRoomHandleForImport, name).then(function(plan){
-        if (plan) renderPlanPreview(roomPlanPreview, plan.imageDataURL, plan.imageTiles, plan.imageW, plan.imageH);
-        showScreen("roomDetail");
-      });
+    activeRoomName = name;
+    roomDetailLabel.textContent = activeProjectName + " — " + activeLevelName + " — " + name;
+    return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(levels){
+      var entry = findLevelEntry(levels, activeLevelName);
+      if (!entry){ entry = { name: activeLevelName, rooms: [], markers: [] }; levels.push(entry); }
+      var already = entry.rooms.some(function(r){ return r.name.toLowerCase() === name.toLowerCase(); });
+      if (already || !create) return;
+      entry.rooms.push({ name: name });
+      return writeLevelsFile(activeProjectHandle, levels);
+    }).then(function(){
+      showScreen("roomDetail");
     }).catch(function(err){
       console.error("Opening room failed:", err);
       showToast("Couldn't open “" + name + "”.");
@@ -2480,12 +2559,12 @@
   }
   backToRoomsBtn.addEventListener("click", function(){ openLevel(activeLevelName); });
 
-  // "New Room" mirrors "New Level" one folder deeper -- a name that
-  // collides with an existing room of THIS level gets a numbered suffix.
+  // "New Room" mirrors "New Level" -- a name that collides with an
+  // existing room of THIS level gets a numbered suffix.
   var newRoomBtn = document.getElementById("newRoomBtn");
   function createNewRoom(rawName){
     var name = sanitizeFileBase(rawName);
-    return listExistingRooms(activeLevelHandle).then(function(existing){
+    return listExistingRoomsInLevel(activeProjectHandle, activeLevelName).then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
       var finalName = name, n = 2;
       while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
@@ -2554,7 +2633,15 @@
     renderPdfPageMaybeTiled: renderPdfPageMaybeTiled,
     makeRoomLinkObject: makeRoomLinkObject,
     readJoineryItems: readJoineryItems,
-    readSavedPlanRaw: readSavedPlanRaw
+    readSavedPlanRaw: readSavedPlanRaw,
+    readLevelsRaw: readLevelsRaw,
+    writeLevelsFile: writeLevelsFile,
+    findLevelEntry: findLevelEntry,
+    migrateLegacyLevelsIfNeeded: migrateLegacyLevelsIfNeeded,
+    listExistingLevels: listExistingLevels,
+    listExistingRoomsInLevel: listExistingRoomsInLevel,
+    readBasePlan: readBasePlan,
+    writeBasePlan: writeBasePlan
   };
 
   boot();

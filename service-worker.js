@@ -98,9 +98,30 @@
 // -- editing a record's own fields from its page is a later step, once
 // Projects V1's original 8-item build sequence gives way to the next
 // phase of work.)
+//
+// (v8, 2026-09-22: RELEASE 3 -- "full flat structure" cutover, approved by
+// Andrew after reviewing utzline-overlay-current-vs-target.md ("both are
+// fine, go ahead with release 3"). Levels and Rooms are no longer real
+// folders: what Levels/Rooms/joinery markers exist now lives in a new
+// project-root levels.json, and each Level's one shared floorplan photo
+// (never per-Room any more -- Andrew's explicit call, overriding this
+// app's own earlier per-Room default) now lives in base-plan/<Level>/
+// manifest.json, versioned. A project created before this cutover still
+// has its old real Level/Room folders on disk, untouched forever; the
+// first time such a project is opened post-cutover, its Levels/Rooms/
+// markers and each Level's embedded floorplan image are read into the new
+// files once (migrateLegacyLevelsIfNeeded) -- purely additive, nothing
+// old is ever deleted or rewritten. The Room detail screen's own "Import
+// floor plan" card is gone entirely (Rooms are pure navigation containers
+// now, sharing their Level's one photo) -- superseded by a short
+// explanatory note. This is the Projects-app half of a release that also
+// touches Site Measure/Viewer (same folder elimination, since both apps
+// currently share Projects' own per-Level/Room floorplan file) and both
+// ITP apps, shipped as coordinated pieces of the same release rather than
+// split further, per Andrew's explicit "I still want full structure.")
 
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v7";
+var CACHE_NAME = "utzline-projects-cache-v8";
 
 var PRECACHE_URLS = [
   "./",
