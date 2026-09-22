@@ -169,9 +169,36 @@
 // app already does (placing a marker, importing a floor plan, migrating
 // a legacy project), so this app's own writes can no longer silently
 // wipe out whatever Site Measure has drawn on a Level's shared plan.)
+//
+// (v12, 2026-09-22: real bug fix, found by Andrew via Site Measure/Viewer
+// -- two joinery markers in the same room "seem to be linked" on left
+// click, and deleting either one deletes both. Root cause: planNextId
+// (this app's own marker-id counter) only ever counted up from 1 within a
+// single page load, with no resync against markers already saved on the
+// level -- so placing a marker, closing/reopening this app (a fresh load
+// resets the counter back to 1), and placing another marker on the same
+// level could hand out an id another marker on that same level already
+// had. Site Measure/Viewer's own select/delete logic keys purely off
+// `id`, so two markers sharing one id are treated as a single object by
+// that code. Fixed by resyncing planNextId against every id already on
+// the level, read fresh off disk, immediately before minting a new
+// marker's id -- the exact same "always higher than anything already
+// here" approach Site Measure's own object-id counter already uses. Site
+// Measure/Viewer also shipped its own matching fix the same day
+// (dedupeObjectIds in applyRestoredState, v44.5) to heal a collision
+// already saved to disk by the old, unfixed version of this app -- that
+// fix is what protects data placed by this app before v12.)
+//
+// (v13, 2026-09-22, same day: both ITP apps' own level-list exclusion
+// (legacyLevelFolderNames, used by the one-time legacy-folder migration)
+// now also excludes "itp-install" -- Install ITP's own project-wide data
+// folder, renamed from "itp" this same day (Unified Implementation Brief
+// section O) -- alongside the existing "itp"/"itp-manufacture" exclusions,
+// so it's never mistaken for a pre-cutover Level folder during migration.
+// No other functional change in this app.)
 
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v11";
+var CACHE_NAME = "utzline-projects-cache-v13";
 
 var PRECACHE_URLS = [
   "./",

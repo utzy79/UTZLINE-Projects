@@ -163,7 +163,7 @@ Info UI** — not gradually (see the data standard's decision #12).
       saves/, pdfs/, backup/   <- this level's own floorplan + objects
       <Room>/
         saves/, pdfs/, backup/ <- same shape, one folder deeper
-    itp/                       <- Install ITP's own project-wide folder
+    itp-install/               <- Install ITP's own project-wide folder (renamed from "itp" 2026-09-22)
     itp-manufacture/           <- Manufacture ITP's own project-wide folder
 ```
 

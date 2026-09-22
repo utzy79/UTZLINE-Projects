@@ -68,8 +68,11 @@
                                       + pdfs/, backup/), read once by
                                       migrateLegacyLevelsIfNeeded and then
                                       left alone -- never written to again
-        itp/, itp-manufacture/     <- LEGACY ONLY: the two ITP apps' own
-                                      pre-cutover project-wide folders
+        itp/, itp-install/,        <- LEGACY ONLY: the two ITP apps' own
+        itp-manufacture/              pre-cutover project-wide folders
+                                      ("itp" is Install ITP's OLD name,
+                                      kept excluded even after its own
+                                      2026-09-22 rename to "itp-install")
 
   v1 was step 1 of the build sequence: the Projects-root folder-picker/
   reconnect flow, and READ-ONLY Project -> Level -> Room browsing, all
@@ -1014,7 +1017,7 @@
   // show up here as a bogus "Level" named "base-plan").
   function legacyLevelFolderNames(projectHandle){
     return listSubdirNames(projectHandle).then(function(names){
-      return names.filter(function(n){ return n !== "itp" && n !== "itp-manufacture" && n !== "base-plan" && n !== projectSavesDirName() && n !== "PDF Files" && n !== "Backups"; });
+      return names.filter(function(n){ return n !== "itp" && n !== "itp-install" && n !== "itp-manufacture" && n !== "base-plan" && n !== projectSavesDirName() && n !== "PDF Files" && n !== "Backups"; });
     });
   }
   // v8-specific migration (2026-09-22, same-day-superseded): a project
@@ -2139,6 +2142,29 @@
       }).map(function(o){ return (o.joineryCode || "").toLowerCase(); });
       var finalCode = joineryIdRaw, cn = 2;
       while (finalCode && siblingCodesLower.indexOf(finalCode.toLowerCase()) !== -1){ finalCode = joineryIdRaw + " " + cn; cn++; }
+
+      // BUG FIX (v12, 2026-09-22, reported by Andrew via Site Measure/
+      // Viewer: two markers on the same room "seem to be linked" on left
+      // click, and deleting either one deletes both): planNextId (above)
+      // only ever counts up from 1 within THIS page load -- it's never been
+      // resynced against markers that already exist on this level, so
+      // placing one marker, then closing/reopening this app (a fresh page
+      // load resets planNextId back to 1) and placing another marker on the
+      // same level could hand out an id ("o1", "o2", ...) that a marker
+      // already sitting in entry.markers already has. Site Measure/Viewer's
+      // own select/delete logic keys purely off `id` -- two markers sharing
+      // one id are treated as a single linked object by that code (see its
+      // own matching fix, applyRestoredState's new dedupeObjectIds, which
+      // heals a collision already saved to disk). This fix stops a NEW
+      // collision from being created here in the first place: resync
+      // planNextId against every id already on THIS level (just freshly
+      // read off disk, above) immediately before minting a new marker's id,
+      // the same "always higher than anything already here" approach Site
+      // Measure's own uid()/nextId already uses for objects it creates.
+      var existingMaxId = (entry.markers || []).reduce(function(m, o){
+        return Math.max(m, parseInt((o.id || "o0").slice(1), 10) || 0);
+      }, 0);
+      if (existingMaxId >= planNextId) planNextId = existingMaxId + 1;
 
       var marker = makeRoomLinkObject(worldPt.x, worldPt.y, finalRoomName, finalCode);
       entry.markers = entry.markers || [];
