@@ -158,9 +158,20 @@
 // at all (previously the folder already existed by the time this dialog
 // opened) -- a deliberate side effect of merging the two steps into one,
 // not a separate ask.)
+//
+// (v11, 2026-09-22: no user-visible change in this app -- a compatibility
+// fix for Site Measure/Viewer's own flat-structure interop update (see
+// next-version-notes.md). Each Level's own Project Saves/Floor Plans/
+// file gains two additive fields this app never populates itself,
+// `objects` and `savedBy` -- Site Measure's own drawn annotations for
+// that Level, and who last saved them. readLevelFileByName/writeLevelFile
+// now round-trip both through untouched on every read-modify-write this
+// app already does (placing a marker, importing a floor plan, migrating
+// a legacy project), so this app's own writes can no longer silently
+// wipe out whatever Site Measure has drawn on a Level's shared plan.)
 
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v10";
+var CACHE_NAME = "utzline-projects-cache-v11";
 
 var PRECACHE_URLS = [
   "./",

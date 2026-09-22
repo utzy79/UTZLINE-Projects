@@ -905,7 +905,19 @@
           imageW: parsed.imageW || 0,
           imageH: parsed.imageH || 0,
           rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
-          markers: Array.isArray(parsed.markers) ? parsed.markers : []
+          markers: Array.isArray(parsed.markers) ? parsed.markers : [],
+          // `objects`/`savedBy` (2026-09-22, Site Measure flat-structure
+          // interop): this app never draws anything, so it never populates
+          // either field itself -- but Site Measure now stores its own
+          // drawn annotations for this Level directly in this same file
+          // (`objects`), stamped with whoever saved them (`savedBy`). Every
+          // caller here already does read-modify-write (see writeLevelFile's
+          // own comment), so round-tripping these two through unread/
+          // unchanged is what stops this app's own writes (placing a
+          // marker, importing a floor plan) from silently wiping out
+          // whatever Site Measure has drawn on this Level.
+          objects: Array.isArray(parsed.objects) ? parsed.objects : [],
+          savedBy: typeof parsed.savedBy === "string" ? parsed.savedBy : ""
         };
       }catch(e){ return null; }
     }, function(){ return null; });
@@ -927,7 +939,13 @@
         imageW: data.imageW || 0,
         imageH: data.imageH || 0,
         rooms: data.rooms || [],
-        markers: data.markers || []
+        markers: data.markers || [],
+        // See readLevelFileByName's own comment -- carried through
+        // unchanged by every caller here (each already reads the current
+        // file into `data` before mutating just the field it actually
+        // cares about), never populated by this app itself.
+        objects: data.objects || [],
+        savedBy: data.savedBy || ""
       });
       return dirH.getFileHandle(levelFileName(projectName, levelName), { create: true }).then(function(fh){
         return fh.createWritable();
