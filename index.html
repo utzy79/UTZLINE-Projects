@@ -1,0 +1,2564 @@
+<!doctype html>
+<!--
+  UTZLINE Projects -- the master application in the UTZLINE family.
+
+  This is NOT built from redline-projects/source.html (the plan-drawing
+  canvas Site Measure and Viewer share). Projects is a different kind of
+  screen entirely -- project/level/room setup and joinery-item management,
+  not a canvas -- so, same reasoning as UTZLINE Install ITP's own original
+  build, it's its own small, purpose-built codebase. See
+  utzline-projects-v1-plan.md (published to the project) for the full
+  rationale and build sequence this follows.
+
+  It reads and writes the SAME Projects folder structure every other app in
+  the family already uses:
+
+    <Projects root>/
+      company-logo.png            <- single company-wide logo (Projects owns
+                                      this; every app reads it), a FILE, not
+                                      a folder, so it's invisible to every
+                                      app's own listSubdirNames()-based
+                                      project list (see below)
+      <Project>/
+        project-meta.json         <- {no, name, contractor} today; this app
+                                      extends it with client/builder/site
+                                      address/project manager fields
+        <Level>/
+          saves/<name>.utzline.json   <- the level's own floorplan + objects,
+                                          written in EXACTLY the shape
+                                          Site Measure/Viewer already read
+                                          (see projectPayload() in
+                                          source.html) -- no format change
+          pdfs/, backup/
+          <Room>/
+            saves/, pdfs/, backup/    <- same shape, one folder deeper
+        itp/                     <- UTZLINE Install ITP's own project-wide
+                                     folder, a sibling of level folders
+        itp-manufacture/         <- UTZLINE Manufacture ITP's own, likewise
+
+  v1 was step 1 of the build sequence: the Projects-root folder-picker/
+  reconnect flow, and READ-ONLY Project -> Level -> Room browsing, all
+  lifted from Site Measure's own
+  detectFolderShape/listSubdirNames/listExistingProjects/listExistingLevels/
+  listExistingRooms logic (same functions, same behaviour, copied rather
+  than re-derived so this app's shape-detection can never quietly drift
+  from what Site Measure/Viewer/the ITP apps already expect).
+
+  v2 (this file) adds step 2: Create Project (same numbered-suffix dedupe
+  as Site Measure's own createNewProject), a Project info dialog (Project
+  name/number/Client/Builder/Site address/Project manager -- extending
+  project-meta.json with three new, additive keys while keeping Site
+  Measure's existing no/name/contractor keys untouched), and the single
+  company-wide logo setting (company-logo.png, a FILE at the Projects
+  root). Create Level/Create Room, floorplan import, joinery markers/
+  items/Register/Item Pages, and Status Overview are later steps in the
+  same build sequence, each its own version bump.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UTZLINE Projects</title>
+<meta name="theme-color" content="#140d0d">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<!-- Same pdf.js version/CDN Site Measure's own source.html already imports
+     PDFs with -- only pdf.js, not jsPDF, since Projects V1 never EXPORTS a
+     PDF, only imports floorplan pages from one. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" onerror="window.__pdfImportLibFailed = true;"></script>
+<style>
+  :root{
+    --bg: #140d0d;
+    --panel: #1d1414;
+    --panel2: #241818;
+    --border: #3a2626;
+    --text: #f6ecec;
+    --muted: #b99;
+    --muted2: #8a7373;
+    --accent: #ff3b3b;
+    --accent-ink: #ffffff;
+    --accent-soft: #3a1616;
+    --danger: #ff3b3b;
+    --radius: 12px;
+  }
+  *{ box-sizing: border-box; }
+  html, body{ height: 100%; }
+  body{
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, "IBM Plex Sans", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+  }
+  header{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #170f0f;
+    flex: 0 0 auto;
+  }
+  header img{ width: 32px; height: 32px; border-radius: 8px; }
+  header .brand{ font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
+  header .brand small{ display:block; font-weight: 500; font-size: 11px; color: var(--muted); letter-spacing: 0.5px; }
+  main{
+    flex: 1 1 auto;
+    overflow-y: auto;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px 60px;
+  }
+  .screen{ width: 100%; max-width: 640px; }
+  .screen[hidden]{ display: none; }
+  h1{ font-size: 20px; margin: 0 0 6px; }
+  p.sub{ color: var(--muted); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+  .card{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .btn{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn:hover{ filter: brightness(1.08); }
+  .btn.secondary{
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn.secondary:hover{ background: var(--panel2); }
+  .btn.link{
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    padding: 6px 0;
+    font-size: 13px;
+    text-decoration: underline;
+  }
+  .row{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .backrow{ margin-bottom: 16px; }
+  .list{ display: flex; flex-direction: column; gap: 8px; }
+  .list-item{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 16px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text);
+    font-size: 15px;
+    width: 100%;
+  }
+  .list-item:hover{ background: var(--panel2); border-color: var(--accent); }
+  .list-item .chev{ color: var(--muted2); }
+  .empty-note{ color: var(--muted); font-size: 14px; padding: 18px 4px; text-align: center; }
+  .meta-grid{ display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
+  .meta-grid dt{ color: var(--muted); }
+  .meta-grid dd{ margin: 0; }
+  .status-line{ display:flex; align-items:center; gap:8px; font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .dot{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.yes{ background: #33c46a; }
+  .dot.no{ background: var(--muted2); }
+  .dot.status-created{ background: #f0a93b; }
+  .section-title{ font-size: 15px; margin: 0 0 8px; }
+  .field{ margin-bottom: 14px; }
+  .field label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .field input[type=text]{
+    width: 100%;
+    background: #140d0d;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .field input[type=text]:focus{ outline: none; border-color: var(--accent); }
+  .modal-backdrop{
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 40;
+    padding: 16px;
+  }
+  .modal-backdrop[hidden]{ display: none; }
+  .modal{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    width: 100%;
+    max-width: 440px;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+  .modal h2{ margin: 0 0 4px; font-size: 17px; }
+  .modal p.sub{ margin-bottom: 16px; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap: 10px; margin-top: 6px; }
+  .logo-row{ display:flex; align-items:center; gap: 14px; }
+  .logo-preview{
+    width: 56px; height: 56px; border-radius: 10px;
+    background: #140d0d; border: 1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    overflow: hidden; flex: 0 0 auto;
+  }
+  .logo-preview img{ max-width: 100%; max-height: 100%; }
+  .logo-preview .placeholder{ color: var(--muted2); font-size: 10px; text-align:center; }
+
+  /* floorplan preview (static, non-interactive -- the pan/zoom/marker canvas is a later step) */
+  .plan-preview{
+    position: relative;
+    width: 100%;
+    max-height: 260px;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #0b0707;
+    margin-top: 10px;
+  }
+  .plan-preview img.single{ display:block; width: 100%; height: auto; }
+  .plan-preview .tile-wrap{ position: relative; width: 100%; }
+  .plan-preview .tile-wrap img{ position: absolute; }
+
+  /* crop dialog */
+  #cropBackdrop .modal{ max-width: 640px; }
+  .crop-stage{ position: relative; display: inline-block; max-width: 100%; touch-action: none; }
+  .crop-stage img{ display:block; max-width: 100%; max-height: 60vh; user-select: none; -webkit-user-drag: none; }
+  .crop-rect{
+    position: absolute;
+    border: 2px solid var(--accent);
+    background: rgba(255,59,59,0.12);
+    cursor: move;
+    touch-action: none;
+  }
+  .crop-handle{
+    position: absolute;
+    width: 18px; height: 18px;
+    margin: -9px;
+    background: var(--accent);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    touch-action: none;
+  }
+  .crop-handle.nw{ left:0; top:0; cursor: nwse-resize; }
+  .crop-handle.ne{ right:0; top:0; left:auto; margin-left:-9px; cursor: nesw-resize; }
+  .crop-handle.sw{ left:0; bottom:0; top:auto; margin-top:-9px; cursor: nesw-resize; }
+  .crop-handle.se{ right:0; bottom:0; left:auto; top:auto; margin-left:-9px; margin-top:-9px; cursor: nwse-resize; }
+
+  /* PDF page picker */
+  #pdfPickerBackdrop .modal{ max-width: 560px; }
+  .pdf-page-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 10px;
+    max-height: 50vh;
+    overflow-y: auto;
+    margin: 12px 0;
+  }
+  .pdf-page-cell{
+    background: #140d0d;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 11px;
+    text-align: center;
+  }
+  .pdf-page-cell img{ width: 100%; display:block; border-radius: 4px; margin-bottom: 4px; }
+  .pdf-page-cell:hover{ border-color: var(--accent); }
+
+  /* plan canvas (lightweight pan/zoom/pin-drop) -- fixed to escape main's
+     centered/max-width layout so it goes edge-to-edge full viewport, same
+     convention Install ITP's own Level Plan screen already established. */
+  .plan-canvas-screen{
+    position: fixed; inset: 0; z-index: 30;
+    width: auto; max-width: none; /* override .screen's max-width:640px -- this one must fill the whole viewport, not sit capped to main's content column width */
+    display: flex; flex-direction: column;
+    background: #0b0707;
+  }
+  .plan-canvas-screen[hidden]{ display: none; }
+  .plan-canvas-topbar{
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: #170f0f;
+  }
+  .plan-canvas-topbar span{ font-weight: 600; font-size: 14px; }
+  .plan-canvas-stage{ flex: 1 1 auto; position: relative; overflow: hidden; touch-action: none; }
+  .plan-canvas-stage svg{ display: block; width: 100%; height: 100%; cursor: grab; }
+  .plan-canvas-hint{
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    background: #170f0f;
+    border-top: 1px solid var(--border);
+  }
+  .marker-dot{ cursor: pointer; }
+  .marker-label{ font-size: 14px; font-weight: 600; pointer-events: none; user-select: none; }
+
+  /* ---- Joinery Register ---- */
+  .register-table{ width: 100%; border-collapse: collapse; font-size: 13px; }
+  .register-table th{
+    text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 600;
+    border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+    white-space: nowrap;
+  }
+  .register-table th:hover{ color: var(--text); }
+  .register-table th.sorted::after{ content: " \25B2"; font-size: 10px; }
+  .register-table th.sorted.desc::after{ content: " \25BC"; }
+  .register-table td{ padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .register-table tbody tr:last-child td{ border-bottom: none; }
+  .register-table td.status-cell{ white-space: nowrap; }
+  .register-table tbody tr{ cursor: pointer; }
+  .register-table tbody tr:hover{ background: var(--panel2); }
+
+  /* ---- Status Overview ---- */
+  .status-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .status-tile{
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; text-align: left; cursor: pointer; color: var(--text);
+    display: flex; flex-direction: column; gap: 6px; font: inherit;
+  }
+  .status-tile:hover{ border-color: var(--accent); }
+  .status-tile .status-tile-id{ font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .status-tile .status-tile-loc{ font-size: 12px; color: var(--muted); }
+  .status-tile .status-tile-desc{ font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  #toast{
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(20px);
+    background: #241818;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 50;
+  }
+  #toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+  .error-note{ color: #ff8080; font-size: 13px; margin-top: 10px; }
+  .error-note[hidden]{ display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="./icons/icon-192.png" alt="">
+  <div class="brand">UTZLINE Projects<small>the master app</small></div>
+</header>
+
+<main>
+
+  <!-- ---- Setup: no Projects root chosen yet ---- -->
+  <section id="screenSetup" class="screen">
+    <h1>Choose your Projects folder</h1>
+    <p class="sub">Pick the same top-level Projects folder used by UTZLINE Site Measure, Viewer, Install ITP and Manufacture ITP. Projects reads and writes the same project/level/room structure -- nothing changes for the other apps.</p>
+    <div class="card">
+      <button class="btn" id="chooseRootBtn">Choose Projects folder</button>
+      <div class="error-note" id="setupError" hidden></div>
+    </div>
+  </section>
+
+  <!-- ---- Reconnect: a folder was chosen before but permission lapsed ---- -->
+  <section id="screenReconnect" class="screen">
+    <h1>Reconnect to your Projects folder</h1>
+    <p class="sub">Permission for "<span id="reconnectName"></span>" isn't active right now (this can happen after a browser restart). Reconnect to continue, or choose a different folder.</p>
+    <div class="card row">
+      <button class="btn" id="reconnectBtn">Reconnect</button>
+      <button class="btn secondary" id="reconnectChooseDifferentBtn">Choose a different folder</button>
+    </div>
+  </section>
+
+  <!-- ---- Project list ---- -->
+  <section id="screenProjects" class="screen">
+    <h1 id="projectsFolderLabel">Projects</h1>
+    <p class="sub">Choose a project to browse its levels and rooms, or start a new one.</p>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:14px;">
+        <strong style="font-size:14px;">Company logo</strong>
+      </div>
+      <div class="logo-row">
+        <div class="logo-preview" id="companyLogoPreviewBox"><span class="placeholder">No logo</span></div>
+        <div class="row">
+          <button class="btn secondary" id="chooseCompanyLogoBtn">Choose logo image</button>
+          <button class="btn link" id="removeCompanyLogoBtn" hidden>Remove</button>
+        </div>
+        <input type="file" id="companyLogoFileInput" accept="image/*" hidden>
+      </div>
+      <p class="sub" style="margin:10px 0 0;font-size:12px;">One logo for the whole company, shared by every project and every UTZLINE app -- not set per project.</p>
+    </div>
+    <div class="card">
+      <button class="btn" id="newProjectBtn">+ New Project</button>
+    </div>
+    <div class="card">
+      <div class="list" id="projectListItems"></div>
+      <div class="empty-note" id="projectListEmpty" hidden>No projects yet -- start one above.</div>
+    </div>
+    <button class="btn link" id="chooseDifferentRootBtn">Choose a different Projects folder</button>
+  </section>
+
+  <!-- ---- Level list (inside a project) ---- -->
+  <section id="screenLevels" class="screen">
+    <div class="backrow"><button class="btn secondary" id="backToProjectsBtn">&larr; All projects</button></div>
+    <h1 id="levelsProjectLabel">Levels</h1>
+    <div class="card" id="projectMetaCard" hidden>
+      <dl class="meta-grid" id="projectMetaGrid"></dl>
+      <button class="btn secondary" id="editProjectInfoBtn" style="margin-top:14px;">Edit project info</button>
+    </div>
+    <div class="card" id="projectMetaEmptyCard">
+      <p class="sub" style="margin:0 0 10px;">This project has no metadata yet.</p>
+      <button class="btn secondary" id="addProjectInfoBtn">Add project info</button>
+    </div>
+    <p class="sub">Choose a level to browse its rooms, or start a new one.</p>
+    <div class="card">
+      <div class="row">
+        <button class="btn" id="newLevelBtn">+ New Level</button>
+        <button class="btn secondary" id="openRegisterBtn">Joinery Register</button>
+        <button class="btn secondary" id="openStatusOverviewBtn">Status Overview</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="list" id="levelListItems"></div>
+      <div class="empty-note" id="levelListEmpty" hidden>No levels yet -- start one above.</div>
+    </div>
+  </section>
+
+  <!-- ---- Room list (inside a level) ---- -->
+  <section id="screenRooms" class="screen">
+    <div class="backrow"><button class="btn secondary" id="backToLevelsBtn">&larr; Levels</button></div>
+    <h1 id="roomsLevelLabel">Rooms</h1>
+    <div class="card">
+      <div class="status-line" id="levelPlanStatus"></div>
+      <div class="plan-preview" id="levelPlanPreview" hidden></div>
+      <div class="row" style="margin-top:12px;">
+        <button class="btn secondary" id="levelImportPlanBtn">Import floor plan</button>
+        <button class="btn" id="openPlanCanvasBtn" hidden>Place joinery items</button>
+      </div>
+      <input type="file" id="levelPlanFileInput" accept="image/*,.pdf,application/pdf" hidden>
+    </div>
+    <p class="sub">Rooms are navigation containers. Choose a room to browse it, or start a new one.</p>
+    <div class="card">
+      <button class="btn" id="newRoomBtn">+ New Room</button>
+    </div>
+    <div class="card">
+      <div class="list" id="roomListItems"></div>
+      <div class="empty-note" id="roomListEmpty" hidden>No rooms yet -- start one above.</div>
+    </div>
+  </section>
+
+  <!-- ---- Room detail ---- -->
+  <section id="screenRoomDetail" class="screen">
+    <div class="backrow"><button class="btn secondary" id="backToRoomsBtn">&larr; Rooms</button></div>
+    <h1 id="roomDetailLabel">Room</h1>
+    <div class="card">
+      <div class="status-line" id="roomPlanStatus"></div>
+      <div class="plan-preview" id="roomPlanPreview" hidden></div>
+      <button class="btn secondary" id="roomImportPlanBtn" style="margin-top:12px;">Import floor plan</button>
+      <input type="file" id="roomPlanFileInput" accept="image/*,.pdf,application/pdf" hidden>
+    </div>
+    <div class="card">
+      <p class="sub" style="margin:0;">Joinery markers are placed from the level's own plan (open the level, then "Place joinery items"), and every joinery item has its own page (see the Joinery Register or Status Overview, from the level list).</p>
+    </div>
+  </section>
+
+  <!-- ---- Joinery Register: a flat, filterable/sortable table over every
+       joinery item record in the project (joinery-items.json), regardless
+       of which level/room it's on. ---- -->
+  <section id="screenRegister" class="screen">
+    <div class="backrow"><button class="btn secondary" id="backFromRegisterBtn">&larr; Levels</button></div>
+    <h1 id="registerProjectLabel">Joinery Register</h1>
+    <p class="sub">Every joinery item in this project, in one place.</p>
+    <div class="card">
+      <div class="row">
+        <div class="field" style="flex:1 1 160px; margin:0;">
+          <label for="registerLevelFilter">Level</label>
+          <select id="registerLevelFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
+            <option value="">All levels</option>
+          </select>
+        </div>
+        <div class="field" style="flex:1 1 160px; margin:0;">
+          <label for="registerStatusFilter">Status</label>
+          <select id="registerStatusFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
+            <option value="">All statuses</option>
+          </select>
+        </div>
+        <div class="field" style="flex:2 1 220px; margin:0;">
+          <label for="registerSearchInput">Search</label>
+          <input type="text" id="registerSearchInput" placeholder="Joinery ID or description…">
+        </div>
+      </div>
+    </div>
+    <div class="card" id="registerTableCard">
+      <table class="register-table" id="registerTable">
+        <thead>
+          <tr>
+            <th data-col="level">Level</th>
+            <th data-col="room">Room</th>
+            <th data-col="joineryId">Joinery ID</th>
+            <th data-col="description">Description</th>
+            <th data-col="status">Status</th>
+          </tr>
+        </thead>
+        <tbody id="registerTableBody"></tbody>
+      </table>
+      <div class="empty-note" id="registerEmpty" hidden>No joinery items match this filter.</div>
+      <div class="empty-note" id="registerEmptyProject" hidden>No joinery items yet -- place some from a level's plan ("Place joinery items", once it has a floor plan).</div>
+    </div>
+  </section>
+
+  <!-- ---- Joinery Item page: one page per joinery item record, keyed by
+       (level, room, joineryId) -- there's no markerId, so this triple is
+       the record's own identity. Reachable from the Register, from Status
+       Overview, or by tapping a placed marker on the plan canvas. ---- -->
+  <section id="screenJoineryItem" class="screen">
+    <div class="backrow"><button class="btn secondary" id="backFromJoineryItemBtn">&larr; Back</button></div>
+    <h1 id="joineryItemTitle">Joinery item</h1>
+    <div class="card">
+      <dl class="meta-grid" id="joineryItemMetaGrid"></dl>
+      <button class="btn secondary" id="viewOnPlanBtn" style="margin-top:14px;">View on plan</button>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Site Measure overlays</h2>
+      <p class="sub" style="margin:0;">Coming in a later step -- this section will show this item's measured overlay once Site Measure is updated to read and write joinery item records directly, instead of its own separate room-marker objects.</p>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Shop drawings</h2>
+      <p class="sub" style="margin:0;">Coming in a later step.</p>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Manufacture + Install ITP</h2>
+      <p class="sub" style="margin:0;">Coming in a later step -- this section will link this item's Manufacture ITP and Install ITP checklist entries once those apps are updated to key off joinery item records directly.</p>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Photos</h2>
+      <p class="sub" style="margin:0;">Coming in a later step.</p>
+    </div>
+  </section>
+
+  <!-- ---- Status Overview: project-wide grid of every joinery item, status
+       at a glance -- every item is "created" in V1, since no app updates
+       status yet, but the grid itself is written to reflect whatever
+       status is actually on each record, not hardcoded. ---- -->
+  <section id="screenStatusOverview" class="screen">
+    <div class="backrow"><button class="btn secondary" id="backFromStatusOverviewBtn">&larr; Levels</button></div>
+    <h1 id="statusOverviewProjectLabel">Status Overview</h1>
+    <p class="sub">Every joinery item in this project, at a glance.</p>
+    <div class="card" id="statusOverviewCard">
+      <div class="status-grid" id="statusOverviewGrid"></div>
+      <div class="empty-note" id="statusOverviewEmpty" hidden>No joinery items yet -- place some from a level's plan ("Place joinery items", once it has a floor plan).</div>
+    </div>
+  </section>
+
+  <!-- ---- Plan canvas: lightweight pan/zoom/pin-drop, for placing joinery markers on a LEVEL's own plan ---- -->
+  <section id="screenPlanCanvas" class="screen plan-canvas-screen">
+    <div class="plan-canvas-topbar">
+      <button class="btn secondary" id="backFromPlanCanvasBtn">&larr; Back</button>
+      <span id="planCanvasTitle">Level plan</span>
+    </div>
+    <div class="plan-canvas-stage" id="planCanvasStage">
+      <svg id="planCanvasSvg" width="100%" height="100%">
+        <g id="planCanvasWorld">
+          <g id="planCanvasTiles"></g>
+          <g id="planCanvasMarkers"></g>
+        </g>
+      </svg>
+    </div>
+    <div class="plan-canvas-hint">Tap anywhere on the plan to add a joinery item &middot; drag to pan &middot; pinch or scroll to zoom &middot; tap a marker to see its details</div>
+  </section>
+
+</main>
+
+<!-- ---- crop dialog (image floorplan import) ---- -->
+<div class="modal-backdrop" id="cropBackdrop" hidden>
+  <div class="modal">
+    <h2>Crop the floorplan</h2>
+    <p class="sub">Drag the box, or its corners, to crop -- or skip to use the whole photo.</p>
+    <div class="crop-stage" id="cropStage">
+      <img id="cropImg" alt="">
+      <div class="crop-rect" id="cropRectEl">
+        <div class="crop-handle nw" data-corner="nw"></div>
+        <div class="crop-handle ne" data-corner="ne"></div>
+        <div class="crop-handle sw" data-corner="sw"></div>
+        <div class="crop-handle se" data-corner="se"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="cropSkipBtn">Use whole photo</button>
+      <button class="btn" id="cropApplyBtn">Crop</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- PDF page picker (multi-page floorplan import) ---- -->
+<div class="modal-backdrop" id="pdfPickerBackdrop" hidden>
+  <div class="modal">
+    <h2>Choose a page</h2>
+    <p class="sub" id="pdfPickerMsg">This PDF has multiple pages -- pick one to import.</p>
+    <div class="pdf-page-grid" id="pdfPickerGrid"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="pdfPickerCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- generic confirm dialog (used before replacing an existing floorplan) ---- -->
+<div class="modal-backdrop" id="confirmBackdrop" hidden>
+  <div class="modal">
+    <h2 id="confirmTitle">Are you sure?</h2>
+    <div class="modal-actions">
+      <button class="btn secondary" id="confirmCancelBtn">Cancel</button>
+      <button class="btn" id="confirmOkBtn">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- Add joinery item dialog (Room + Joinery ID + Description) ---- -->
+<div class="modal-backdrop" id="addItemBackdrop" hidden>
+  <div class="modal">
+    <h2>Add joinery item</h2>
+    <div class="field">
+      <label for="addItemRoomSelect">Room</label>
+      <select id="addItemRoomSelect" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;"></select>
+    </div>
+    <div class="field" id="addItemNewRoomField" hidden>
+      <label for="addItemNewRoomInput">New room name</label>
+      <input type="text" id="addItemNewRoomInput">
+    </div>
+    <div class="field"><label for="addItemJoineryIdInput">Joinery ID</label><input type="text" id="addItemJoineryIdInput"></div>
+    <div class="field"><label for="addItemDescriptionInput">Description</label><input type="text" id="addItemDescriptionInput"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="addItemCancelBtn">Cancel</button>
+      <button class="btn" id="addItemSaveBtn">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- generic single-line prompt dialog (used for "New Project" etc.) ---- -->
+<div class="modal-backdrop" id="promptBackdrop" hidden>
+  <div class="modal">
+    <h2 id="promptTitle">Name</h2>
+    <div class="field"><input type="text" id="promptInput"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="promptCancel">Cancel</button>
+      <button class="btn" id="promptOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- project info (metadata) dialog ---- -->
+<div class="modal-backdrop" id="projectInfoBackdrop" hidden>
+  <div class="modal">
+    <h2>Project info</h2>
+    <p class="sub">Shown to Site Measure, Viewer, and both ITP apps.</p>
+    <div class="field"><label for="piNameInput">Project name</label><input type="text" id="piNameInput"></div>
+    <div class="field"><label for="piNoInput">Project number</label><input type="text" id="piNoInput"></div>
+    <div class="field"><label for="piClientInput">Client</label><input type="text" id="piClientInput"></div>
+    <div class="field"><label for="piBuilderInput">Builder</label><input type="text" id="piBuilderInput"></div>
+    <div class="field"><label for="piSiteAddressInput">Site address</label><input type="text" id="piSiteAddressInput"></div>
+    <div class="field"><label for="piProjectManagerInput">Project manager</label><input type="text" id="piProjectManagerInput"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="projectInfoSkip">Cancel</button>
+      <button class="btn" id="projectInfoSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================== small helpers ============================== */
+  var toastEl = document.getElementById("toast");
+  function showToast(msg, durationMs){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function(){ toastEl.classList.remove("show"); }, durationMs || 2600);
+  }
+
+  // Own IndexedDB database for this app's own session state (the Projects
+  // root folder handle) -- deliberately separate from Site Measure's own
+  // "redline-db"/"session" and from the shared "utzline-identity" database,
+  // same one-database-per-concern pattern already established across the
+  // family.
+  var DB_NAME = "utzline-projects-db", STORE = "session";
+  function idbOpen(){
+    return new Promise(function(res, rej){
+      try{
+        var r = indexedDB.open(DB_NAME, 1);
+        r.onupgradeneeded = function(){ r.result.createObjectStore(STORE); };
+        r.onsuccess = function(){ res(r.result); };
+        r.onerror = function(){ rej(r.error); };
+      }catch(e){ rej(e); }
+    });
+  }
+  function idbSet(key, val){
+    return idbOpen().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put(val, key);
+        tx.oncomplete = function(){ res(); };
+        tx.onerror = function(){ rej(tx.error); };
+      });
+    });
+  }
+  function idbGet(key){
+    return idbOpen().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction(STORE, "readonly");
+        var rq = tx.objectStore(STORE).get(key);
+        rq.onsuccess = function(){ res(rq.result); };
+        rq.onerror = function(){ rej(rq.error); };
+      });
+    });
+  }
+
+  /* ============================== folder shape / listing ==============================
+     Lifted essentially verbatim from redline-projects/source.html so this
+     app's own idea of "what's a project / level / room" can never quietly
+     drift from what Site Measure, Viewer, Install ITP and Manufacture ITP
+     already expect. See that file's own comments on each of these for the
+     full reasoning; kept short here to avoid duplicating it at length. */
+  function listSubdirNames(dirHandle){
+    if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
+    var names = [];
+    var iter = dirHandle.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return names;
+        if (res.value && res.value.kind === "directory") names.push(res.value.name);
+        return step();
+      });
+    }
+    return step().then(function(list){
+      list.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+      return list;
+    });
+  }
+  function hasReservedWorkSubfolders(names){
+    return names.indexOf("saves") !== -1 && names.indexOf("pdfs") !== -1 && names.indexOf("backup") !== -1;
+  }
+  function isLevelShaped(dirHandle){
+    return listSubdirNames(dirHandle).then(hasReservedWorkSubfolders);
+  }
+  function anySubfolderMatches(dirHandle, names, predicate, i){
+    i = i || 0;
+    if (i >= names.length) return Promise.resolve(false);
+    return dirHandle.getDirectoryHandle(names[i]).then(function(childHandle){
+      return predicate(childHandle);
+    }).catch(function(){ return false; }).then(function(matched){
+      if (matched) return true;
+      return anySubfolderMatches(dirHandle, names, predicate, i + 1);
+    });
+  }
+  function detectFolderShape(dirHandle){
+    return listSubdirNames(dirHandle).then(function(names){
+      if (hasReservedWorkSubfolders(names)) return "level";
+      if (!names.length) return "empty";
+      return anySubfolderMatches(dirHandle, names, isLevelShaped).then(function(hasLevelChild){
+        if (hasLevelChild) return "project";
+        return anySubfolderMatches(dirHandle, names, function(childHandle){
+          return listSubdirNames(childHandle).then(function(grandNames){
+            if (!grandNames.length) return false;
+            return anySubfolderMatches(childHandle, grandNames, isLevelShaped);
+          });
+        }).then(function(hasProjectChild){
+          return hasProjectChild ? "root" : "unknown";
+        });
+      });
+    });
+  }
+  function listExistingProjects(rootHandle){ return listSubdirNames(rootHandle); }
+  // "itp"/"itp-manufacture" are the two ITP apps' own project-wide folders --
+  // excluded the same way Site Measure/Install ITP/Manufacture ITP already
+  // exclude each other's, so neither ever shows up here mislabeled as a
+  // level someone could open.
+  function listExistingLevels(projectHandle){
+    return listSubdirNames(projectHandle).then(function(names){
+      return names.filter(function(n){ return n !== "itp" && n !== "itp-manufacture"; });
+    });
+  }
+  function listExistingRooms(levelHandle){
+    return listSubdirNames(levelHandle).then(function(names){
+      return names.filter(function(n){ return n !== "saves" && n !== "pdfs" && n !== "backup"; });
+    });
+  }
+  function sanitizeFileBase(name){
+    var cleaned = String(name || "")
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
+      .trim()
+      .replace(/^[._]+|[._\s]+$/g, "");
+    return cleaned.slice(0, 120) || "plan";
+  }
+  function projectSaveFilename(name){ return sanitizeFileBase(name) + ".utzline.json"; }
+
+  // Same as Site Measure's own ensureWorkFolders: resolves (creating if
+  // missing) a level/room's three reserved subfolders. Called every time a
+  // level/room is opened here -- browsed to OR just created -- exactly like
+  // Site Measure's own openLevelFromHandle/openRoom already do, since this
+  // app is never in a read-only mode the way the Viewer is.
+  function ensureWorkFolders(dirHandle){
+    return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
+      return dirHandle.getDirectoryHandle("pdfs", { create: true }).then(function(pdfsH){
+        return dirHandle.getDirectoryHandle("backup", { create: true }).then(function(backupH){
+          return { savesHandle: savesH, pdfsHandle: pdfsH, backupsHandle: backupH };
+        });
+      });
+    });
+  }
+
+  // Whether a level/room's own folder already has a saved floorplan. A
+  // folder whose "saves" subfolder doesn't even exist yet resolves to "no
+  // plan", same as one that has "saves" but no save file inside it yet.
+  function workFolderHasPlan(dirHandle, name){
+    if (!dirHandle) return Promise.resolve(false);
+    return dirHandle.getDirectoryHandle("saves", { create: false }).then(function(savesH){
+      return savesH.getFileHandle(projectSaveFilename(name)).then(function(){ return true; }, function(){ return false; });
+    }, function(){ return false; });
+  }
+  // Reads back an existing floorplan save file (written by this app or by
+  // Site Measure -- same file, same shape) so the static preview can show
+  // it immediately on opening a level/room that already has one, not only
+  // right after a fresh import.
+  function readFloorplan(dirHandle, name){
+    if (!dirHandle) return Promise.resolve(null);
+    return dirHandle.getDirectoryHandle("saves", { create: false }).then(function(savesH){
+      return savesH.getFileHandle(projectSaveFilename(name));
+    }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{
+        var saved = JSON.parse(text);
+        if (!saved || !(saved.utzlineProject || saved.redlineProject)) return null;
+        return { imageDataURL: saved.imageDataURL || null, imageTiles: saved.imageTiles || null, imageW: saved.imageW || 0, imageH: saved.imageH || 0 };
+      }catch(e){ return null; }
+    }, function(){ return null; });
+  }
+
+  // Project metadata -- {no, name, contractor} today (Site Measure's
+  // existing schema); this app's own Create/Edit Project screen (next step
+  // in the build sequence) extends it with client/builder/site address/
+  // project manager. Read-only here -- shown as a preview on the level list
+  // so existing projects' info is visible even before the edit screen
+  // exists. Same filename/shape/parsing as source.html's own
+  // readProjectMeta so this app never disagrees with Site Measure about
+  // what's in this file.
+  function projectMetaFilename(){ return "project-meta.json"; }
+  function readProjectMeta(dirHandle){
+    if (!dirHandle) return Promise.resolve(null);
+    return dirHandle.getFileHandle(projectMetaFilename()).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{
+        var parsed = JSON.parse(text);
+        return {
+          no: String(parsed.no || ""),
+          name: String(parsed.name || ""),
+          contractor: String(parsed.contractor || ""),
+          client: String(parsed.client || ""),
+          siteAddress: String(parsed.siteAddress || ""),
+          projectManager: String(parsed.projectManager || "")
+        };
+      }catch(e){ return null; }
+    }, function(){ return null; }); // no file yet -- not an error
+  }
+
+  // Extended schema (v2): keeps Site Measure's own three keys (no/name/
+  // contractor) exactly as-is -- Site Measure's "Project Info" dialog and
+  // both ITP apps' title blocks read those same three keys today, and
+  // decision #12's cutover hasn't happened yet, so this app must not break
+  // what Site Measure still writes/reads meanwhile. client/siteAddress/
+  // projectManager are new, additive keys; an older project (or one Site
+  // Measure itself still edits) simply won't have them, which readProjectMeta
+  // above already treats as empty strings, not an error.
+  function writeProjectMeta(dirHandle, meta){
+    var payload = JSON.stringify({
+      no: String((meta && meta.no) || ""),
+      name: String((meta && meta.name) || ""),
+      contractor: String((meta && meta.contractor) || ""),
+      client: String((meta && meta.client) || ""),
+      siteAddress: String((meta && meta.siteAddress) || ""),
+      projectManager: String((meta && meta.projectManager) || "")
+    });
+    return dirHandle.getFileHandle(projectMetaFilename(), { create: true }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(w){
+      return w.write(payload).then(function(){ return w.close(); });
+    });
+  }
+
+  /* ============================== generic prompt dialog ============================== */
+  var promptBackdrop = document.getElementById("promptBackdrop");
+  var promptTitle = document.getElementById("promptTitle");
+  var promptInput = document.getElementById("promptInput");
+  var promptOk = document.getElementById("promptOk");
+  var promptCancel = document.getElementById("promptCancel");
+  var promptResolve = null;
+  function showPromptDialog(title, initialValue){
+    promptTitle.textContent = title;
+    promptInput.value = initialValue || "";
+    promptBackdrop.hidden = false;
+    promptInput.focus();
+    promptInput.select();
+    return new Promise(function(resolve){ promptResolve = resolve; });
+  }
+  function closePrompt(value){
+    promptBackdrop.hidden = true;
+    var resolve = promptResolve; promptResolve = null;
+    if (resolve) resolve(value);
+  }
+  promptOk.addEventListener("click", function(){ closePrompt(promptInput.value); });
+  promptCancel.addEventListener("click", function(){ closePrompt(null); });
+  promptBackdrop.addEventListener("click", function(e){ if (e.target === promptBackdrop) closePrompt(null); });
+  promptInput.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); closePrompt(promptInput.value); }
+    else if (e.key === "Escape"){ e.preventDefault(); closePrompt(null); }
+  });
+
+  /* ============================== project info dialog ============================== */
+  var projectInfoBackdrop = document.getElementById("projectInfoBackdrop");
+  var piNameInput = document.getElementById("piNameInput");
+  var piNoInput = document.getElementById("piNoInput");
+  var piClientInput = document.getElementById("piClientInput");
+  var piBuilderInput = document.getElementById("piBuilderInput");
+  var piSiteAddressInput = document.getElementById("piSiteAddressInput");
+  var piProjectManagerInput = document.getElementById("piProjectManagerInput");
+  var projectInfoSave = document.getElementById("projectInfoSave");
+  var projectInfoSkip = document.getElementById("projectInfoSkip");
+  var projectInfoResolve = null;
+  function showProjectInfoDialog(current){
+    piNameInput.value = (current && current.name) || "";
+    piNoInput.value = (current && current.no) || "";
+    piClientInput.value = (current && current.client) || "";
+    piBuilderInput.value = (current && current.contractor) || "";
+    piSiteAddressInput.value = (current && current.siteAddress) || "";
+    piProjectManagerInput.value = (current && current.projectManager) || "";
+    projectInfoBackdrop.hidden = false;
+    piNameInput.focus();
+    return new Promise(function(resolve){ projectInfoResolve = resolve; });
+  }
+  function closeProjectInfo(value){
+    projectInfoBackdrop.hidden = true;
+    var resolve = projectInfoResolve; projectInfoResolve = null;
+    if (resolve) resolve(value);
+  }
+  function currentProjectInfoValue(){
+    return {
+      name: piNameInput.value,
+      no: piNoInput.value,
+      client: piClientInput.value,
+      contractor: piBuilderInput.value,
+      siteAddress: piSiteAddressInput.value,
+      projectManager: piProjectManagerInput.value
+    };
+  }
+  projectInfoSave.addEventListener("click", function(){ closeProjectInfo(currentProjectInfoValue()); });
+  projectInfoSkip.addEventListener("click", function(){ closeProjectInfo(null); });
+  projectInfoBackdrop.addEventListener("click", function(e){ if (e.target === projectInfoBackdrop) closeProjectInfo(null); });
+
+  /* ============================== company logo (single, company-wide) ==============================
+     Stored at the Projects ROOT, a sibling of every project folder -- a
+     FILE, not a folder, so listSubdirNames() (used by every app's own
+     project list, this one included) never lists it as a project. Written
+     as whatever bytes the browser hands back for the chosen image file --
+     browsers decode an <img>/object-URL by the file's actual content, not
+     its extension, so storing every format under one fixed
+     "company-logo.png" name works regardless of what was actually
+     uploaded (jpg, svg-as-raster, etc.) without needing to track a real
+     extension anywhere. */
+  function companyLogoFilename(){ return "company-logo.png"; }
+  var companyLogoObjectUrl = null;
+  function readCompanyLogo(){
+    if (!projectsRootHandle) return Promise.resolve(null);
+    return projectsRootHandle.getFileHandle(companyLogoFilename(), { create: false }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.arrayBuffer();
+    }).then(function(buf){
+      if (companyLogoObjectUrl) URL.revokeObjectURL(companyLogoObjectUrl);
+      companyLogoObjectUrl = URL.createObjectURL(new Blob([buf]));
+      return companyLogoObjectUrl;
+    }, function(){ return null; });
+  }
+  function writeCompanyLogo(file){
+    return projectsRootHandle.getFileHandle(companyLogoFilename(), { create: true }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(w){
+      return file.arrayBuffer().then(function(buf){
+        return w.write(buf).then(function(){ return w.close(); });
+      });
+    });
+  }
+  function removeCompanyLogo(){
+    return projectsRootHandle.removeEntry(companyLogoFilename()).catch(function(){});
+  }
+  var companyLogoPreviewBox = document.getElementById("companyLogoPreviewBox");
+  var removeCompanyLogoBtn = document.getElementById("removeCompanyLogoBtn");
+  var chooseCompanyLogoBtn = document.getElementById("chooseCompanyLogoBtn");
+  var companyLogoFileInput = document.getElementById("companyLogoFileInput");
+  function refreshCompanyLogoPreview(){
+    return readCompanyLogo().then(function(url){
+      if (url){
+        companyLogoPreviewBox.innerHTML = "<img src=\"" + url + "\" alt=\"Company logo\">";
+        removeCompanyLogoBtn.hidden = false;
+      } else {
+        companyLogoPreviewBox.innerHTML = "<span class=\"placeholder\">No logo</span>";
+        removeCompanyLogoBtn.hidden = true;
+      }
+    });
+  }
+  chooseCompanyLogoBtn.addEventListener("click", function(){ companyLogoFileInput.click(); });
+  companyLogoFileInput.addEventListener("change", function(){
+    var file = companyLogoFileInput.files && companyLogoFileInput.files[0];
+    companyLogoFileInput.value = "";
+    if (!file) return;
+    writeCompanyLogo(file).then(function(){
+      showToast("Company logo updated.");
+      return refreshCompanyLogoPreview();
+    }).catch(function(err){
+      console.error("Saving company logo failed:", err);
+      showToast("Couldn't save the logo.");
+    });
+  });
+  removeCompanyLogoBtn.addEventListener("click", function(){
+    removeCompanyLogo().then(function(){
+      showToast("Company logo removed.");
+      return refreshCompanyLogoPreview();
+    });
+  });
+
+  /* ============================== create project ============================== */
+  var newProjectBtn = document.getElementById("newProjectBtn");
+  var editProjectInfoBtn = document.getElementById("editProjectInfoBtn");
+  var addProjectInfoBtn = document.getElementById("addProjectInfoBtn");
+
+  // Same "collides -> numbered suffix" dedupe loop as Site Measure's own
+  // createNewProject, so a name typed here never silently reopens (or
+  // silently shadows) an existing project folder.
+  function createNewProject(rawName){
+    var name = sanitizeFileBase(rawName);
+    return listExistingProjects(projectsRootHandle).then(function(existing){
+      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+      var finalName = name, n = 2;
+      while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
+        finalName = name + " " + n; n++;
+      }
+      return projectsRootHandle.getDirectoryHandle(finalName, { create: true }).then(function(dirH){
+        activeProjectHandle = dirH;
+        activeProjectName = finalName;
+        return finalName;
+      });
+    });
+  }
+  newProjectBtn.addEventListener("click", function(){
+    showPromptDialog("New project name", "").then(function(value){
+      if (value === null || !value.trim()) return;
+      return createNewProject(value).then(function(finalName){
+        showToast("Created “" + finalName + "”.");
+        return showProjectInfoDialog(null).then(function(info){
+          if (info) return writeProjectMeta(activeProjectHandle, info);
+        });
+      }).then(function(){
+        return populateLevelList();
+      });
+    }).catch(function(err){
+      console.error("Create project failed:", err);
+      showToast("Couldn't create that project.");
+    });
+  });
+  function editCurrentProjectInfo(){
+    readProjectMeta(activeProjectHandle).then(function(current){
+      return showProjectInfoDialog(current);
+    }).then(function(info){
+      if (!info) return;
+      return writeProjectMeta(activeProjectHandle, info).then(function(){
+        showToast("Project info saved.");
+        return populateLevelList();
+      });
+    }).catch(function(err){
+      console.error("Saving project info failed:", err);
+      showToast("Couldn't save project info.");
+    });
+  }
+  editProjectInfoBtn.addEventListener("click", editCurrentProjectInfo);
+  addProjectInfoBtn.addEventListener("click", editCurrentProjectInfo);
+
+  /* ============================== generic confirm dialog ============================== */
+  var confirmBackdrop = document.getElementById("confirmBackdrop");
+  var confirmTitle = document.getElementById("confirmTitle");
+  var confirmOkBtn = document.getElementById("confirmOkBtn");
+  var confirmCancelBtn = document.getElementById("confirmCancelBtn");
+  var confirmResolve = null;
+  function showConfirmDialog(message){
+    confirmTitle.textContent = message;
+    confirmBackdrop.hidden = false;
+    return new Promise(function(resolve){ confirmResolve = resolve; });
+  }
+  function closeConfirmDialog(ok){
+    confirmBackdrop.hidden = true;
+    var resolve = confirmResolve; confirmResolve = null;
+    if (resolve) resolve(ok);
+  }
+  confirmOkBtn.addEventListener("click", function(){ closeConfirmDialog(true); });
+  confirmCancelBtn.addEventListener("click", function(){ closeConfirmDialog(false); });
+  confirmBackdrop.addEventListener("click", function(e){ if (e.target === confirmBackdrop) closeConfirmDialog(false); });
+
+  /* ============================== floorplan import: image read + crop ==============================
+     Lifted from Site Measure's own readImageFile/showCropDialog/applyCrop
+     (source.html) -- same decode-via-<img> confirmation, same drag-to-crop
+     interaction, same "draw from the ORIGINAL image at native resolution,
+     never through the smaller on-screen <img>" approach so a crop never
+     costs sharpness the source photo actually had. */
+  function readImageFile(file, timeoutMs){
+    return new Promise(function(resolve, reject){
+      var settled = false;
+      var to = setTimeout(function(){ settle(reject, { code: "image_read_timeout" }); }, timeoutMs || 20000);
+      function settle(fn, arg){ if (settled) return; settled = true; clearTimeout(to); fn(arg); }
+      var reader = new FileReader();
+      reader.onload = function(){
+        var img = new Image();
+        img.onload = function(){ settle(resolve, { dataUrl: reader.result, w: img.naturalWidth, h: img.naturalHeight }); };
+        img.onerror = function(){ settle(reject, { code: "image_decode_failed" }); };
+        img.src = reader.result;
+      };
+      reader.onerror = function(){ settle(reject, { code: "image_read_failed" }); };
+      reader.readAsDataURL(file);
+    });
+  }
+  function imageReadErrorToast(err){
+    if (err && err.code === "image_read_timeout") return "That photo took too long to load -- try again.";
+    if (err && err.code === "image_decode_failed") return "Couldn't read that image (unsupported format?).";
+    return "Couldn't read that file.";
+  }
+
+  var cropBackdrop = document.getElementById("cropBackdrop");
+  var cropImg = document.getElementById("cropImg");
+  var cropRectEl = document.getElementById("cropRectEl");
+  var cropSkipBtn = document.getElementById("cropSkipBtn");
+  var cropApplyBtn = document.getElementById("cropApplyBtn");
+  var cropResolve = null, cropSrc = null, cropRect = null;
+  function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+  function showCropDialog(dataUrl, naturalW, naturalH){
+    return new Promise(function(resolve){
+      cropResolve = resolve;
+      cropSrc = { dataUrl: dataUrl, w: naturalW, h: naturalH };
+      cropImg.src = dataUrl;
+      cropBackdrop.hidden = false;
+      var place = function(){
+        var dw = cropImg.offsetWidth, dh = cropImg.offsetHeight;
+        var inset = 0.1;
+        cropRect = { x: dw * inset, y: dh * inset, w: dw * (1 - 2 * inset), h: dh * (1 - 2 * inset) };
+        renderCropRect();
+      };
+      if (cropImg.complete && cropImg.naturalWidth) requestAnimationFrame(place);
+      else cropImg.onload = function(){ requestAnimationFrame(place); };
+    });
+  }
+  function renderCropRect(){
+    cropRectEl.style.left = cropRect.x + "px";
+    cropRectEl.style.top = cropRect.y + "px";
+    cropRectEl.style.width = cropRect.w + "px";
+    cropRectEl.style.height = cropRect.h + "px";
+  }
+  function closeCropDialog(result){
+    cropBackdrop.hidden = true;
+    cropImg.onload = null;
+    cropImg.src = "";
+    var resolve = cropResolve; cropResolve = null;
+    var src = cropSrc; cropSrc = null;
+    if (resolve) resolve(result || { dataUrl: src.dataUrl, w: src.w, h: src.h });
+  }
+  function applyCrop(){
+    var dw = cropImg.offsetWidth, dh = cropImg.offsetHeight;
+    if (!dw || !dh || !cropSrc){ closeCropDialog(); return; }
+    var scale = cropSrc.w / dw;
+    var nx = Math.round(cropRect.x * scale), ny = Math.round(cropRect.y * scale);
+    var nw = Math.max(1, Math.round(cropRect.w * scale)), nh = Math.max(1, Math.round(cropRect.h * scale));
+    var full = new Image();
+    full.onload = function(){
+      var c = document.createElement("canvas");
+      c.width = nw; c.height = nh;
+      var ctx = c.getContext("2d");
+      ctx.drawImage(full, nx, ny, nw, nh, 0, 0, nw, nh);
+      var mime = (/^data:([^;]+);/.exec(cropSrc.dataUrl) || [])[1] || "image/jpeg";
+      var out;
+      try{ out = c.toDataURL(mime === "image/png" ? "image/png" : "image/jpeg", 0.92); }
+      catch(e){ closeCropDialog(); return; }
+      closeCropDialog({ dataUrl: out, w: nw, h: nh });
+    };
+    full.onerror = function(){ closeCropDialog(); };
+    full.src = cropSrc.dataUrl;
+  }
+  cropSkipBtn.addEventListener("click", function(){ closeCropDialog(); });
+  cropApplyBtn.addEventListener("click", applyCrop);
+  var MIN_CROP_PX = 24;
+  function startCropDrag(e, mode, corner){
+    e.preventDefault(); e.stopPropagation();
+    var startX = e.clientX, startY = e.clientY;
+    var start = { x: cropRect.x, y: cropRect.y, w: cropRect.w, h: cropRect.h };
+    var stageW = cropImg.offsetWidth, stageH = cropImg.offsetHeight;
+    var target = e.currentTarget;
+    try{ target.setPointerCapture(e.pointerId); }catch(err){}
+    function onMove(ev){
+      var dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (mode === "move"){
+        cropRect.x = clamp(start.x + dx, 0, stageW - start.w);
+        cropRect.y = clamp(start.y + dy, 0, stageH - start.h);
+      } else {
+        var left = start.x, top = start.y, right = start.x + start.w, bottom = start.y + start.h;
+        if (corner === "nw" || corner === "sw") left = clamp(start.x + dx, 0, right - MIN_CROP_PX);
+        if (corner === "ne" || corner === "se") right = clamp(right + dx, left + MIN_CROP_PX, stageW);
+        if (corner === "nw" || corner === "ne") top = clamp(start.y + dy, 0, bottom - MIN_CROP_PX);
+        if (corner === "sw" || corner === "se") bottom = clamp(bottom + dy, top + MIN_CROP_PX, stageH);
+        cropRect.x = left; cropRect.y = top; cropRect.w = right - left; cropRect.h = bottom - top;
+      }
+      renderCropRect();
+    }
+    function onUp(){
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
+    }
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
+  }
+  cropRectEl.addEventListener("pointerdown", function(e){
+    if (e.target !== cropRectEl) return;
+    startCropDrag(e, "move", null);
+  });
+  Array.prototype.forEach.call(cropRectEl.querySelectorAll(".crop-handle"), function(handle){
+    handle.addEventListener("pointerdown", function(e){ startCropDrag(e, "resize", handle.getAttribute("data-corner")); });
+  });
+
+  /* ============================== floorplan import: PDF pages ==============================
+     Lifted from Site Measure's own renderPdfPage/renderPdfPageGrid/
+     renderPdfPageMaybeTiled/pdfFileToImage/showPdfPagePicker (source.html) --
+     same constants, same tiling behaviour for a genuinely oversized sheet,
+     so a large CAD-exported fitout scan imported here looks and measures
+     identically to one imported through Site Measure's own "Open". Only
+     simplification: this picker is always single-select (a level/room's
+     base plan is always exactly one page), unlike Site Measure's "Insert
+     image" multi-select mode, which this app has no equivalent of. */
+  var PX_TO_PT = 0.24;
+  var PDF_IMPORT_MAX_DIM = 20000;
+  var PDF_TILE_MAX_DIM = 4000;
+  function isPdfFile(file){ return file.type === "application/pdf" || /\.pdf$/i.test(file.name || ""); }
+  function pdfImportLibsReady(){ return !!(window.pdfjsLib && typeof window.pdfjsLib.getDocument === "function"); }
+  function waitForPdfImportLibs(timeoutMs){
+    return new Promise(function(resolve){
+      if (pdfImportLibsReady() || window.__pdfImportLibFailed){ resolve(pdfImportLibsReady()); return; }
+      var elapsed = 0, step = 150;
+      var iv = setInterval(function(){
+        elapsed += step;
+        if (pdfImportLibsReady() || window.__pdfImportLibFailed || elapsed >= timeoutMs){
+          clearInterval(iv);
+          resolve(pdfImportLibsReady());
+        }
+      }, step);
+    });
+  }
+  function withPdfImportLibsReady(proceed){
+    if (pdfImportLibsReady()) return proceed();
+    if (window.__pdfImportLibFailed) return Promise.reject({ code: "pdf_import_failed" });
+    return waitForPdfImportLibs(8000).then(function(ready){
+      if (window.__pdfImportLibFailed) return Promise.reject({ code: "pdf_import_failed" });
+      if (!ready) return Promise.reject({ code: "pdf_import_loading" });
+      return proceed();
+    });
+  }
+  function ensurePdfWorker(){
+    if (!ensurePdfWorker._set){
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+      ensurePdfWorker._set = true;
+    }
+  }
+  function renderPdfPage(pdfDoc, pageNum, scale, maxDim){
+    return pdfDoc.getPage(pageNum).then(function(page){
+      var viewport = page.getViewport({ scale: scale });
+      if (maxDim){
+        var longest = Math.max(viewport.width, viewport.height);
+        if (longest > maxDim) viewport = page.getViewport({ scale: scale * (maxDim / longest) });
+      }
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(viewport.width));
+      canvas.height = Math.max(1, Math.round(viewport.height));
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function(){
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+        var w = canvas.width, h = canvas.height;
+        canvas.width = 0; canvas.height = 0;
+        return { dataUrl: dataUrl, w: w, h: h };
+      });
+    });
+  }
+  function renderPdfPageGrid(page, viewport, fullW, fullH, cols, rows){
+    var tileW = Math.ceil(fullW / cols), tileH = Math.ceil(fullH / rows);
+    var jobs = [];
+    for (var row = 0; row < rows; row++){
+      for (var col = 0; col < cols; col++){
+        var x = col * tileW, y = row * tileH;
+        var w = Math.min(tileW, fullW - x), h = Math.min(tileH, fullH - y);
+        jobs.push({ x: x, y: y, w: w, h: h });
+      }
+    }
+    var tiles = [];
+    return jobs.reduce(function(chain, job){
+      return chain.then(function(){
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(job.w));
+        canvas.height = Math.max(1, Math.round(job.h));
+        var ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+          transform: [1, 0, 0, 1, -job.x, -job.y]
+        }).promise.then(function(){
+          var dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+          var w = canvas.width, h = canvas.height;
+          canvas.width = 0; canvas.height = 0;
+          tiles.push({ dataUrl: dataUrl, x: job.x, y: job.y, w: w, h: h });
+        });
+      });
+    }, Promise.resolve()).then(function(){ return tiles; });
+  }
+  function renderPdfPageMaybeTiled(pdfDoc, pageNum, scale){
+    return pdfDoc.getPage(pageNum).then(function(page){
+      var viewport = page.getViewport({ scale: scale });
+      var longest = Math.max(viewport.width, viewport.height);
+      if (longest > PDF_IMPORT_MAX_DIM){
+        viewport = page.getViewport({ scale: scale * (PDF_IMPORT_MAX_DIM / longest) });
+      }
+      var fullW = Math.max(1, Math.round(viewport.width));
+      var fullH = Math.max(1, Math.round(viewport.height));
+      var cols = Math.ceil(fullW / PDF_TILE_MAX_DIM);
+      var rows = Math.ceil(fullH / PDF_TILE_MAX_DIM);
+      if (cols <= 1 && rows <= 1){
+        return renderPdfPage(pdfDoc, pageNum, scale, PDF_IMPORT_MAX_DIM);
+      }
+      return renderPdfPageGrid(page, viewport, fullW, fullH, cols, rows).then(function(tiles){
+        return { tiles: tiles, w: fullW, h: fullH };
+      });
+    });
+  }
+  function pdfFileToImage(file){
+    return withPdfImportLibsReady(function(){
+      ensurePdfWorker();
+      var importScale = 1 / PX_TO_PT;
+      function renderOnePage(pdfDoc, pageNum){ return renderPdfPageMaybeTiled(pdfDoc, pageNum, importScale); }
+      return file.arrayBuffer().then(function(buf){
+        return window.pdfjsLib.getDocument({ data: buf }).promise;
+      }).then(function(pdfDoc){
+        if (pdfDoc.numPages <= 1){
+          return renderOnePage(pdfDoc, 1).then(function(res){ res.pageCount = 1; res.pageNum = 1; return res; });
+        }
+        return showPdfPagePicker(pdfDoc).then(function(pageNum){
+          if (!pageNum) return Promise.reject({ code: "pdf_import_cancelled" });
+          return renderOnePage(pdfDoc, pageNum).then(function(res){ res.pageCount = pdfDoc.numPages; res.pageNum = pageNum; return res; });
+        });
+      });
+    });
+  }
+  function pdfImportErrorToast(err){
+    if (err && err.code === "pdf_import_failed") return "PDF import couldn't load (network/firewall) -- try an image instead.";
+    if (err && err.code === "pdf_import_loading") return "PDF import is still loading -- try again in a second.";
+    console.error("PDF import failed:", err);
+    return "Couldn't open that PDF.";
+  }
+
+  var pdfPickerBackdrop = document.getElementById("pdfPickerBackdrop");
+  var pdfPickerMsg = document.getElementById("pdfPickerMsg");
+  var pdfPickerGrid = document.getElementById("pdfPickerGrid");
+  var pdfPickerCancelBtn = document.getElementById("pdfPickerCancelBtn");
+  var pdfPickerResolve = null;
+  function showPdfPagePicker(pdfDoc){
+    var n = pdfDoc.numPages;
+    var thumbs = [];
+    var chain = Promise.resolve();
+    for (var i = 1; i <= n; i++){
+      (function(pageNum){
+        chain = chain.then(function(){ return renderPdfPage(pdfDoc, pageNum, 0.22); }).then(function(t){ thumbs.push(t); });
+      })(i);
+    }
+    return chain.then(function(){
+      return new Promise(function(resolve){
+        pdfPickerResolve = resolve;
+        pdfPickerMsg.textContent = "This PDF has multiple pages — pick one to import.";
+        pdfPickerGrid.innerHTML = "";
+        thumbs.forEach(function(t, idx){
+          var pageNum = idx + 1;
+          var cell = document.createElement("button");
+          cell.type = "button"; cell.className = "pdf-page-cell";
+          var img = document.createElement("img"); img.src = t.dataUrl; img.alt = "Page " + pageNum;
+          var lab = document.createElement("span"); lab.textContent = "Page " + pageNum;
+          cell.appendChild(img); cell.appendChild(lab);
+          cell.addEventListener("click", function(){ closePdfPicker(pageNum); });
+          pdfPickerGrid.appendChild(cell);
+        });
+        pdfPickerBackdrop.hidden = false;
+      });
+    });
+  }
+  function closePdfPicker(result){
+    pdfPickerBackdrop.hidden = true;
+    if (pdfPickerResolve){ var r = pdfPickerResolve; pdfPickerResolve = null; r(result); }
+  }
+  pdfPickerCancelBtn.addEventListener("click", function(){ closePdfPicker(null); });
+  pdfPickerBackdrop.addEventListener("click", function(e){ if (e.target === pdfPickerBackdrop) closePdfPicker(null); });
+
+  /* ============================== floorplan import: orchestration + save ============================== */
+  // Site Measure's own default style for a brand-new plan (defaultStyle()
+  // in source.html) -- written here so a level/room Projects creates opens
+  // in Site Measure with the exact same starting defaults a level created
+  // BY Site Measure itself would have had, never an undefined/missing style
+  // object.
+  function defaultStyleObject(){
+    return {
+      strokeWidth: 4, fontSize: 32, dimensionEnds: "tick", lineEnds: "arrow",
+      colorByType: { dimension: "#c8391c", line: "#c8391c", angle: "#c8391c", rect: "#c8391c", text: "#c8391c", callout: "#c8391c" },
+      snapToGrid: false, hvSnap: false
+    };
+  }
+  // Writes the level/room's own save file in EXACTLY the shape Site
+  // Measure/Viewer already read (projectPayload() in source.html) -- no
+  // format change. bareName is the level/room's own folder name (the save
+  // FILENAME is sanitizeFileBase(bareName) + ".utzline.json"); fullFileBase
+  // is the "<Project>_<Level>[_<Room>]" identity string that goes INSIDE
+  // the payload's own fileBase field -- the two are deliberately different
+  // strings, same distinction Site Measure's own openLevelFromHandle/
+  // openRoom draw. Objects always start empty: importing/replacing a
+  // floorplan is a Projects responsibility; annotating it is Site
+  // Measure's, later.
+  function writeFloorplanSaveFile(dirHandle, bareName, fullFileBase, imageDataURL, imageW, imageH, imageTiles){
+    return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
+      var payload = JSON.stringify({
+        utzlineProject: 1,
+        imageDataURL: imageTiles ? null : imageDataURL,
+        imageW: imageW,
+        imageH: imageH,
+        imageTiles: imageTiles || null,
+        fileBase: fullFileBase,
+        objects: [],
+        style: defaultStyleObject(),
+        savedBy: ""
+      });
+      return savesH.getFileHandle(projectSaveFilename(bareName), { create: true }).then(function(fh){
+        return fh.createWritable();
+      }).then(function(w){
+        return w.write(payload).then(function(){ return w.close(); });
+      });
+    });
+  }
+  // Static, non-interactive preview -- confirms an import (especially a
+  // tiled one) actually landed correctly. The real pan/zoom/marker-drop
+  // canvas is a later build-sequence step.
+  function renderPlanPreview(el, imageDataURL, imageTiles, imageW, imageH){
+    el.innerHTML = "";
+    if (!imageW){ el.hidden = true; return; }
+    el.hidden = false;
+    if (imageTiles && imageTiles.length){
+      var wrap = document.createElement("div");
+      wrap.className = "tile-wrap";
+      wrap.style.paddingTop = (imageH / imageW * 100) + "%";
+      imageTiles.forEach(function(t){
+        var img = document.createElement("img");
+        img.src = t.dataUrl;
+        img.style.left = (t.x / imageW * 100) + "%";
+        img.style.top = (t.y / imageH * 100) + "%";
+        img.style.width = (t.w / imageW * 100) + "%";
+        img.style.height = (t.h / imageH * 100) + "%";
+        wrap.appendChild(img);
+      });
+      el.appendChild(wrap);
+    } else {
+      var img2 = document.createElement("img");
+      img2.className = "single";
+      img2.src = imageDataURL;
+      el.appendChild(img2);
+    }
+  }
+  // Shared by both the level and room "Import floor plan" buttons. Resolves
+  // with {imageDataURL, imageTiles, imageW, imageH} on success so the
+  // caller can update its own status/preview UI, or rejects (already
+  // toasted) on failure/cancel.
+  function importFloorplanFromFile(file){
+    if (isPdfFile(file)){
+      showToast("Importing PDF…");
+      return pdfFileToImage(file).then(function(res){
+        return { imageDataURL: res.tiles ? null : res.dataUrl, imageTiles: res.tiles || null, imageW: res.w, imageH: res.h };
+      });
+    }
+    return readImageFile(file).then(function(res){
+      return showCropDialog(res.dataUrl, res.w, res.h);
+    }).then(function(cropped){
+      return { imageDataURL: cropped.dataUrl, imageTiles: null, imageW: cropped.w, imageH: cropped.h };
+    });
+  }
+
+  var levelImportPlanBtn = document.getElementById("levelImportPlanBtn");
+  var levelPlanFileInput = document.getElementById("levelPlanFileInput");
+  var levelPlanPreview = document.getElementById("levelPlanPreview");
+  levelImportPlanBtn.addEventListener("click", function(){
+    workFolderHasPlan(activeLevelHandle, activeLevelName).then(function(hasPlan){
+      if (!hasPlan){ levelPlanFileInput.click(); return; }
+      showConfirmDialog("Replace this level's floor plan? This won't affect any rooms.").then(function(ok){
+        if (ok) levelPlanFileInput.click();
+      });
+    });
+  });
+  levelPlanFileInput.addEventListener("change", function(){
+    var file = levelPlanFileInput.files && levelPlanFileInput.files[0];
+    levelPlanFileInput.value = "";
+    if (!file) return;
+    importFloorplanFromFile(file).then(function(res){
+      var fullFileBase = sanitizeFileBase(activeProjectName + "_" + activeLevelName);
+      return writeFloorplanSaveFile(activeLevelHandle, activeLevelName, fullFileBase, res.imageDataURL, res.imageW, res.imageH, res.imageTiles).then(function(){
+        renderPlanStatus(levelPlanStatus, true, "This level");
+        renderPlanPreview(levelPlanPreview, res.imageDataURL, res.imageTiles, res.imageW, res.imageH);
+        openPlanCanvasBtn.hidden = false;
+        showToast("Floor plan saved.");
+      });
+    }).catch(function(err){
+      if (err && err.code === "pdf_import_cancelled") return;
+      console.error("Floorplan import failed:", err);
+      showToast(err && err.code ? (isPdfFile(file) ? pdfImportErrorToast(err) : imageReadErrorToast(err)) : "Couldn't import that floor plan.");
+    });
+  });
+
+  var roomImportPlanBtn = document.getElementById("roomImportPlanBtn");
+  var roomPlanFileInput = document.getElementById("roomPlanFileInput");
+  var roomPlanPreview = document.getElementById("roomPlanPreview");
+  var activeRoomHandleForImport = null;
+  roomImportPlanBtn.addEventListener("click", function(){
+    workFolderHasPlan(activeRoomHandleForImport, activeRoomName).then(function(hasPlan){
+      if (!hasPlan){ roomPlanFileInput.click(); return; }
+      showConfirmDialog("Replace this room's floor plan?").then(function(ok){
+        if (ok) roomPlanFileInput.click();
+      });
+    });
+  });
+  roomPlanFileInput.addEventListener("change", function(){
+    var file = roomPlanFileInput.files && roomPlanFileInput.files[0];
+    roomPlanFileInput.value = "";
+    if (!file) return;
+    importFloorplanFromFile(file).then(function(res){
+      var fullFileBase = sanitizeFileBase(activeProjectName + "_" + activeLevelName + "_" + activeRoomName);
+      return writeFloorplanSaveFile(activeRoomHandleForImport, activeRoomName, fullFileBase, res.imageDataURL, res.imageW, res.imageH, res.imageTiles).then(function(){
+        renderPlanStatus(roomPlanStatus, true, "This room");
+        renderPlanPreview(roomPlanPreview, res.imageDataURL, res.imageTiles, res.imageW, res.imageH);
+        showToast("Floor plan saved.");
+      });
+    }).catch(function(err){
+      if (err && err.code === "pdf_import_cancelled") return;
+      console.error("Floorplan import failed:", err);
+      showToast(err && err.code ? (isPdfFile(file) ? pdfImportErrorToast(err) : imageReadErrorToast(err)) : "Couldn't import that floor plan.");
+    });
+  });
+
+  /* ============================== joinery items (project-wide record store) ==============================
+     Andrew's final approved shape (2026-09-22), exactly:
+       { joineryId, description, level, room, status }
+     No markerId -- a marker and its item record correlate by matching
+     (level, room, joineryId) against the marker's own (level, roomName,
+     joineryCode), the same LEVEL-ROOM-JOINERYITEM key convention already
+     locked into UTZLINE Data Standard v1 decision #9. Storage location
+     wasn't specified in Andrew's answer, only the record shape -- stored
+     here as a single flat "joinery-items.json" array at the PROJECT's own
+     root (a sibling of project-meta.json and the level folders), the
+     simplest place a whole-project Joinery Register (a later build-
+     sequence step) can read from in one call. */
+  function joineryItemsFilename(){ return "joinery-items.json"; }
+  function readJoineryItems(projectHandle){
+    if (!projectHandle) return Promise.resolve([]);
+    return projectHandle.getFileHandle(joineryItemsFilename(), { create: false }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
+    }, function(){ return []; }); // no file yet -- not an error
+  }
+  function writeJoineryItems(projectHandle, items){
+    return projectHandle.getFileHandle(joineryItemsFilename(), { create: true }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(w){
+      return w.write(JSON.stringify(items)).then(function(){ return w.close(); });
+    });
+  }
+  function addJoineryItem(projectHandle, item){
+    return readJoineryItems(projectHandle).then(function(items){
+      items.push(item);
+      return writeJoineryItems(projectHandle, items).then(function(){ return items; });
+    });
+  }
+
+  /* ============================== plan canvas: reading/writing a level's roomlink markers ==============================
+     A marker is added to the LEVEL's own save file's objects array --
+     never the room's -- same as Site Measure's own makeRoomLink/
+     promptAddRoomAt place it: a marker lives on the level's plan and
+     points AT a room, it doesn't live inside the room's own plan. Adding
+     one must preserve everything else already in that save file (image
+     data, any other objects, style, savedBy) -- this is read-modify-write
+     on the whole file, not a blind overwrite. */
+  function readSavedPlanRaw(dirHandle, name){
+    if (!dirHandle) return Promise.resolve(null);
+    return dirHandle.getDirectoryHandle("saves", { create: false }).then(function(savesH){
+      return savesH.getFileHandle(projectSaveFilename(name));
+    }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{
+        var saved = JSON.parse(text);
+        if (!saved || !(saved.utzlineProject || saved.redlineProject)) return null;
+        return saved;
+      }catch(e){ return null; }
+    }, function(){ return null; });
+  }
+  function writeSavedPlanRaw(dirHandle, bareName, fullFileBase, saved){
+    return dirHandle.getDirectoryHandle("saves", { create: true }).then(function(savesH){
+      var payload = JSON.stringify({
+        utzlineProject: 1,
+        imageDataURL: saved.imageTiles ? null : (saved.imageDataURL || null),
+        imageW: saved.imageW || 0,
+        imageH: saved.imageH || 0,
+        imageTiles: saved.imageTiles || null,
+        fileBase: saved.fileBase || fullFileBase,
+        objects: saved.objects || [],
+        style: saved.style || defaultStyleObject(),
+        savedBy: saved.savedBy || ""
+      });
+      return savesH.getFileHandle(projectSaveFilename(bareName), { create: true }).then(function(fh){
+        return fh.createWritable();
+      }).then(function(w){
+        return w.write(payload).then(function(){ return w.close(); });
+      });
+    });
+  }
+  // Site Measure's own uid()/makeRoomLink() (source.html) -- same object
+  // shape, so a marker placed here is indistinguishable, once opened in
+  // Site Measure, from one Site Measure itself would have placed.
+  var planNextId = 1;
+  function planUid(){ return "o" + (planNextId++); }
+  function makeRoomLinkObject(x, y, roomName, joineryCode){
+    var color = "#c8391c"; // COLORS[0], same default defaultColorFor("roomlink") resolves to on a fresh style
+    var fontSize = 32; // defaultFontSize() on this app's own always-fresh defaultStyleObject()
+    var r = fontSize * 0.85;
+    var labelText = joineryCode ? (roomName + " · " + joineryCode) : roomName;
+    return {
+      id: planUid(), type: "roomlink", x: x, y: y, r: r, roomName: roomName, joineryCode: joineryCode || "", color: color,
+      label: { text: labelText, x: x, y: y + r + fontSize * 0.95, rot: 0, fontSize: fontSize, family: "sans", color: color, anchor: "middle" }
+    };
+  }
+
+  /* ============================== plan canvas: lightweight pan/zoom/pin-drop ============================== */
+  var planCanvasSvg = document.getElementById("planCanvasSvg");
+  var planCanvasStage = document.getElementById("planCanvasStage");
+  var planCanvasWorld = document.getElementById("planCanvasWorld");
+  var planCanvasTilesG = document.getElementById("planCanvasTiles");
+  var planCanvasMarkersG = document.getElementById("planCanvasMarkers");
+  var planCanvasTitle = document.getElementById("planCanvasTitle");
+  var backFromPlanCanvasBtn = document.getElementById("backFromPlanCanvasBtn");
+  var openPlanCanvasBtn = document.getElementById("openPlanCanvasBtn");
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  var planView = { tx: 0, ty: 0, scale: 1 };
+  var planImageW = 0, planImageH = 0;
+  var planSaved = null; // the full parsed save file currently loaded into the canvas
+
+  function planApplyTransform(){
+    planCanvasWorld.setAttribute("transform", "translate(" + planView.tx + " " + planView.ty + ") scale(" + planView.scale + ")");
+  }
+  function planFitToView(){
+    var w = planCanvasStage.clientWidth, h = planCanvasStage.clientHeight;
+    if (!planImageW || !planImageH || !w || !h) return;
+    var scale = Math.min(w / planImageW, h / planImageH) * 0.94;
+    planView.scale = scale;
+    planView.tx = (w - planImageW * scale) / 2;
+    planView.ty = (h - planImageH * scale) / 2;
+    planApplyTransform();
+  }
+  function planClientToWorld(clientX, clientY){
+    var r = planCanvasSvg.getBoundingClientRect();
+    var sx = clientX - r.left, sy = clientY - r.top;
+    return { x: (sx - planView.tx) / planView.scale, y: (sy - planView.ty) / planView.scale };
+  }
+  function planZoomAt(clientX, clientY, newScale){
+    var r = planCanvasSvg.getBoundingClientRect();
+    var sx = clientX - r.left, sy = clientY - r.top;
+    var world = { x: (sx - planView.tx) / planView.scale, y: (sy - planView.ty) / planView.scale };
+    planView.scale = clamp(newScale, 0.05, 20);
+    planView.tx = sx - world.x * planView.scale;
+    planView.ty = sy - world.y * planView.scale;
+    planApplyTransform();
+  }
+  function planRenderTiles(){
+    while (planCanvasTilesG.firstChild) planCanvasTilesG.removeChild(planCanvasTilesG.firstChild);
+    if (!planSaved) return;
+    if (planSaved.imageTiles && planSaved.imageTiles.length){
+      planSaved.imageTiles.forEach(function(t){
+        var img = document.createElementNS(SVG_NS, "image");
+        img.setAttributeNS(null, "href", t.dataUrl);
+        img.setAttribute("x", t.x); img.setAttribute("y", t.y);
+        img.setAttribute("width", t.w); img.setAttribute("height", t.h);
+        planCanvasTilesG.appendChild(img);
+      });
+    } else if (planSaved.imageDataURL){
+      var img2 = document.createElementNS(SVG_NS, "image");
+      img2.setAttributeNS(null, "href", planSaved.imageDataURL);
+      img2.setAttribute("x", 0); img2.setAttribute("y", 0);
+      img2.setAttribute("width", planImageW); img2.setAttribute("height", planImageH);
+      planCanvasTilesG.appendChild(img2);
+    }
+  }
+  function planRenderMarkers(){
+    while (planCanvasMarkersG.firstChild) planCanvasMarkersG.removeChild(planCanvasMarkersG.firstChild);
+    if (!planSaved || !planSaved.objects) return;
+    planSaved.objects.forEach(function(obj){
+      if (obj.type !== "roomlink") return;
+      var dot = document.createElementNS(SVG_NS, "circle");
+      dot.setAttribute("class", "marker-dot");
+      dot.setAttribute("cx", obj.x); dot.setAttribute("cy", obj.y); dot.setAttribute("r", obj.r);
+      dot.setAttribute("fill", obj.color || "#c8391c");
+      dot.setAttribute("stroke", "#fff"); dot.setAttribute("stroke-width", Math.max(1, obj.r * 0.08));
+      dot.setAttribute("data-marker-id", obj.id);
+      planCanvasMarkersG.appendChild(dot);
+      if (obj.label && obj.label.text){
+        var text = document.createElementNS(SVG_NS, "text");
+        text.setAttribute("class", "marker-label");
+        text.setAttribute("x", obj.label.x); text.setAttribute("y", obj.label.y);
+        text.setAttribute("text-anchor", obj.label.anchor || "middle");
+        text.setAttribute("fill", obj.label.color || "#fff");
+        text.setAttribute("font-size", obj.label.fontSize || 32);
+        text.setAttribute("paint-order", "stroke");
+        text.setAttribute("stroke", "#0b0707");
+        text.setAttribute("stroke-width", "4");
+        text.textContent = obj.label.text;
+        planCanvasMarkersG.appendChild(text);
+      }
+    });
+  }
+  function planMarkerAt(worldX, worldY){
+    if (!planSaved || !planSaved.objects) return null;
+    var hitR = 28 / planView.scale; // a little generous, in world units, so a touch tap doesn't need pixel precision
+    var best = null, bestDist = Infinity;
+    planSaved.objects.forEach(function(obj){
+      if (obj.type !== "roomlink") return;
+      var d = Math.hypot(obj.x - worldX, obj.y - worldY);
+      if (d <= Math.max(obj.r, hitR) && d < bestDist){ best = obj; bestDist = d; }
+    });
+    return best;
+  }
+  // Pan (1 pointer), pinch-zoom (2 pointers), tap-to-add-or-inspect (no
+  // movement between down/up). Pointer Events unify mouse/touch/pen, so
+  // this one set of handlers covers desktop drag+wheel and phone/tablet
+  // drag+pinch alike.
+  var planPointers = {};
+  var planDownPoint = null, planDragMoved = false, planPinchLastDist = null;
+  planCanvasSvg.addEventListener("pointerdown", function(e){
+    planPointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    try{ planCanvasSvg.setPointerCapture(e.pointerId); }catch(err){}
+    var n = Object.keys(planPointers).length;
+    if (n === 1){ planDownPoint = { x: e.clientX, y: e.clientY }; planDragMoved = false; }
+    else { planPinchLastDist = null; }
+  });
+  planCanvasSvg.addEventListener("pointermove", function(e){
+    if (!planPointers[e.pointerId]) return;
+    var prev = planPointers[e.pointerId];
+    var dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    planPointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    var ids = Object.keys(planPointers);
+    if (ids.length === 1){
+      if (Math.abs(e.clientX - planDownPoint.x) > 4 || Math.abs(e.clientY - planDownPoint.y) > 4) planDragMoved = true;
+      planView.tx += dx; planView.ty += dy;
+      planApplyTransform();
+    } else if (ids.length === 2){
+      var pts = ids.map(function(id){ return planPointers[id]; });
+      var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      var mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      if (planPinchLastDist){
+        planZoomAt(mid.x, mid.y, planView.scale * (dist / planPinchLastDist));
+      }
+      planPinchLastDist = dist;
+      planDragMoved = true;
+    }
+  });
+  function planPointerEnd(e){
+    var wasSingleTap = Object.keys(planPointers).length === 1 && !planDragMoved;
+    var tapClient = planDownPoint;
+    delete planPointers[e.pointerId];
+    if (Object.keys(planPointers).length < 2) planPinchLastDist = null;
+    if (wasSingleTap && tapClient){
+      var world = planClientToWorld(tapClient.x, tapClient.y);
+      onPlanTap(world.x, world.y);
+    }
+  }
+  planCanvasSvg.addEventListener("pointerup", planPointerEnd);
+  planCanvasSvg.addEventListener("pointercancel", function(e){ delete planPointers[e.pointerId]; planPinchLastDist = null; });
+  planCanvasSvg.addEventListener("wheel", function(e){
+    e.preventDefault();
+    var factor = Math.pow(1.0015, -e.deltaY);
+    planZoomAt(e.clientX, e.clientY, planView.scale * factor);
+  }, { passive: false });
+
+  function onPlanTap(worldX, worldY){
+    var hit = planMarkerAt(worldX, worldY);
+    if (hit){
+      var hitLevel = activeLevelName, hitRoom = hit.roomName || "", hitCode = hit.joineryCode || "";
+      readJoineryItems(activeProjectHandle).then(function(items){
+        var match = items.filter(function(it){
+          return it.level === hitLevel && it.room === hitRoom && it.joineryId === hitCode;
+        })[0];
+        if (match){ openJoineryItemPage(match, "planCanvas"); }
+        else { showToast((hitRoom || "") + (hitCode ? " · " + hitCode : "") + " — no matching item record found."); }
+      });
+      return;
+    }
+    openAddJoineryItemDialog(worldX, worldY);
+  }
+
+  /* ---- Add joinery item dialog ---- */
+  var addItemBackdrop = document.getElementById("addItemBackdrop");
+  var addItemRoomSelect = document.getElementById("addItemRoomSelect");
+  var addItemNewRoomField = document.getElementById("addItemNewRoomField");
+  var addItemNewRoomInput = document.getElementById("addItemNewRoomInput");
+  var addItemJoineryIdInput = document.getElementById("addItemJoineryIdInput");
+  var addItemDescriptionInput = document.getElementById("addItemDescriptionInput");
+  var addItemSaveBtn = document.getElementById("addItemSaveBtn");
+  var addItemCancelBtn = document.getElementById("addItemCancelBtn");
+  var ADD_ITEM_NEW_ROOM_VALUE = "__new__";
+  var addItemPendingWorldPoint = null;
+  function updateAddItemNewRoomVisibility(){
+    addItemNewRoomField.hidden = addItemRoomSelect.value !== ADD_ITEM_NEW_ROOM_VALUE;
+  }
+  addItemRoomSelect.addEventListener("change", updateAddItemNewRoomVisibility);
+  function openAddJoineryItemDialog(worldX, worldY){
+    addItemPendingWorldPoint = { x: worldX, y: worldY };
+    listExistingRooms(activeLevelHandle).then(function(existing){
+      addItemRoomSelect.innerHTML = "";
+      existing.forEach(function(name){
+        var opt = document.createElement("option");
+        opt.value = name; opt.textContent = name;
+        addItemRoomSelect.appendChild(opt);
+      });
+      var newOpt = document.createElement("option");
+      newOpt.value = ADD_ITEM_NEW_ROOM_VALUE; newOpt.textContent = "+ Create new room…";
+      addItemRoomSelect.appendChild(newOpt);
+      addItemRoomSelect.value = existing.length ? existing[0] : ADD_ITEM_NEW_ROOM_VALUE;
+      addItemNewRoomInput.value = "";
+      addItemJoineryIdInput.value = "";
+      addItemDescriptionInput.value = "";
+      updateAddItemNewRoomVisibility();
+      addItemBackdrop.hidden = false;
+    });
+  }
+  function closeAddItemDialog(){ addItemBackdrop.hidden = true; addItemPendingWorldPoint = null; }
+  addItemCancelBtn.addEventListener("click", closeAddItemDialog);
+  addItemBackdrop.addEventListener("click", function(e){ if (e.target === addItemBackdrop) closeAddItemDialog(); });
+  addItemSaveBtn.addEventListener("click", function(){
+    if (!addItemPendingWorldPoint) return;
+    var isNewRoom = addItemRoomSelect.value === ADD_ITEM_NEW_ROOM_VALUE;
+    var worldPt = addItemPendingWorldPoint;
+    var joineryIdRaw = addItemJoineryIdInput.value.trim();
+    var description = addItemDescriptionInput.value.trim();
+    listExistingRooms(activeLevelHandle).then(function(existing){
+      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+      var finalRoomName;
+      if (isNewRoom){
+        var roomRaw = addItemNewRoomInput.value.trim();
+        if (!roomRaw){ showToast("Enter a name for the new room."); return Promise.reject({ code: "handled" }); }
+        var clean = sanitizeFileBase(roomRaw);
+        finalRoomName = clean;
+        var n = 2;
+        while (existingLower.indexOf(finalRoomName.toLowerCase()) !== -1){ finalRoomName = clean + " " + n; n++; }
+      } else {
+        finalRoomName = addItemRoomSelect.value;
+      }
+      // Dedupe the joinery ID against sibling markers already in this same
+      // room on this level -- same numbered-suffix convention as
+      // Site Measure's own promptAddRoomAt.
+      var siblingCodesLower = (planSaved.objects || []).filter(function(o){
+        return o.type === "roomlink" && o.roomName && o.roomName.toLowerCase() === finalRoomName.toLowerCase();
+      }).map(function(o){ return (o.joineryCode || "").toLowerCase(); });
+      var finalCode = joineryIdRaw, cn = 2;
+      while (finalCode && siblingCodesLower.indexOf(finalCode.toLowerCase()) !== -1){ finalCode = joineryIdRaw + " " + cn; cn++; }
+
+      var marker = makeRoomLinkObject(worldPt.x, worldPt.y, finalRoomName, finalCode);
+      planSaved.objects = planSaved.objects || [];
+      planSaved.objects.push(marker);
+
+      var levelFullFileBase = sanitizeFileBase(activeProjectName + "_" + activeLevelName);
+      return writeSavedPlanRaw(activeLevelHandle, activeLevelName, levelFullFileBase, planSaved).then(function(){
+        return isNewRoom ? activeLevelHandle.getDirectoryHandle(finalRoomName, { create: true }).then(function(dirH){
+          return ensureWorkFolders(dirH);
+        }) : Promise.resolve();
+      }).then(function(){
+        return addJoineryItem(activeProjectHandle, {
+          joineryId: finalCode, description: description, level: activeLevelName, room: finalRoomName, status: "created"
+        });
+      }).then(function(){
+        planRenderMarkers();
+        closeAddItemDialog();
+        showToast("Added " + finalRoomName + (finalCode ? " · " + finalCode : "") + ".");
+      });
+    }).catch(function(err){
+      if (err && err.code === "handled") return;
+      console.error("Add joinery item failed:", err);
+      showToast("Couldn't add that — try again.");
+    });
+  });
+
+  // Which screen "back" returns to from the plan canvas -- normally
+  // "rooms" (opened via the level's own "Place joinery items" button), but
+  // "joineryItem" when reached via that page's own "View on plan" button,
+  // so backing out lands the visitor back on the item they were reading.
+  var planCanvasReturnScreen = "rooms";
+  function openPlanCanvasForLevel(centerOnMarker){
+    planCanvasTitle.textContent = activeProjectName + " — " + activeLevelName;
+    showScreen("planCanvas");
+    return readSavedPlanRaw(activeLevelHandle, activeLevelName).then(function(saved){
+      planSaved = saved || { utzlineProject: 1, imageDataURL: null, imageTiles: null, imageW: 0, imageH: 0, objects: [], style: defaultStyleObject(), savedBy: "" };
+      planImageW = planSaved.imageW || 0;
+      planImageH = planSaved.imageH || 0;
+      planRenderTiles();
+      planRenderMarkers();
+      requestAnimationFrame(function(){
+        planFitToView();
+        if (centerOnMarker){
+          var marker = (planSaved.objects || []).filter(function(o){
+            return o.type === "roomlink" && o.roomName === centerOnMarker.room && o.joineryCode === centerOnMarker.joineryId;
+          })[0];
+          if (marker){
+            var w = planCanvasStage.clientWidth, h = planCanvasStage.clientHeight;
+            // Zoom in at least as close as a 1:1 pixel view so the marker is
+            // easy to pick out, but never zoom back OUT past whatever
+            // fit-to-view already chose.
+            planView.scale = Math.max(planView.scale, 1);
+            planView.tx = w / 2 - marker.x * planView.scale;
+            planView.ty = h / 2 - marker.y * planView.scale;
+            planApplyTransform();
+          }
+        }
+      });
+    });
+  }
+  openPlanCanvasBtn.addEventListener("click", function(){
+    planCanvasReturnScreen = "rooms";
+    openPlanCanvasForLevel();
+  });
+  backFromPlanCanvasBtn.addEventListener("click", function(){
+    showScreen(planCanvasReturnScreen);
+    planCanvasReturnScreen = "rooms";
+  });
+
+  /* ============================== Joinery Register ==============================
+     A flat, filterable/sortable table over every joinery item record in
+     the CURRENT project (joinery-items.json), regardless of which level or
+     room it's on -- this is the project-wide view Andrew's original spec
+     called out by name, separate from a level's own room list. Reads only
+     -- editing a record's status/description from here is a later step
+     (Joinery Item Pages, the next build-sequence task). */
+  var registerProjectLabel = document.getElementById("registerProjectLabel");
+  var registerLevelFilter = document.getElementById("registerLevelFilter");
+  var registerStatusFilter = document.getElementById("registerStatusFilter");
+  var registerSearchInput = document.getElementById("registerSearchInput");
+  var registerTable = document.getElementById("registerTable");
+  var registerTableBody = document.getElementById("registerTableBody");
+  var registerEmpty = document.getElementById("registerEmpty");
+  var registerEmptyProject = document.getElementById("registerEmptyProject");
+  var openRegisterBtn = document.getElementById("openRegisterBtn");
+  var backFromRegisterBtn = document.getElementById("backFromRegisterBtn");
+
+  var registerAllItems = [];
+  var registerSort = { col: "level", dir: "asc" };
+
+  function registerMatchesFilters(item){
+    if (registerLevelFilter.value && item.level !== registerLevelFilter.value) return false;
+    if (registerStatusFilter.value && item.status !== registerStatusFilter.value) return false;
+    var q = registerSearchInput.value.trim().toLowerCase();
+    if (q){
+      var hay = ((item.joineryId || "") + " " + (item.description || "")).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  }
+  function registerCompare(a, b){
+    var col = registerSort.col;
+    var av = String(a[col] || "").toLowerCase(), bv = String(b[col] || "").toLowerCase();
+    var cmp = av < bv ? -1 : (av > bv ? 1 : 0);
+    return registerSort.dir === "desc" ? -cmp : cmp;
+  }
+  function renderRegisterTable(){
+    var filtered = registerAllItems.filter(registerMatchesFilters);
+    filtered.sort(registerCompare);
+    registerTableBody.innerHTML = "";
+    filtered.forEach(function(item){
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + escapeHtml(item.level) + "</td>" +
+        "<td>" + escapeHtml(item.room) + "</td>" +
+        "<td>" + escapeHtml(item.joineryId) + "</td>" +
+        "<td>" + escapeHtml(item.description) + "</td>" +
+        "<td class=\"status-cell\">" + escapeHtml(item.status) + "</td>";
+      tr.addEventListener("click", function(){ openJoineryItemPage(item, "register"); });
+      registerTableBody.appendChild(tr);
+    });
+    registerTable.hidden = registerAllItems.length === 0;
+    registerEmptyProject.hidden = registerAllItems.length !== 0;
+    registerEmpty.hidden = !(registerAllItems.length > 0 && filtered.length === 0);
+    Array.prototype.forEach.call(registerTable.querySelectorAll("th"), function(th){
+      th.classList.remove("sorted", "desc");
+      if (th.getAttribute("data-col") === registerSort.col){
+        th.classList.add("sorted");
+        if (registerSort.dir === "desc") th.classList.add("desc");
+      }
+    });
+  }
+  Array.prototype.forEach.call(registerTable.querySelectorAll("th"), function(th){
+    th.addEventListener("click", function(){
+      var col = th.getAttribute("data-col");
+      if (registerSort.col === col){ registerSort.dir = registerSort.dir === "asc" ? "desc" : "asc"; }
+      else { registerSort.col = col; registerSort.dir = "asc"; }
+      renderRegisterTable();
+    });
+  });
+  registerLevelFilter.addEventListener("change", renderRegisterTable);
+  registerStatusFilter.addEventListener("change", renderRegisterTable);
+  registerSearchInput.addEventListener("input", renderRegisterTable);
+
+  function openJoineryRegister(){
+    registerProjectLabel.textContent = activeProjectName + " — Joinery Register";
+    showScreen("register");
+    return Promise.all([
+      readJoineryItems(activeProjectHandle),
+      listExistingLevels(activeProjectHandle)
+    ]).then(function(results){
+      registerAllItems = results[0] || [];
+      var levelNames = results[1] || [];
+      var statuses = []; // distinct statuses actually present, in first-seen order -- V1 only ever writes "created", but this stays correct once other apps start updating status
+      registerAllItems.forEach(function(item){
+        if (item.status && statuses.indexOf(item.status) === -1) statuses.push(item.status);
+      });
+      var prevLevel = registerLevelFilter.value, prevStatus = registerStatusFilter.value;
+      registerLevelFilter.innerHTML = "<option value=\"\">All levels</option>";
+      levelNames.forEach(function(name){
+        var opt = document.createElement("option");
+        opt.value = name; opt.textContent = name;
+        registerLevelFilter.appendChild(opt);
+      });
+      registerStatusFilter.innerHTML = "<option value=\"\">All statuses</option>";
+      statuses.forEach(function(s){
+        var opt = document.createElement("option");
+        opt.value = s; opt.textContent = s;
+        registerStatusFilter.appendChild(opt);
+      });
+      if (levelNames.indexOf(prevLevel) !== -1) registerLevelFilter.value = prevLevel;
+      if (statuses.indexOf(prevStatus) !== -1) registerStatusFilter.value = prevStatus;
+      renderRegisterTable();
+    }).catch(function(err){
+      console.error("Opening Joinery Register failed:", err);
+      showToast("Couldn't open the Joinery Register.");
+    });
+  }
+  openRegisterBtn.addEventListener("click", openJoineryRegister);
+  backFromRegisterBtn.addEventListener("click", function(){ showScreen("levels"); });
+
+  /* ============================== Joinery Item page ==============================
+     One page per record, keyed by (level, room, joineryId) -- there's no
+     markerId, so this triple stands in for one. Reachable from the
+     Register, from Status Overview, or by tapping a placed marker on the
+     plan canvas -- "back" returns to whichever of those it came from. */
+  var joineryItemTitle = document.getElementById("joineryItemTitle");
+  var joineryItemMetaGrid = document.getElementById("joineryItemMetaGrid");
+  var viewOnPlanBtn = document.getElementById("viewOnPlanBtn");
+  var backFromJoineryItemBtn = document.getElementById("backFromJoineryItemBtn");
+  var activeJoineryItem = null;
+  var joineryItemReturnScreen = "levels";
+  function openJoineryItemPage(item, returnScreen){
+    activeJoineryItem = item;
+    joineryItemReturnScreen = returnScreen || "levels";
+    joineryItemTitle.textContent = item.joineryId ? item.joineryId : "(no ID)";
+    joineryItemMetaGrid.innerHTML =
+      "<dt>Description</dt><dd>" + escapeHtml(item.description || "(none)") + "</dd>" +
+      "<dt>Level</dt><dd>" + escapeHtml(item.level) + "</dd>" +
+      "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
+      "<dt>Status</dt><dd><span class=\"dot status-" + escapeHtml(item.status) + "\"></span> " + escapeHtml(item.status) + "</dd>";
+    showScreen("joineryItem");
+  }
+  backFromJoineryItemBtn.addEventListener("click", function(){ showScreen(joineryItemReturnScreen); });
+  viewOnPlanBtn.addEventListener("click", function(){
+    if (!activeJoineryItem) return;
+    var item = activeJoineryItem;
+    planCanvasReturnScreen = "joineryItem";
+    activeProjectHandle.getDirectoryHandle(item.level, { create: false }).then(function(lvlHandle){
+      activeLevelHandle = lvlHandle;
+      activeLevelName = item.level;
+      // Keep the rooms screen's own state consistent too, in case some
+      // later navigation lands there directly instead of retracing back
+      // through this page -- this item came from a marker on this level's
+      // plan, so the level definitely already has one.
+      roomsLevelLabel.textContent = activeProjectName + " — " + item.level;
+      openPlanCanvasBtn.hidden = false;
+      return openPlanCanvasForLevel({ room: item.room, joineryId: item.joineryId });
+    }).catch(function(err){
+      console.error("Opening plan for joinery item failed:", err);
+      showToast("Couldn't open that level's plan — it may have been moved or renamed.");
+    });
+  });
+
+  /* ============================== Status Overview ==============================
+     A project-wide grid of every joinery item's status, at a glance --
+     every record reads "created" in V1 (no app updates status yet), but
+     the grid renders whatever status is actually on each record, so it
+     stays correct as soon as a later app starts changing it. */
+  var statusOverviewProjectLabel = document.getElementById("statusOverviewProjectLabel");
+  var statusOverviewGrid = document.getElementById("statusOverviewGrid");
+  var statusOverviewEmpty = document.getElementById("statusOverviewEmpty");
+  var openStatusOverviewBtn = document.getElementById("openStatusOverviewBtn");
+  var backFromStatusOverviewBtn = document.getElementById("backFromStatusOverviewBtn");
+  function openStatusOverview(){
+    statusOverviewProjectLabel.textContent = activeProjectName + " — Status Overview";
+    showScreen("statusOverview");
+    return readJoineryItems(activeProjectHandle).then(function(items){
+      statusOverviewGrid.innerHTML = "";
+      items.forEach(function(item){
+        var tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "status-tile";
+        tile.innerHTML =
+          "<span class=\"status-tile-id\"><span class=\"dot status-" + escapeHtml(item.status) + "\"></span>" + escapeHtml(item.joineryId || "(no ID)") + "</span>" +
+          "<span class=\"status-tile-loc\">" + escapeHtml(item.level) + " — " + escapeHtml(item.room) + "</span>" +
+          "<span class=\"status-tile-desc\">" + escapeHtml(item.description || "") + "</span>";
+        tile.addEventListener("click", function(){ openJoineryItemPage(item, "statusOverview"); });
+        statusOverviewGrid.appendChild(tile);
+      });
+      statusOverviewEmpty.hidden = items.length !== 0;
+    }).catch(function(err){
+      console.error("Opening Status Overview failed:", err);
+      showToast("Couldn't open the Status Overview.");
+    });
+  }
+  openStatusOverviewBtn.addEventListener("click", openStatusOverview);
+  backFromStatusOverviewBtn.addEventListener("click", function(){ showScreen("levels"); });
+
+  function folderPickerErrorMessage(err){
+    if (err && err.name === "SecurityError"){
+      return "Folder access isn't available in this embedded preview. Open the self-hosted or installed version of this app to use project folders.";
+    }
+    return "Couldn't open the folder picker -- try again.";
+  }
+
+  /* ============================== screen state ============================== */
+  var screens = {
+    setup: document.getElementById("screenSetup"),
+    reconnect: document.getElementById("screenReconnect"),
+    projects: document.getElementById("screenProjects"),
+    levels: document.getElementById("screenLevels"),
+    rooms: document.getElementById("screenRooms"),
+    roomDetail: document.getElementById("screenRoomDetail"),
+    planCanvas: document.getElementById("screenPlanCanvas"),
+    register: document.getElementById("screenRegister"),
+    joineryItem: document.getElementById("screenJoineryItem"),
+    statusOverview: document.getElementById("screenStatusOverview")
+  };
+  function showScreen(name){
+    Object.keys(screens).forEach(function(k){ screens[k].hidden = (k !== name); });
+  }
+
+  var projectsRootHandle = null, projectsRootName = "";
+  var activeProjectHandle = null, activeProjectName = "";
+  var activeLevelHandle = null, activeLevelName = "";
+  var activeRoomName = "";
+
+  /* ============================== setup / reconnect ============================== */
+  var chooseRootBtn = document.getElementById("chooseRootBtn");
+  var setupError = document.getElementById("setupError");
+  var reconnectName = document.getElementById("reconnectName");
+  var reconnectBtn = document.getElementById("reconnectBtn");
+  var reconnectChooseDifferentBtn = document.getElementById("reconnectChooseDifferentBtn");
+  var chooseDifferentRootBtn = document.getElementById("chooseDifferentRootBtn");
+  var projectsFolderLabel = document.getElementById("projectsFolderLabel");
+
+  // Projects is a creating app by design (unlike the read-only Viewer), so
+  // it asks for "readwrite" from the start even though this V1 scaffold
+  // only reads -- the next build-sequence step (Create Project/Level/Room)
+  // needs that same permission, and asking again later would mean a second
+  // picker/consent round-trip for no benefit.
+  function pickProjectsRootFolder(){
+    return window.showDirectoryPicker({ id: "utzline-projects-root", mode: "readwrite" }).then(function(handle){
+      return detectFolderShape(handle).then(function(shape){
+        // A "level" or single-"project" pick has nowhere useful to persist
+        // as the Projects root itself -- most likely means someone pointed
+        // this at one specific job rather than their whole Projects folder.
+        // Rather than silently treating a single project as "the" root
+        // (which would hide every sibling project), ask for the actual
+        // root folder instead.
+        if (shape === "level" || shape === "project"){
+          setupError.hidden = false;
+          setupError.textContent = "That looks like a single " + (shape === "level" ? "level's" : "project's") + " own folder, not your Projects folder. Choose the top-level folder that contains all your projects.";
+          return;
+        }
+        projectsRootHandle = handle; projectsRootName = handle.name;
+        return idbSet("projectsRootHandle", handle).then(function(){
+          return populateProjectList();
+        });
+      });
+    });
+  }
+  chooseRootBtn.addEventListener("click", function(){
+    setupError.hidden = true;
+    pickProjectsRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+      setupError.hidden = false;
+      setupError.textContent = folderPickerErrorMessage(err);
+    });
+  });
+  chooseDifferentRootBtn.addEventListener("click", function(){
+    pickProjectsRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+      showToast(folderPickerErrorMessage(err));
+    });
+  });
+  reconnectChooseDifferentBtn.addEventListener("click", function(){
+    pickProjectsRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+      showToast(folderPickerErrorMessage(err));
+    });
+  });
+  reconnectBtn.addEventListener("click", function(){
+    if (!projectsRootHandle) return;
+    // Called directly from this click (a genuine user gesture) since
+    // requestPermission() needs one to be allowed to prompt at all.
+    projectsRootHandle.requestPermission({ mode: "readwrite" }).then(function(perm){
+      if (perm !== "granted") return;
+      populateProjectList();
+    });
+  });
+
+  /* ============================== project list ============================== */
+  var projectListItems = document.getElementById("projectListItems");
+  var projectListEmpty = document.getElementById("projectListEmpty");
+
+  function populateProjectList(){
+    return listExistingProjects(projectsRootHandle).then(function(names){
+      projectListItems.innerHTML = "";
+      projectListEmpty.hidden = names.length > 0;
+      names.forEach(function(name){
+        var row = document.createElement("button");
+        row.className = "list-item";
+        row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
+        row.addEventListener("click", function(){ openProject(name); });
+        projectListItems.appendChild(row);
+      });
+      projectsFolderLabel.textContent = "Projects";
+      document.title = "UTZLINE Projects";
+      showScreen("projects");
+      return refreshCompanyLogoPreview();
+    }).catch(function(err){
+      console.error("Listing projects failed:", err);
+      showToast("Couldn't list projects in this folder.");
+    });
+  }
+
+  function openProject(name){
+    return projectsRootHandle.getDirectoryHandle(name, { create: false }).then(function(dirH){
+      activeProjectHandle = dirH;
+      activeProjectName = name;
+      return populateLevelList();
+    }).catch(function(err){
+      console.error("Opening project failed:", err);
+      showToast("Couldn't open “" + name + "”.");
+    });
+  }
+
+  /* ============================== level list ============================== */
+  var levelsProjectLabel = document.getElementById("levelsProjectLabel");
+  var levelListItems = document.getElementById("levelListItems");
+  var levelListEmpty = document.getElementById("levelListEmpty");
+  var projectMetaCard = document.getElementById("projectMetaCard");
+  var projectMetaGrid = document.getElementById("projectMetaGrid");
+  var projectMetaEmptyCard = document.getElementById("projectMetaEmptyCard");
+  var backToProjectsBtn = document.getElementById("backToProjectsBtn");
+
+  function populateLevelList(){
+    levelsProjectLabel.textContent = activeProjectName;
+    return readProjectMeta(activeProjectHandle).then(function(meta){
+      renderProjectMetaPreview(meta);
+      return listExistingLevels(activeProjectHandle);
+    }).then(function(names){
+      levelListItems.innerHTML = "";
+      levelListEmpty.hidden = names.length > 0;
+      names.forEach(function(name){
+        var row = document.createElement("button");
+        row.className = "list-item";
+        row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
+        row.addEventListener("click", function(){ openLevel(name); });
+        levelListItems.appendChild(row);
+      });
+      showScreen("levels");
+    }).catch(function(err){
+      console.error("Listing levels failed:", err);
+      showToast("Couldn't list levels for “" + activeProjectName + "”.");
+    });
+  }
+  function renderProjectMetaPreview(meta){
+    if (!meta || (!meta.no && !meta.name && !meta.contractor && !meta.client && !meta.siteAddress && !meta.projectManager)){
+      projectMetaCard.hidden = true;
+      projectMetaEmptyCard.hidden = false;
+      return;
+    }
+    projectMetaEmptyCard.hidden = true;
+    var rows = [
+      ["Project No.", meta.no],
+      ["Project name", meta.name],
+      ["Client", meta.client],
+      ["Builder", meta.contractor],
+      ["Site address", meta.siteAddress],
+      ["Project manager", meta.projectManager]
+    ];
+    projectMetaGrid.innerHTML = "";
+    rows.forEach(function(pair){
+      if (!pair[1]) return;
+      var dt = document.createElement("dt"); dt.textContent = pair[0];
+      var dd = document.createElement("dd"); dd.textContent = pair[1];
+      projectMetaGrid.appendChild(dt);
+      projectMetaGrid.appendChild(dd);
+    });
+    projectMetaCard.hidden = false;
+  }
+  backToProjectsBtn.addEventListener("click", function(){ populateProjectList(); });
+
+  /* ============================== room list (inside a level) ============================== */
+  var roomsLevelLabel = document.getElementById("roomsLevelLabel");
+  var roomListItems = document.getElementById("roomListItems");
+  var roomListEmpty = document.getElementById("roomListEmpty");
+  var levelPlanStatus = document.getElementById("levelPlanStatus");
+  var backToLevelsBtn = document.getElementById("backToLevelsBtn");
+
+  // {create:false} for an ordinary browse-to-an-existing-level click;
+  // {create:true} only from createNewLevel() just below, right after it's
+  // confirmed the (possibly-deduped) name doesn't already exist -- either
+  // way, ensureWorkFolders is what actually makes the reserved saves/pdfs/
+  // backup subfolders exist, same as Site Measure's own openLevelFromHandle.
+  function openLevel(name, opts){
+    var create = !!(opts && opts.create);
+    return activeProjectHandle.getDirectoryHandle(name, { create: create }).then(function(dirH){
+      activeLevelHandle = dirH;
+      activeLevelName = name;
+      roomsLevelLabel.textContent = activeProjectName + " — " + name;
+      return ensureWorkFolders(dirH);
+    }).then(function(){
+      return workFolderHasPlan(activeLevelHandle, name);
+    }).then(function(hasPlan){
+      renderPlanStatus(levelPlanStatus, hasPlan, "This level");
+      // Placing a joinery marker needs an actual plan underneath it to tap
+      // on -- so this button only appears once a floorplan import has
+      // landed for this level.
+      openPlanCanvasBtn.hidden = !hasPlan;
+      if (!hasPlan){ renderPlanPreview(levelPlanPreview, null, null, 0, 0); return; }
+      return readFloorplan(activeLevelHandle, name).then(function(plan){
+        if (plan) renderPlanPreview(levelPlanPreview, plan.imageDataURL, plan.imageTiles, plan.imageW, plan.imageH);
+      });
+    }).then(function(){
+      return listExistingRooms(activeLevelHandle);
+    }).then(function(names){
+      roomListItems.innerHTML = "";
+      roomListEmpty.hidden = names.length > 0;
+      names.forEach(function(name){
+        var row = document.createElement("button");
+        row.className = "list-item";
+        row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
+        row.addEventListener("click", function(){ openRoom(name); });
+        roomListItems.appendChild(row);
+      });
+      showScreen("rooms");
+    }).catch(function(err){
+      console.error("Opening level failed:", err);
+      showToast("Couldn't open “" + name + "”.");
+    });
+  }
+  function renderPlanStatus(el, hasPlan, subject){
+    el.innerHTML = "<span class=\"dot " + (hasPlan ? "yes" : "no") + "\"></span><span>" +
+      subject + (hasPlan ? " already has a floorplan saved." : " has no floorplan saved yet.") + "</span>";
+  }
+  backToLevelsBtn.addEventListener("click", function(){ populateLevelList(); });
+
+  // "New Level" mirrors Site Measure's own createNewLevel -- a name that
+  // collides with an existing level of THIS project gets a numbered suffix,
+  // same dedupe loop as createNewProject above.
+  var newLevelBtn = document.getElementById("newLevelBtn");
+  function createNewLevel(rawName){
+    var name = sanitizeFileBase(rawName);
+    return listExistingLevels(activeProjectHandle).then(function(existing){
+      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+      var finalName = name, n = 2;
+      while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
+        finalName = name + " " + n; n++;
+      }
+      return openLevel(finalName, { create: true });
+    });
+  }
+  newLevelBtn.addEventListener("click", function(){
+    showPromptDialog("New level name", "").then(function(value){
+      if (value === null || !value.trim()) return;
+      return createNewLevel(value);
+    }).catch(function(err){
+      console.error("Create level failed:", err);
+      showToast("Couldn't create that level.");
+    });
+  });
+
+  /* ============================== room detail ============================== */
+  var roomDetailLabel = document.getElementById("roomDetailLabel");
+  var roomPlanStatus = document.getElementById("roomPlanStatus");
+  var backToRoomsBtn = document.getElementById("backToRoomsBtn");
+
+  // Same {create:false}/{create:true} split as openLevel, one folder deeper.
+  function openRoom(name, opts){
+    var create = !!(opts && opts.create);
+    return activeLevelHandle.getDirectoryHandle(name, { create: create }).then(function(dirH){
+      activeRoomName = name;
+      activeRoomHandleForImport = dirH;
+      roomDetailLabel.textContent = activeProjectName + " — " + activeLevelName + " — " + name;
+      return ensureWorkFolders(dirH).then(function(){ return dirH; });
+    }).then(function(dirH){
+      return workFolderHasPlan(dirH, name);
+    }).then(function(hasPlan){
+      renderPlanStatus(roomPlanStatus, hasPlan, "This room");
+      if (!hasPlan){ renderPlanPreview(roomPlanPreview, null, null, 0, 0); showScreen("roomDetail"); return; }
+      return readFloorplan(activeRoomHandleForImport, name).then(function(plan){
+        if (plan) renderPlanPreview(roomPlanPreview, plan.imageDataURL, plan.imageTiles, plan.imageW, plan.imageH);
+        showScreen("roomDetail");
+      });
+    }).catch(function(err){
+      console.error("Opening room failed:", err);
+      showToast("Couldn't open “" + name + "”.");
+    });
+  }
+  backToRoomsBtn.addEventListener("click", function(){ openLevel(activeLevelName); });
+
+  // "New Room" mirrors "New Level" one folder deeper -- a name that
+  // collides with an existing room of THIS level gets a numbered suffix.
+  var newRoomBtn = document.getElementById("newRoomBtn");
+  function createNewRoom(rawName){
+    var name = sanitizeFileBase(rawName);
+    return listExistingRooms(activeLevelHandle).then(function(existing){
+      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+      var finalName = name, n = 2;
+      while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
+        finalName = name + " " + n; n++;
+      }
+      return openRoom(finalName, { create: true });
+    });
+  }
+  newRoomBtn.addEventListener("click", function(){
+    showPromptDialog("New room name", "").then(function(value){
+      if (value === null || !value.trim()) return;
+      return createNewRoom(value);
+    }).catch(function(err){
+      console.error("Create room failed:", err);
+      showToast("Couldn't create that room.");
+    });
+  });
+
+  /* ============================== misc ============================== */
+  function escapeHtml(s){
+    return String(s || "").replace(/[&<>"']/g, function(c){
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  /* ============================== boot ============================== */
+  function boot(){
+    if (typeof window.showDirectoryPicker !== "function"){
+      setupError.hidden = false;
+      setupError.textContent = "This browser doesn't support the File System Access API that UTZLINE Projects needs. Use an up-to-date Chrome/Edge, or the installed app.";
+      showScreen("setup");
+      return;
+    }
+    idbGet("projectsRootHandle").then(function(handle){
+      if (!handle){ showScreen("setup"); return; }
+      projectsRootHandle = handle; projectsRootName = handle.name;
+      return handle.queryPermission({ mode: "readwrite" }).then(function(perm){
+        if (perm === "granted"){
+          return populateProjectList();
+        }
+        reconnectName.textContent = projectsRootName;
+        showScreen("reconnect");
+      });
+    }).catch(function(){
+      projectsRootHandle = null; projectsRootName = "";
+      showScreen("setup");
+    });
+  }
+
+  if ("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("./service-worker.js").catch(function(err){
+        console.error("Service worker registration failed:", err);
+      });
+    });
+  }
+
+  // Test-only hook: exposes the pure PDF-tiling math (no real pdf.js/CDN
+  // needed) so it can be exercised directly with fake page/viewport
+  // objects shaped like pdf.js's own -- this sandbox's outbound network
+  // policy blocks the real cdnjs.cloudflare.com pdf.js fetch, so the real
+  // import path can only be exercised in a normally-networked browser (as
+  // Site Measure's own identical code already has been, in production).
+  window.__testHooks = {
+    renderPdfPageGrid: renderPdfPageGrid,
+    renderPdfPageMaybeTiled: renderPdfPageMaybeTiled,
+    makeRoomLinkObject: makeRoomLinkObject,
+    readJoineryItems: readJoineryItems,
+    readSavedPlanRaw: readSavedPlanRaw
+  };
+
+  boot();
+})();
+</script>
+</body>
+</html>
