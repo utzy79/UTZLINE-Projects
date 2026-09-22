@@ -119,9 +119,30 @@
 // currently share Projects' own per-Level/Room floorplan file) and both
 // ITP apps, shipped as coordinated pieces of the same release rather than
 // split further, per Andrew's explicit "I still want full structure.")
+//
+// (v9, 2026-09-22: CORRECTION to v8, shipped the same day after Andrew
+// rejected v8's actual folder shape outright ("still dont get why your
+// not using my architecture") -- v8's levels.json and base-plan/<Level>/
+// sat at the project ROOT, outside his own drawn folder structure, and
+// weren't something a person could find by clicking through folders.
+// Andrew's own words made the real requirement explicit: "what i want is
+// to go into a job, into pdfs, then into shop drawings or itps or
+// whatever from there, easy for a human to find." Fixed by moving this
+// same data (Levels/Rooms/markers/floorplan photo) into a new "Project
+// Saves/Floor Plans/" folder -- just another human-browsable branch under
+// the same "Project Saves" folder every other app already writes into --
+// holding one plain file per Level, "<Project> - <Level>.json", no
+// versioning (matching Andrew's own rule that only Site Measure's overlay
+// saves are ever multi-file). A project already migrated under v8's
+// scheme is re-migrated automatically the first time it's opened under
+// v9 -- v8's levels.json/base-plan/ files are simply legacy folders/files
+// from v9's point of view, safe to leave untouched. No functional/UI
+// change from v8 otherwise -- same Level/Room-as-data behaviour, same
+// one-shared-photo-per-Level rule, same migration-is-additive-only
+// guarantee, just relocated to a place a human can actually find.)
 
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v8";
+var CACHE_NAME = "utzline-projects-cache-v9";
 
 var PRECACHE_URLS = [
   "./",
