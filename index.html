@@ -33,10 +33,14 @@
                                       a folder, so it's invisible to every
                                       app's own listSubdirNames()-based
                                       project list (see below)
-      <Project>/
+      <Project>/                 <- named "<Job#> - <Project Name>", per
+                                      Andrew's own diagram convention
         project-meta.json         <- {no, name, contractor} today; this app
-                                      extends it with client/builder/site
-                                      address/project manager fields
+                                      extends it with siteAddress/
+                                      projectManager fields (no separate
+                                      "client" field -- in Andrew's own
+                                      workflow the client IS the project
+                                      name)
         joinery-items.json        <- project-wide {joineryId, description,
                                       level, room, status} records
         Project Saves/
@@ -698,9 +702,8 @@
   <div class="modal">
     <h2>Project info</h2>
     <p class="sub">Shown to Site Measure, Viewer, and both ITP apps.</p>
+    <div class="field"><label for="piNoInput">Job number</label><input type="text" id="piNoInput"></div>
     <div class="field"><label for="piNameInput">Project name</label><input type="text" id="piNameInput"></div>
-    <div class="field"><label for="piNoInput">Project number</label><input type="text" id="piNoInput"></div>
-    <div class="field"><label for="piClientInput">Client</label><input type="text" id="piClientInput"></div>
     <div class="field"><label for="piBuilderInput">Builder</label><input type="text" id="piBuilderInput"></div>
     <div class="field"><label for="piSiteAddressInput">Site address</label><input type="text" id="piSiteAddressInput"></div>
     <div class="field"><label for="piProjectManagerInput">Project manager</label><input type="text" id="piProjectManagerInput"></div>
@@ -1098,13 +1101,18 @@
   }
 
   // Project metadata -- {no, name, contractor} today (Site Measure's
-  // existing schema); this app's own Create/Edit Project screen (next step
-  // in the build sequence) extends it with client/builder/site address/
-  // project manager. Read-only here -- shown as a preview on the level list
-  // so existing projects' info is visible even before the edit screen
-  // exists. Same filename/shape/parsing as source.html's own
-  // readProjectMeta so this app never disagrees with Site Measure about
-  // what's in this file.
+  // existing schema); this app's own Create/Edit Project screen extends it
+  // with siteAddress/projectManager. Andrew's own diagram uses "Job#" for
+  // what Site Measure's schema calls "no" and "Project Name" for "name" --
+  // same keys on disk, just relabelled in this app's own UI. A "client"
+  // key was tried and then explicitly dropped (2026-09-22) -- in Andrew's
+  // own workflow the client IS the project name, so a separate field was
+  // pure redundancy; never write or read one, even for a project that has
+  // one left over from before this change (silently ignored, not an
+  // error). Read-only here -- shown as a preview on the level list so
+  // existing projects' info is visible even before the edit screen exists.
+  // Same filename/shape/parsing as source.html's own readProjectMeta so
+  // this app never disagrees with Site Measure about what's in this file.
   function projectMetaFilename(){ return "project-meta.json"; }
   function readProjectMeta(dirHandle){
     if (!dirHandle) return Promise.resolve(null);
@@ -1119,7 +1127,6 @@
           no: String(parsed.no || ""),
           name: String(parsed.name || ""),
           contractor: String(parsed.contractor || ""),
-          client: String(parsed.client || ""),
           siteAddress: String(parsed.siteAddress || ""),
           projectManager: String(parsed.projectManager || "")
         };
@@ -1131,7 +1138,7 @@
   // contractor) exactly as-is -- Site Measure's "Project Info" dialog and
   // both ITP apps' title blocks read those same three keys today, and
   // decision #12's cutover hasn't happened yet, so this app must not break
-  // what Site Measure still writes/reads meanwhile. client/siteAddress/
+  // what Site Measure still writes/reads meanwhile. siteAddress/
   // projectManager are new, additive keys; an older project (or one Site
   // Measure itself still edits) simply won't have them, which readProjectMeta
   // above already treats as empty strings, not an error.
@@ -1140,7 +1147,6 @@
       no: String((meta && meta.no) || ""),
       name: String((meta && meta.name) || ""),
       contractor: String((meta && meta.contractor) || ""),
-      client: String((meta && meta.client) || ""),
       siteAddress: String((meta && meta.siteAddress) || ""),
       projectManager: String((meta && meta.projectManager) || "")
     });
@@ -1180,10 +1186,15 @@
   });
 
   /* ============================== project info dialog ============================== */
+  // Also doubles as the CREATE flow's only prompt (see "create project"
+  // below) -- there's no separate "New project name" step any more.
+  // Andrew's own field order, matching how he actually thinks about a job:
+  // Job number, Project name, Builder, Site address, Project manager. No
+  // "Client" field -- dropped 2026-09-22 (see writeProjectMeta's own
+  // comment for why).
   var projectInfoBackdrop = document.getElementById("projectInfoBackdrop");
-  var piNameInput = document.getElementById("piNameInput");
   var piNoInput = document.getElementById("piNoInput");
-  var piClientInput = document.getElementById("piClientInput");
+  var piNameInput = document.getElementById("piNameInput");
   var piBuilderInput = document.getElementById("piBuilderInput");
   var piSiteAddressInput = document.getElementById("piSiteAddressInput");
   var piProjectManagerInput = document.getElementById("piProjectManagerInput");
@@ -1191,14 +1202,13 @@
   var projectInfoSkip = document.getElementById("projectInfoSkip");
   var projectInfoResolve = null;
   function showProjectInfoDialog(current){
-    piNameInput.value = (current && current.name) || "";
     piNoInput.value = (current && current.no) || "";
-    piClientInput.value = (current && current.client) || "";
+    piNameInput.value = (current && current.name) || "";
     piBuilderInput.value = (current && current.contractor) || "";
     piSiteAddressInput.value = (current && current.siteAddress) || "";
     piProjectManagerInput.value = (current && current.projectManager) || "";
     projectInfoBackdrop.hidden = false;
-    piNameInput.focus();
+    piNoInput.focus();
     return new Promise(function(resolve){ projectInfoResolve = resolve; });
   }
   function closeProjectInfo(value){
@@ -1210,7 +1220,6 @@
     return {
       name: piNameInput.value,
       no: piNoInput.value,
-      client: piClientInput.value,
       contractor: piBuilderInput.value,
       siteAddress: piSiteAddressInput.value,
       projectManager: piProjectManagerInput.value
@@ -1296,16 +1305,30 @@
   var editProjectInfoBtn = document.getElementById("editProjectInfoBtn");
   var addProjectInfoBtn = document.getElementById("addProjectInfoBtn");
 
+  // The project FOLDER is named "Job# - Project Name" -- Andrew's own
+  // diagram convention (<JOB# - PROJECT NAME>) -- built from the two
+  // fields entered in the Project Info dialog itself; there's no separate
+  // "New project name" prompt any more (2026-09-22 -- Andrew: go straight
+  // to the Project Info dialog). If only one of the two is given, the
+  // folder is just that one value alone rather than a dangling " - ".
   // Same "collides -> numbered suffix" dedupe loop as Site Measure's own
-  // createNewProject, so a name typed here never silently reopens (or
-  // silently shadows) an existing project folder.
-  function createNewProject(rawName){
-    var name = sanitizeFileBase(rawName);
+  // createNewProject, so this never silently reopens (or silently
+  // shadows) an existing project folder.
+  function projectFolderBaseName(no, name){
+    var hasNo = String(no || "").trim().length > 0;
+    var hasName = String(name || "").trim().length > 0;
+    if (hasNo && hasName) return sanitizeFileBase(no) + " - " + sanitizeFileBase(name);
+    if (hasName) return sanitizeFileBase(name);
+    if (hasNo) return sanitizeFileBase(no);
+    return "New Project";
+  }
+  function createNewProject(no, name){
+    var base = projectFolderBaseName(no, name);
     return listExistingProjects(projectsRootHandle).then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
-      var finalName = name, n = 2;
+      var finalName = base, n = 2;
       while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
-        finalName = name + " " + n; n++;
+        finalName = base + " " + n; n++;
       }
       return projectsRootHandle.getDirectoryHandle(finalName, { create: true }).then(function(dirH){
         activeProjectHandle = dirH;
@@ -1315,15 +1338,14 @@
     });
   }
   newProjectBtn.addEventListener("click", function(){
-    showPromptDialog("New project name", "").then(function(value){
-      if (value === null || !value.trim()) return;
-      return createNewProject(value).then(function(finalName){
-        showToast("Created “" + finalName + "”.");
-        return showProjectInfoDialog(null).then(function(info){
-          if (info) return writeProjectMeta(activeProjectHandle, info);
+    showProjectInfoDialog(null).then(function(info){
+      if (!info) return; // cancelled
+      if (!info.name.trim()){ showToast("Enter a project name."); return; }
+      return createNewProject(info.no, info.name).then(function(finalName){
+        return writeProjectMeta(activeProjectHandle, info).then(function(){
+          showToast("Created “" + finalName + "”.");
+          return populateLevelList();
         });
-      }).then(function(){
-        return populateLevelList();
       });
     }).catch(function(err){
       console.error("Create project failed:", err);
@@ -2542,16 +2564,15 @@
     });
   }
   function renderProjectMetaPreview(meta){
-    if (!meta || (!meta.no && !meta.name && !meta.contractor && !meta.client && !meta.siteAddress && !meta.projectManager)){
+    if (!meta || (!meta.no && !meta.name && !meta.contractor && !meta.siteAddress && !meta.projectManager)){
       projectMetaCard.hidden = true;
       projectMetaEmptyCard.hidden = false;
       return;
     }
     projectMetaEmptyCard.hidden = true;
     var rows = [
-      ["Project No.", meta.no],
+      ["Job #", meta.no],
       ["Project name", meta.name],
-      ["Client", meta.client],
       ["Builder", meta.contractor],
       ["Site address", meta.siteAddress],
       ["Project manager", meta.projectManager]

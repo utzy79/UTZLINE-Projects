@@ -140,9 +140,27 @@
 // change from v8 otherwise -- same Level/Room-as-data behaviour, same
 // one-shared-photo-per-Level rule, same migration-is-additive-only
 // guarantee, just relocated to a place a human can actually find.)
+//
+// (v10, 2026-09-22: Create Project flow simplified, plus a naming/schema
+// fix, both per Andrew's direct follow-up requests. The separate "New
+// project name" prompt is gone -- "+ New Project" now goes straight to
+// the Project Info dialog (Job number, Project name, Builder, Site
+// address, Project manager, in that order), and the project FOLDER is
+// built from that dialog's own Job#/Project Name fields as "<Job#> -
+// <Project Name>" -- Andrew's own diagram convention (<JOB# - PROJECT
+// NAME>) -- rather than a separately-typed name. Falls back to whichever
+// of Job#/Name is given if only one is entered. The "Client" field is
+// removed entirely (from the dialog, from project-meta.json, and from
+// the level list's info preview) -- Andrew's own words: "delete client as
+// this is the project name," i.e. in his workflow the client and the
+// project name were always the same thing, making a separate field pure
+// redundancy. Cancelling the dialog during creation now makes no folder
+// at all (previously the folder already existed by the time this dialog
+// opened) -- a deliberate side effect of merging the two steps into one,
+// not a separate ask.)
 
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v9";
+var CACHE_NAME = "utzline-projects-cache-v10";
 
 var PRECACHE_URLS = [
   "./",
