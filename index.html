@@ -96,9 +96,15 @@
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <!-- Same pdf.js version/CDN Site Measure's own source.html already imports
-     PDFs with -- only pdf.js, not jsPDF, since Projects V1 never EXPORTS a
-     PDF, only imports floorplan pages from one. -->
+     PDFs with -- read-only, for importing floorplan pages from a PDF. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" onerror="window.__pdfImportLibFailed = true;"></script>
+<!-- jsPDF (2026-09-23): first-ever PDF EXPORT in this app, for the new
+     Rework Register's "Print / Save PDF" and "Share…" buttons -- Andrew:
+     "Also need the ability to print the rework page or email / share it."
+     Vendored locally (same file, same convention Install/Manufacture/
+     Delivery ITP already use) rather than a CDN import, so it keeps working
+     fully offline once installed, and precached in service-worker.js. -->
+<script src="./jspdf.umd.min.js" onerror="window.__jsPdfLibFailed = true;"></script>
 <style>
   :root{
     --bg: #140d0d;
@@ -145,6 +151,12 @@
   }
   .screen{ width: 100%; max-width: 640px; }
   .screen[hidden]{ display: none; }
+  /* Full-width table screens (2026-09-23): Andrew, verbatim -- "Where there
+     is a table it needs to open the full width of the screen. To minimise
+     scrolling." Same override pattern .plan-canvas-screen already
+     established for the plan canvas (just the max-width part -- these
+     still scroll normally in main, so no position:fixed/inset needed). */
+  .screen.wide-table{ max-width: none; }
   h1{ font-size: 20px; margin: 0 0 6px; }
   p.sub{ color: var(--muted); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
   .card{
@@ -407,6 +419,11 @@
   .status-history-pop .shp-status{ font-weight: 600; }
   .status-history-pop .shp-meta{ color: var(--muted); text-align: right; white-space: nowrap; }
   .status-history-pop .shp-empty{ color: var(--muted); }
+  /* Elapsed time between two consecutive history rows (added 2026-09-23,
+     Andrew: "these status windows to show days between each process") --
+     deliberately borderless/centred so it reads as a gap marker sitting
+     BETWEEN the two rows it measures, not a row of its own. */
+  .status-history-pop .shp-gap{ color: var(--muted2); font-size: 11px; font-style: italic; text-align: center; padding: 2px 0; }
 
   /* ---- Joinery item page: linked-document lists (Shop drawings, Job
        notes, Manufacture + Install ITP) -- 2026-09-23 ---- */
@@ -417,6 +434,35 @@
   .doc-row:first-child{ border-top: none; }
   .doc-row-name{ font-size: 13px; }
   .doc-row-sub{ font-size: 12px; color: var(--muted); }
+
+  /* ---- Joinery item page: read-only rework summary (2026-09-23) -- see
+       readInstallReworkForItem's own comment. ---- */
+  .rework-item{ padding: 10px 0; border-top: 1px solid var(--border); }
+  .rework-item:first-child{ border-top: none; }
+  .rework-item-head{ display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+  .rework-item-cabinet{ font-weight: 600; }
+  .rework-item-date{ font-size: 12px; color: var(--muted); }
+  .rework-item-text{ font-size: 13px; margin: 6px 0 0; white-space: pre-wrap; }
+  .rework-item-status{ font-size: 12px; margin-top: 6px; color: var(--muted); }
+  .rework-item-status.received{ color: var(--accent); }
+  .rework-item-photos{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .rework-item-photos img{ width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
+  /* Brief highlight when arriving from the Rework Register's "clicking on a
+     rework takes you to that rework" navigation (2026-09-23). */
+  .rework-item-flash{ animation: reworkItemFlash 2.2s ease-out; border-radius: 8px; }
+  @keyframes reworkItemFlash{
+    0%{ background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+    100%{ background: transparent; box-shadow: 0 0 0 2px transparent; }
+  }
+
+  /* ---- Joinery item page: delivery-location pin thumbnail (2026-09-23) --
+       mirrors UTZLINE Delivery ITP's own checklist-screen thumbnail. ---- */
+  .delivery-loc-row{ display: flex; align-items: center; gap: 12px; }
+  .delivery-loc-thumb{
+    width: 64px; height: 64px; flex: 0 0 auto; padding: 0; border-radius: 6px;
+    border: 1px solid var(--border); background: none; cursor: pointer; overflow: hidden;
+  }
+  .delivery-loc-thumb img{ width: 100%; height: 100%; object-fit: cover; display: block; }
 
   #toast{
     position: fixed;
@@ -529,6 +575,7 @@
       <div class="row">
         <button class="btn" id="newLevelBtn">+ New Level</button>
         <button class="btn secondary" id="openRegisterBtn">Joinery Register</button>
+        <button class="btn secondary" id="openReworkRegisterBtn">Rework register</button>
       </div>
     </div>
     <div class="card">
@@ -572,7 +619,7 @@
   <!-- ---- Joinery Register: a flat, filterable/sortable table over every
        joinery item record in the project (joinery-items.json), regardless
        of which level/room it's on. ---- -->
-  <section id="screenRegister" class="screen">
+  <section id="screenRegister" class="screen wide-table">
     <div class="backrow"><button class="btn secondary" id="backFromRegisterBtn">&larr; Levels</button></div>
     <h1 id="registerProjectLabel">Joinery Register</h1>
     <p class="sub">Every joinery item in this project, in one place.</p>
@@ -616,6 +663,68 @@
     </div>
   </section>
 
+  <!-- ---- Rework Register (2026-09-23): Andrew, verbatim: "Projects to have
+       a rework section per project where you can press a button and see a
+       status list of all reworks for that project. Sortable, filterable
+       and clicking on a rework takes you to that rework. Also need the
+       ability to print the rework page or email / share it." Same
+       filter/sort/table conventions as the Joinery Register above, just
+       flattened one level further -- one ROW PER REWORK ENTRY, not per
+       joinery item, since a single item can have several reworks and
+       Andrew's own wording ("clicking on a rework") means each entry is
+       its own row here. See openReworkRegister's own comment for how it's
+       assembled and reworkRegisterRowsToPdf's for the Print/Share design. ---- -->
+  <section id="screenReworkRegister" class="screen wide-table">
+    <div class="backrow"><button class="btn secondary" id="backFromReworkRegisterBtn">&larr; Levels</button></div>
+    <h1 id="reworkRegisterProjectLabel">Rework Register</h1>
+    <p class="sub">Every rework entry logged in Install ITP for this project, in one place.</p>
+    <div class="card">
+      <div class="row">
+        <div class="field" style="flex:1 1 160px; margin:0;">
+          <label for="reworkRegisterLevelFilter">Level</label>
+          <select id="reworkRegisterLevelFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
+            <option value="">All levels</option>
+          </select>
+        </div>
+        <div class="field" style="flex:1 1 160px; margin:0;">
+          <label for="reworkRegisterReceivedFilter">Received</label>
+          <select id="reworkRegisterReceivedFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
+            <option value="">All</option>
+            <option value="yes">Received back on site</option>
+            <option value="no">Not yet received</option>
+          </select>
+        </div>
+        <div class="field" style="flex:2 1 220px; margin:0;">
+          <label for="reworkRegisterSearchInput">Search</label>
+          <input type="text" id="reworkRegisterSearchInput" placeholder="Joinery ID, cabinet #, or detail text…">
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn secondary" id="reworkRegisterPrintBtn">Print / Save PDF</button>
+        <button class="btn secondary" id="reworkRegisterShareBtn" hidden>Share…</button>
+        <span class="sub" id="reworkRegisterCountLabel" style="margin:0 0 0 auto; align-self:center;"></span>
+      </div>
+    </div>
+    <div class="card" id="reworkRegisterTableCard">
+      <table class="register-table" id="reworkRegisterTable">
+        <thead>
+          <tr>
+            <th data-col="level">Level</th>
+            <th data-col="room">Room</th>
+            <th data-col="joineryId">Joinery ID</th>
+            <th data-col="cabinetNumber">Cabinet #</th>
+            <th data-col="text">Detail</th>
+            <th data-col="createdAt">Logged</th>
+            <th data-col="received">Received</th>
+          </tr>
+        </thead>
+        <tbody id="reworkRegisterTableBody"></tbody>
+      </table>
+      <div class="empty-note" id="reworkRegisterEmpty" hidden>No rework entries match this filter.</div>
+      <div class="empty-note" id="reworkRegisterEmptyProject" hidden>No rework logged for this project yet -- entries are added from Install ITP's own long-press "Open rework" menu on a joinery marker.</div>
+    </div>
+  </section>
+
   <!-- ---- Status-history hover popup (2026-09-23): "if you hover over a
        joinery item on this page, it gives you a list of all the status
        changes for that joinery item, dates and who changed it." One shared,
@@ -648,8 +757,24 @@
       <div id="itemJobNotesList"></div>
     </div>
     <div class="card">
-      <h2 class="section-title">Manufacture + Install ITP</h2>
+      <h2 class="section-title">ITPs</h2>
       <div id="itemItpList"></div>
+    </div>
+    <!-- Read-only rework summary (2026-09-23) -- Andrew, verbatim, on Install
+         ITP's new rework tracker: "fully trackable via this system and via
+         utzline projects summary pages per project." Reads Install ITP's own
+         "Install ITP Rework" flat branch (read-only -- this app never writes
+         rework data, only Install ITP does) via the exact same
+         readItpChecklistRaw walk every other ITP branch already uses here,
+         so it needs no new folder-reading code of its own. See
+         readInstallReworkForItem's own comment. -->
+    <div class="card">
+      <h2 class="section-title">Rework</h2>
+      <div id="itemReworkList"></div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Delivery location</h2>
+      <div id="itemDeliveryLocation"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Photos</h2>
@@ -2680,10 +2805,29 @@
       return jnH.getDirectoryHandle(key, { create: false });
     });
   }
+  // Same jobNoteSortKey trick as source.html's own listJobNotes (2026-09-23,
+  // moving the timestamp from a filename PREFIX to a SUFFIX per Andrew's
+  // "dont want job notes to have this format at the start" request) -- finds
+  // the "yyyy-mm-dd hh-mm-ss" stamp wherever it sits in the name so old
+  // (prefix) and new (suffix) files both keep sorting newest-first
+  // correctly, rather than relying on generic listFilesInDir's plain
+  // filename compare (which would now sort primarily by original file name
+  // once the stamp is no longer at the very start).
+  function jobNoteSortKey(fileName){
+    var m = /\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}/.exec(fileName || "");
+    return m ? m[0] : "";
+  }
   function listJobNotesForItem(projectHandle, item){
     return getJobNotesDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
       return listFilesInDir(dirH, function(name){ return /\.pdf$/i.test(name); });
-    }, function(){ return []; });
+    }, function(){ return []; }).then(function(list){
+      list.sort(function(a, b){
+        var ka = jobNoteSortKey(a.fileName), kb = jobNoteSortKey(b.fileName);
+        if (ka !== kb) return kb.localeCompare(ka);
+        return b.fileName.localeCompare(a.fileName);
+      });
+      return list;
+    });
   }
 
   /* ---- Shop drawings (mirrors source.html's own getShopDrawingsDirForItem/
@@ -2749,7 +2893,12 @@
   function itpPdfBaseNameForItem(item){
     return sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + " - " + sanitizeFileBase(item.joineryId);
   }
-  function readItpChecklistSummary(projectHandle, appBranch, roleKeys, item){
+  // Raw checklist JSON for one item, in one ITP app's own flat branch --
+  // factored out of readItpChecklistSummary (2026-09-23) so the new
+  // delivery-location reader below can share the exact same directory walk
+  // instead of duplicating it. Resolves to null (not a rejection) for "no
+  // checklist started yet" -- the normal, common case for most items.
+  function readItpChecklistRaw(projectHandle, appBranch, item){
     return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
       return psH.getDirectoryHandle("UTZLINE ITP", { create: false });
     }).then(function(branchH){
@@ -2759,15 +2908,51 @@
     }).then(function(fh){
       return fh.getFile();
     }).then(function(file){ return file.text(); }).then(function(text){
-      var data = null;
-      try{ data = JSON.parse(text); }catch(e){ data = null; }
-      if (!data) return null;
+      try{ return JSON.parse(text); }catch(e){ return null; }
+    }, function(){ return null; });
+  }
+  function readItpChecklistSummary(projectHandle, appBranch, roleKeys, item){
+    return readItpChecklistRaw(projectHandle, appBranch, item).then(function(data){
+      if (!data) return { started: false };
       var total = Array.isArray(data.rows) ? data.rows.length : 0;
       var answered = Array.isArray(data.rows) ? data.rows.filter(function(r){ return r && r.status; }).length : 0;
       var hasNo = Array.isArray(data.rows) && data.rows.some(function(r){ return r && r.status === "no"; });
       var bothSigned = !!(data.signoff && roleKeys.every(function(role){ return data.signoff[role] && data.signoff[role].sig; }));
       return { started: true, answered: answered, total: total, hasNo: hasNo, signed: bothSigned && !hasNo };
-    }, function(){ return { started: false }; });
+    });
+  }
+  // "Pin drop location button that takes you to it on the map / snapshot
+  // taken from the delivery itp" (Andrew, 2026-09-23) -- Delivery ITP's own
+  // checklist JSON (read-only here, same file readItpChecklistSummary
+  // already reads for its "Delivery ITP" row above) carries
+  // `deliveryLocationPin` ({x,y} world coordinates on the level's plan)
+  // and `locationSnapshot` ({dataUrl,w,h,capturedAt}, a small square JPEG
+  // of the pin dropped on the plan) once Delivery ITP's own "Add location
+  // snapshot" has been used for this item. Both are independently
+  // optional -- a pin can exist with no snapshot taken yet, in principle --
+  // so each is checked on its own rather than assuming one implies the
+  // other.
+  function readDeliveryLocationForItem(projectHandle, item){
+    return readItpChecklistRaw(projectHandle, "Delivery ITP", item).then(function(data){
+      if (!data) return { pin: null, snapshot: null };
+      var pin = (data.deliveryLocationPin && typeof data.deliveryLocationPin.x === "number" && typeof data.deliveryLocationPin.y === "number") ? data.deliveryLocationPin : null;
+      var snapshot = (data.locationSnapshot && data.locationSnapshot.dataUrl) ? data.locationSnapshot : null;
+      return { pin: pin, snapshot: snapshot };
+    });
+  }
+  // Install ITP's own rework-tracker file for this item (read-only -- see
+  // this card's own top-of-HTML comment). Lives in the exact same flat
+  // "Project Saves/UTZLINE ITP/<branch>/<Level> - <Room> - <Code>.json"
+  // shape as every other ITP checklist here, just under its own
+  // "Install ITP Rework" branch -- Install ITP deliberately kept rework
+  // data in its own file, separate from the checklist's own JSON, so this
+  // reader (and any future one) never needs to understand the checklist's
+  // 16-row/signoff/photos shape at all. Resolves to an empty array (not a
+  // rejection) for "no rework logged yet", the normal, common case.
+  function readInstallReworkForItem(projectHandle, item){
+    return readItpChecklistRaw(projectHandle, "Install ITP Rework", item).then(function(data){
+      return (data && Array.isArray(data.reworks)) ? data.reworks : [];
+    });
   }
   function listItpPdfsForItem(projectHandle, appBranch, item){
     return projectHandle.getDirectoryHandle("PDF Files", { create: false }).then(function(pfH){
@@ -3167,17 +3352,32 @@
       requestAnimationFrame(function(){
         planFitToView();
         if (centerOnMarker){
-          var marker = (planSaved.objects || []).filter(function(o){
-            return o.type === "roomlink" && o.roomName === centerOnMarker.room && o.joineryCode === centerOnMarker.joineryId;
-          })[0];
-          if (marker){
+          // Two shapes accepted here (2026-09-23): {room, joineryId} looks
+          // up that item's own roomlink marker (the original, still-used
+          // path -- viewOnPlanBtn/the "View on plan" button on this item's
+          // page); {x, y} centres directly on a raw world point instead,
+          // with no marker lookup at all -- used by the delivery-location
+          // "Pin drop location" button, since a delivery pin is placed by
+          // hand and isn't guaranteed to sit exactly on the item's own
+          // marker.
+          var targetX = null, targetY = null;
+          if (typeof centerOnMarker.x === "number" && typeof centerOnMarker.y === "number"){
+            targetX = centerOnMarker.x;
+            targetY = centerOnMarker.y;
+          } else {
+            var marker = (planSaved.objects || []).filter(function(o){
+              return o.type === "roomlink" && o.roomName === centerOnMarker.room && o.joineryCode === centerOnMarker.joineryId;
+            })[0];
+            if (marker){ targetX = marker.x; targetY = marker.y; }
+          }
+          if (targetX !== null){
             var w = planCanvasStage.clientWidth, h = planCanvasStage.clientHeight;
-            // Zoom in at least as close as a 1:1 pixel view so the marker is
+            // Zoom in at least as close as a 1:1 pixel view so the target is
             // easy to pick out, but never zoom back OUT past whatever
             // fit-to-view already chose.
             planView.scale = Math.max(planView.scale, 1);
-            planView.tx = w / 2 - marker.x * planView.scale;
-            planView.ty = h / 2 - marker.y * planView.scale;
+            planView.tx = w / 2 - targetX * planView.scale;
+            planView.ty = h / 2 - targetY * planView.scale;
             planApplyTransform();
           }
         }
@@ -3273,6 +3473,21 @@
     return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   }
   function hideStatusHistoryPop(){ statusHistoryPop.hidden = true; }
+  // Elapsed time between two history entries (added 2026-09-23, Andrew:
+  // "these status windows to show days between each process") -- newerIso
+  // is always the same moment or later than olderIso, since hist is always
+  // sorted newest-first before this is called. Whole calendar days,
+  // rounded, with a "Same day" fallback for two stages recorded within the
+  // same ~day (including the -- impossible in practice, since the pipeline
+  // is forward-only, but defensively handled anyway -- case of a
+  // non-positive difference).
+  function formatDaysBetween(newerIso, olderIso){
+    var a = new Date(newerIso), b = new Date(olderIso);
+    if (isNaN(a.getTime()) || isNaN(b.getTime())) return "";
+    var days = Math.round((a.getTime() - b.getTime()) / 86400000);
+    if (days <= 0) return "Same day";
+    return days === 1 ? "1 day" : days + " days";
+  }
   // Andrew: "if you hover over a joinery item on this page, it gives you a
   // list of all the status changes for that joinery item, dates and who
   // changed it." Also opens on click/tap, since plain hover isn't reachable
@@ -3281,8 +3496,14 @@
   function showStatusHistoryPop(cellEl, item){
     var hist = joineryStatusHistoryFor(registerStatusList, item);
     var rows = hist.length
-      ? hist.map(function(h){
-          return "<div class=\"shp-row\"><span class=\"shp-status\">" + statusLabelHtml(h.status) + "</span><span class=\"shp-meta\">" + escapeHtml(formatHistoryDate(h.at)) + (h.by ? "<br>" + escapeHtml(h.by) : "") + "</span></div>";
+      ? hist.map(function(h, i){
+          var rowHtml = "<div class=\"shp-row\"><span class=\"shp-status\">" + statusLabelHtml(h.status) + "</span><span class=\"shp-meta\">" + escapeHtml(formatHistoryDate(h.at)) + (h.by ? "<br>" + escapeHtml(h.by) : "") + "</span></div>";
+          // A gap marker sits BETWEEN this row and the next-older one, so
+          // there's one fewer gap than there are rows -- none after the
+          // very last (oldest) entry, since there's nothing older to
+          // measure against.
+          var gapHtml = (i < hist.length - 1) ? "<div class=\"shp-gap\">" + escapeHtml(formatDaysBetween(h.at, hist[i + 1].at)) + "</div>" : "";
+          return rowHtml + gapHtml;
         }).join("")
       : "<div class=\"shp-empty\">No status changes yet.</div>";
     statusHistoryPop.innerHTML = "<div class=\"shp-title\">" + escapeHtml(item.joineryId || "(no ID)") + "</div>" + rows;
@@ -3412,6 +3633,325 @@
   openRegisterBtn.addEventListener("click", openJoineryRegister);
   backFromRegisterBtn.addEventListener("click", function(){ showScreen("levels"); });
 
+  /* ============================== Rework Register ==============================
+     Andrew, verbatim: "Projects to have a rework section per project where
+     you can press a button and see a status list of all reworks for that
+     project. Sortable, filterable and clicking on a rework takes you to
+     that rework. Also need the ability to print the rework page or email /
+     share it." Same filter/sort/table conventions as the Joinery Register
+     just above, but flattened one level further: registerAllItems is one
+     row per JOINERY ITEM, while reworkRegisterAllRows is one row per REWORK
+     ENTRY (an item with 3 reworks logged contributes 3 rows here), since
+     "clicking on a rework" means each entry needs its own row and its own
+     click target -- not the item that owns it. Assembled by reading every
+     item's own rework file (readInstallReworkForItem, already used by the
+     Joinery Item page's own Rework card) and flattening the results, rather
+     than any new folder-walking code. */
+  var reworkRegisterLevelFilter = document.getElementById("reworkRegisterLevelFilter");
+  var reworkRegisterReceivedFilter = document.getElementById("reworkRegisterReceivedFilter");
+  var reworkRegisterSearchInput = document.getElementById("reworkRegisterSearchInput");
+  var reworkRegisterTable = document.getElementById("reworkRegisterTable");
+  var reworkRegisterTableBody = document.getElementById("reworkRegisterTableBody");
+  var reworkRegisterEmpty = document.getElementById("reworkRegisterEmpty");
+  var reworkRegisterEmptyProject = document.getElementById("reworkRegisterEmptyProject");
+  var reworkRegisterProjectLabel = document.getElementById("reworkRegisterProjectLabel");
+  var reworkRegisterCountLabel = document.getElementById("reworkRegisterCountLabel");
+  var openReworkRegisterBtn = document.getElementById("openReworkRegisterBtn");
+  var backFromReworkRegisterBtn = document.getElementById("backFromReworkRegisterBtn");
+  var reworkRegisterPrintBtn = document.getElementById("reworkRegisterPrintBtn");
+  var reworkRegisterShareBtn = document.getElementById("reworkRegisterShareBtn");
+
+  var reworkRegisterAllRows = []; // [{ item, entry }], newest-created first within each item, items in joinery-items.json order
+  // Most-recently-logged first by default -- unlike the Joinery Register
+  // (which defaults to Level, since that's how items are naturally toured),
+  // a rework register is naturally read "what's newest," same as Install
+  // ITP's own rework history list on the joinery marker itself.
+  var reworkRegisterSort = { col: "createdAt", dir: "desc" };
+
+  function reworkRegisterMatchesFilters(row){
+    if (reworkRegisterLevelFilter.value && row.item.level !== reworkRegisterLevelFilter.value) return false;
+    var recv = reworkRegisterReceivedFilter.value;
+    if (recv === "yes" && !row.entry.received) return false;
+    if (recv === "no" && row.entry.received) return false;
+    var q = reworkRegisterSearchInput.value.trim().toLowerCase();
+    if (q){
+      var hay = ((row.item.joineryId || "") + " " + (row.item.room || "") + " " + (row.entry.cabinetNumber || "") + " " + (row.entry.text || "") + " " + (row.entry.createdBy || "")).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  }
+  function reworkRegisterCompare(a, b){
+    var col = reworkRegisterSort.col;
+    var cmp;
+    if (col === "createdAt"){
+      cmp = new Date(a.entry.createdAt || 0).getTime() - new Date(b.entry.createdAt || 0).getTime();
+    } else if (col === "received"){
+      cmp = (a.entry.received ? 1 : 0) - (b.entry.received ? 1 : 0);
+    } else if (col === "level" || col === "room" || col === "joineryId"){
+      var av = String(a.item[col] || "").toLowerCase(), bv = String(b.item[col] || "").toLowerCase();
+      cmp = av < bv ? -1 : (av > bv ? 1 : 0);
+    } else { // cabinetNumber, text
+      var av2 = String(a.entry[col] || "").toLowerCase(), bv2 = String(b.entry[col] || "").toLowerCase();
+      cmp = av2 < bv2 ? -1 : (av2 > bv2 ? 1 : 0);
+    }
+    return reworkRegisterSort.dir === "desc" ? -cmp : cmp;
+  }
+  function reworkRegisterRowDetailText(entry){
+    var t = (entry.text || "").trim();
+    if (!t) return "—";
+    return t.length > 90 ? (t.slice(0, 87) + "…") : t;
+  }
+  function currentReworkRegisterRows(){
+    var filtered = reworkRegisterAllRows.filter(reworkRegisterMatchesFilters);
+    filtered.sort(reworkRegisterCompare);
+    return filtered;
+  }
+  function renderReworkRegisterTable(){
+    var filtered = currentReworkRegisterRows();
+    reworkRegisterTableBody.innerHTML = "";
+    filtered.forEach(function(row){
+      var item = row.item, entry = row.entry;
+      var receivedHtml = entry.received
+        ? "<span class=\"rework-item-status received\" style=\"display:inline-block;\">Received" + (entry.receivedDate ? " (" + escapeHtml(entry.receivedDate) + ")" : "") + "</span>"
+        : "<span class=\"muted-cell\">Not yet</span>";
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + escapeHtml(item.level) + "</td>" +
+        "<td>" + escapeHtml(item.room) + "</td>" +
+        "<td>" + escapeHtml(item.joineryId) + "</td>" +
+        "<td>" + escapeHtml(entry.cabinetNumber || "—") + "</td>" +
+        "<td>" + escapeHtml(reworkRegisterRowDetailText(entry)) + "</td>" +
+        "<td>" + escapeHtml(formatHistoryDate(entry.createdAt)) + "</td>" +
+        "<td>" + receivedHtml + "</td>";
+      tr.addEventListener("click", function(){
+        // "Clicking on a rework takes you to that rework" -- there's no
+        // separate rework-detail screen in this app (Projects is read-only
+        // for rework data), so this opens that entry's own Joinery Item
+        // page and scrolls to/flashes the exact card, via
+        // pendingReworkHighlightId (consumed in renderJoineryItemLinkedSections above).
+        pendingReworkHighlightId = entry.id || null;
+        openJoineryItemPage(item, "reworkRegister");
+      });
+      reworkRegisterTableBody.appendChild(tr);
+    });
+    reworkRegisterTable.hidden = reworkRegisterAllRows.length === 0;
+    reworkRegisterEmptyProject.hidden = reworkRegisterAllRows.length !== 0;
+    reworkRegisterEmpty.hidden = !(reworkRegisterAllRows.length > 0 && filtered.length === 0);
+    reworkRegisterCountLabel.textContent = filtered.length + (filtered.length === 1 ? " rework entry" : " rework entries") +
+      (filtered.length !== reworkRegisterAllRows.length ? (" (of " + reworkRegisterAllRows.length + ")") : "");
+    Array.prototype.forEach.call(reworkRegisterTable.querySelectorAll("th"), function(th){
+      th.classList.remove("sorted", "desc");
+      if (th.getAttribute("data-col") === reworkRegisterSort.col){
+        th.classList.add("sorted");
+        if (reworkRegisterSort.dir === "desc") th.classList.add("desc");
+      }
+    });
+  }
+  Array.prototype.forEach.call(reworkRegisterTable.querySelectorAll("th"), function(th){
+    th.addEventListener("click", function(){
+      var col = th.getAttribute("data-col");
+      if (reworkRegisterSort.col === col){ reworkRegisterSort.dir = reworkRegisterSort.dir === "asc" ? "desc" : "asc"; }
+      else { reworkRegisterSort.col = col; reworkRegisterSort.dir = col === "createdAt" ? "desc" : "asc"; }
+      renderReworkRegisterTable();
+    });
+  });
+  reworkRegisterLevelFilter.addEventListener("change", renderReworkRegisterTable);
+  reworkRegisterReceivedFilter.addEventListener("change", renderReworkRegisterTable);
+  reworkRegisterSearchInput.addEventListener("input", renderReworkRegisterTable);
+
+  function openReworkRegister(){
+    reworkRegisterProjectLabel.textContent = activeProjectName + " — Rework Register";
+    showScreen("reworkRegister");
+    reworkRegisterTableBody.innerHTML = "";
+    reworkRegisterCountLabel.textContent = "Loading…";
+    return Promise.all([
+      readJoineryItems(activeProjectHandle),
+      listExistingLevels(activeProjectHandle)
+    ]).then(function(results){
+      var items = results[0] || [];
+      var levelNames = results[1] || [];
+      return Promise.all(items.map(function(item){
+        return readInstallReworkForItem(activeProjectHandle, item).then(function(reworks){
+          return reworks.map(function(entry){ return { item: item, entry: entry }; });
+        });
+      })).then(function(perItemRows){
+        reworkRegisterAllRows = [].concat.apply([], perItemRows);
+        var prevLevel = reworkRegisterLevelFilter.value;
+        reworkRegisterLevelFilter.innerHTML = "<option value=\"\">All levels</option>";
+        levelNames.forEach(function(name){
+          var opt = document.createElement("option");
+          opt.value = name; opt.textContent = name;
+          reworkRegisterLevelFilter.appendChild(opt);
+        });
+        if (levelNames.indexOf(prevLevel) !== -1) reworkRegisterLevelFilter.value = prevLevel;
+        renderReworkRegisterTable();
+      });
+    }).catch(function(err){
+      console.error("Opening Rework Register failed:", err);
+      showToast("Couldn't open the Rework Register.");
+    });
+  }
+  openReworkRegisterBtn.addEventListener("click", openReworkRegister);
+  backFromReworkRegisterBtn.addEventListener("click", function(){ showScreen("levels"); });
+
+  /* ---- Rework Register: Print / Share (2026-09-23) -- Andrew: "Also need
+     the ability to print the rework page or email / share it." This app has
+     never exported a PDF before (only ever READ one, via pdf.js -- see this
+     file's own top-of-file comment on that script tag); jsPDF is vendored
+     here for the first time, the same local jspdf.umd.min.js file the ITP
+     apps already ship, so it keeps working fully offline once installed.
+     "Print" opens the exported PDF in a new tab so the browser's own PDF
+     viewer (and its own Print button/Ctrl+P) handles the actual printing --
+     there's no in-app print stylesheet anywhere in this app family to
+     diverge from. "Share" ports Site Measure/Viewer's own isShareSupported()
+     /shareFile()/browserDownloadBlob() pattern verbatim (native OS share
+     sheet where available, a plain download with an explanatory toast
+     everywhere else) rather than inventing a new one -- neither of these two
+     design calls was separately confirmed with Andrew beyond his own
+     wording above; both simply carry over this app family's existing
+     conventions. */
+  function browserDownloadBlob(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+  function isShareSupported(){
+    return typeof navigator.share === "function";
+  }
+  function shareFile(file){
+    var shareData = { files: [file] };
+    if (navigator.canShare && !navigator.canShare(shareData)){
+      browserDownloadBlob(file, file.name);
+      showToast("Sharing files isn't supported here — saved \"" + file.name + "\" instead. Open it from Downloads (or your Files app) and share it from there.");
+      return;
+    }
+    navigator.share(shareData).catch(function(err){
+      if (err && err.name === "AbortError") return; // person closed the share sheet on purpose
+      console.error("Share failed:", err);
+      browserDownloadBlob(file, file.name);
+      showToast("Share didn't open — saved \"" + file.name + "\" instead. Open it from Downloads (or your Files app) and use its Share button from there.");
+    });
+  }
+  function reworkRegisterPdfFilename(){
+    return sanitizeFileBase(activeProjectName || "Project") + " - Rework Register.pdf";
+  }
+  // Landscape table of the CURRENT filtered/sorted rows, drawn by hand row
+  // by row -- the same manual jsPDF approach Install ITP's own
+  // exportChecklistPdf already uses, rather than a table-plugin dependency.
+  function buildReworkRegisterPdf(rows){
+    var doc = new window.jspdf.jsPDF({ orientation: "landscape", unit: "pt", format: "a4", compress: true });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 30;
+    var contentW = pageW - margin * 2;
+    var y = margin;
+
+    doc.setFont("helvetica", "bold").setFontSize(14).setTextColor(20);
+    doc.text("UTZLINE Rework Register — " + (activeProjectName || ""), margin, y);
+    y += 16;
+    doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(120);
+    doc.text(rows.length + (rows.length === 1 ? " rework entry" : " rework entries") + " — generated " + new Date().toLocaleString(), margin, y);
+    y += 12;
+    doc.setDrawColor(20).setLineWidth(1);
+    doc.line(margin, y, pageW - margin, y);
+    y += 14;
+
+    var cols = [
+      { key: "level", label: "LEVEL", frac: 0.09 },
+      { key: "room", label: "ROOM", frac: 0.11 },
+      { key: "joineryId", label: "JOINERY ID", frac: 0.11 },
+      { key: "cabinetNumber", label: "CABINET #", frac: 0.1 },
+      { key: "text", label: "DETAIL", frac: 0.32 },
+      { key: "createdAt", label: "LOGGED", frac: 0.13 },
+      { key: "received", label: "RECEIVED", frac: 0.14 }
+    ];
+    cols.forEach(function(c){ c.w = c.frac * contentW; });
+    var headerH = 16;
+    function drawTableHeader(){
+      doc.setFillColor(20, 20, 20);
+      doc.rect(margin, y, contentW, headerH, "F");
+      doc.setTextColor(255).setFont("helvetica", "bold").setFontSize(8);
+      var hx = margin;
+      cols.forEach(function(c){ doc.text(c.label, hx + 4, y + 11); hx += c.w; });
+      y += headerH;
+      doc.setTextColor(20);
+    }
+    drawTableHeader();
+
+    rows.forEach(function(row){
+      var item = row.item, entry = row.entry;
+      var cellText = {
+        level: item.level || "", room: item.room || "", joineryId: item.joineryId || "",
+        cabinetNumber: entry.cabinetNumber || "—",
+        text: entry.text || "—",
+        createdAt: formatHistoryDate(entry.createdAt),
+        received: entry.received ? ("Received" + (entry.receivedDate ? (" (" + entry.receivedDate + ")") : "")) : "Not yet received"
+      };
+      var wrapped = {}, maxLines = 1;
+      cols.forEach(function(c){
+        doc.setFont("helvetica", "normal").setFontSize(8);
+        wrapped[c.key] = doc.splitTextToSize(String(cellText[c.key]), c.w - 8);
+        maxLines = Math.max(maxLines, wrapped[c.key].length);
+      });
+      var lineH = 9.5;
+      var rowH = maxLines * lineH + 6;
+      if (y + rowH > pageH - margin){
+        doc.addPage();
+        y = margin;
+        drawTableHeader();
+      }
+      var rx = margin;
+      cols.forEach(function(c){
+        doc.setFont("helvetica", (c.key === "received" && entry.received) ? "bold" : "normal").setFontSize(8);
+        if (c.key === "received"){
+          if (entry.received) doc.setTextColor(31, 138, 76); else doc.setTextColor(140, 140, 140);
+        } else {
+          doc.setTextColor(20);
+        }
+        doc.text(wrapped[c.key], rx + 4, y + 8);
+        rx += c.w;
+      });
+      doc.setDrawColor(220).setLineWidth(0.5);
+      doc.line(margin, y + rowH, pageW - margin, y + rowH);
+      y += rowH;
+    });
+
+    return doc;
+  }
+  reworkRegisterPrintBtn.addEventListener("click", function(){
+    if (!window.jspdf || !window.jspdf.jsPDF){
+      showToast("The PDF library failed to load — check your connection and reload the app.");
+      return;
+    }
+    var rows = currentReworkRegisterRows();
+    if (!rows.length){ showToast("No rework entries to export with the current filters."); return; }
+    var doc = buildReworkRegisterPdf(rows);
+    var blob = doc.output("blob");
+    var url = URL.createObjectURL(blob);
+    var win = window.open(url, "_blank");
+    if (!win){
+      browserDownloadBlob(blob, reworkRegisterPdfFilename());
+      showToast("Pop-up blocked — downloaded the PDF instead. Open it to print.");
+    }
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 30000);
+  });
+  reworkRegisterShareBtn.hidden = !isShareSupported();
+  reworkRegisterShareBtn.addEventListener("click", function(){
+    if (!window.jspdf || !window.jspdf.jsPDF){
+      showToast("The PDF library failed to load — check your connection and reload the app.");
+      return;
+    }
+    var rows = currentReworkRegisterRows();
+    if (!rows.length){ showToast("No rework entries to share with the current filters."); return; }
+    var doc = buildReworkRegisterPdf(rows);
+    var blob = doc.output("blob");
+    shareFile(new File([blob], reworkRegisterPdfFilename(), { type: "application/pdf" }));
+  });
+
   /* ============================== Joinery Item page ==============================
      One page per record, keyed by (level, room, joineryId) -- there's no
      markerId, so this triple stands in for one. Reachable from the
@@ -3424,7 +3964,17 @@
      this exact item (see the "Linked-document readers" block above). Site
      Measure overlays and Photos are deliberately left as still-pending
      placeholders -- not named in Andrew's own "shop drawings / job notes,
-     itps" list for this round. */
+     itps" list for this round.
+     2026-09-23, same day, follow-up (Andrew): "Delivery ITP, All itps to
+     be viewable from here (like job notes and shop drawings are)... Pin
+     drop location button that takes you to it on the map / snapshot taken
+     from the delivery itp." The ITP card above now also lists Delivery
+     ITP (renamed from "Manufacture + Install ITP" to just "ITPs"), and a
+     new "Delivery location" card shows the pin-drop snapshot Delivery ITP
+     captured for this item (if any) with a button that jumps straight to
+     that exact point on this item's own level plan -- see
+     readDeliveryLocationForItem above and viewDeliveryLocationBtn's own
+     click handler below. */
   var joineryItemTitle = document.getElementById("joineryItemTitle");
   var joineryItemMetaGrid = document.getElementById("joineryItemMetaGrid");
   var viewOnPlanBtn = document.getElementById("viewOnPlanBtn");
@@ -3432,8 +3982,15 @@
   var itemShopDrawingsList = document.getElementById("itemShopDrawingsList");
   var itemJobNotesList = document.getElementById("itemJobNotesList");
   var itemItpList = document.getElementById("itemItpList");
+  var itemReworkList = document.getElementById("itemReworkList");
+  var itemDeliveryLocation = document.getElementById("itemDeliveryLocation");
   var activeJoineryItem = null;
   var joineryItemReturnScreen = "levels";
+  // Set just before navigating to a Joinery Item page from the Rework
+  // Register (below), so that page's own Rework card can scroll to and
+  // flash the exact entry that was clicked, per Andrew's "clicking on a
+  // rework takes you to that rework."
+  var pendingReworkHighlightId = null;
   // Opens a file handle's contents in a new tab -- same pattern source.html
   // already uses for "View job note"/"View shop drawing" (an object URL,
   // revoked a minute later, long enough for the browser to have opened it).
@@ -3496,9 +4053,22 @@
       itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load job notes.</p>";
     });
 
+    // Andrew: "in the project app joinery item status, we need to add the
+    // following items. Delivery ITP, All itps to be viewable from here
+    // (like job notes and shop drawings are)." Manufacture ITP and Install
+    // ITP were already wired in here from an earlier round; Delivery ITP
+    // (added 2026-09-23) uses the exact same flat "Project Saves/UTZLINE
+    // ITP/<branch>/" + "PDF Files/UTZLINE ITP/<branch>/" convention as the
+    // other two (see its own itpAppBranchName/getItpChecklistsDirFlat/
+    // getItpPdfDirFlat), so readItpChecklistSummary/listItpPdfsForItem
+    // below need no changes at all -- just this one new entry. Its own
+    // signoff role keys are "driver"/"supervisor" (labelled "Delivery
+    // Driver / Transport Rep." and "Metro Site Supervisor (Receiving)" in
+    // its own UI).
     var itpApps = [
       { branch: "Manufacture ITP", roles: ["builder", "supervisor"], name: "Manufacture ITP" },
-      { branch: "Install ITP", roles: ["installer", "supervisor"], name: "Install ITP" }
+      { branch: "Install ITP", roles: ["installer", "supervisor"], name: "Install ITP" },
+      { branch: "Delivery ITP", roles: ["driver", "supervisor"], name: "Delivery ITP" }
     ];
     Promise.all(itpApps.map(function(app){
       return Promise.all([
@@ -3525,6 +4095,102 @@
     }).catch(function(err){
       console.error("Listing ITP checklists failed:", err);
       itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load ITP checklists.</p>";
+    });
+
+    // Read-only rework summary (2026-09-23) -- Andrew, verbatim, on Install
+    // ITP's new rework tracker: "fully trackable via this system and via
+    // utzline projects summary pages per project." Newest first, same
+    // convention as Install ITP's own history list; this app never writes
+    // to Install ITP's rework file, only displays it.
+    itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    readInstallReworkForItem(activeProjectHandle, item).then(function(reworks){
+      if (activeJoineryItem !== item) return;
+      if (!reworks.length){
+        itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No rework logged for this item.</p>";
+        return;
+      }
+      itemReworkList.innerHTML = "";
+      reworks.forEach(function(r){
+        var row = document.createElement("div");
+        row.className = "rework-item";
+        if (r.id) row.setAttribute("data-rework-id", r.id);
+        var cabinetText = r.cabinetNumber ? ("Cabinet " + r.cabinetNumber) : "No cabinet number";
+        var createdText = formatHistoryDate(r.createdAt) + (r.createdBy ? " — " + escapeHtml(r.createdBy) : "");
+        var statusText = r.received
+          ? "Received back on site" + (r.receivedDate ? " (" + escapeHtml(r.receivedDate) + ")" : "")
+          : "Not yet received back on site";
+        var photosHtml = (r.photos && r.photos.length)
+          ? "<div class=\"rework-item-photos\">" + r.photos.map(function(p){ return "<img src=\"" + p.dataUrl + "\" alt=\"Rework photo\">"; }).join("") + "</div>"
+          : "";
+        row.innerHTML =
+          "<div class=\"rework-item-head\"><span class=\"rework-item-cabinet\">" + escapeHtml(cabinetText) + "</span><span class=\"rework-item-date\">" + createdText + "</span></div>" +
+          (r.text ? "<p class=\"rework-item-text\">" + escapeHtml(r.text) + "</p>" : "") +
+          "<div class=\"rework-item-status" + (r.received ? " received" : "") + "\">" + escapeHtml(statusText) + "</div>" +
+          photosHtml;
+        itemReworkList.appendChild(row);
+      });
+      // "Clicking on a rework takes you to that rework" (Andrew, 2026-09-23,
+      // on the new project-wide Rework Register below) -- a register row
+      // sets pendingReworkHighlightId before calling openJoineryItemPage,
+      // so once this specific item's own entries have rendered, the exact
+      // entry clicked (not just the card) scrolls into view and flashes
+      // briefly. Cleared immediately so it never re-fires on a later,
+      // unrelated visit to this same item's page.
+      if (pendingReworkHighlightId){
+        var targetEntryId = pendingReworkHighlightId;
+        pendingReworkHighlightId = null;
+        var targetEl = itemReworkList.querySelector("[data-rework-id=\"" + CSS.escape(targetEntryId) + "\"]");
+        if (targetEl){
+          targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          targetEl.classList.add("rework-item-flash");
+          setTimeout(function(){ targetEl.classList.remove("rework-item-flash"); }, 2200);
+        }
+      }
+    }).catch(function(err){
+      console.error("Reading rework tracker failed:", err);
+      itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load rework tracking.</p>";
+    });
+
+    // "Pin drop location button that takes you to it on the map / snapshot
+    // taken from the delivery itp" (Andrew, 2026-09-23) -- see
+    // readDeliveryLocationForItem above.
+    itemDeliveryLocation.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    readDeliveryLocationForItem(activeProjectHandle, item).then(function(loc){
+      if (activeJoineryItem !== item) return;
+      if (!loc.pin){
+        itemDeliveryLocation.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No delivery location pin recorded yet.</p>";
+        return;
+      }
+      var thumbHtml = loc.snapshot
+        ? "<button type=\"button\" class=\"delivery-loc-thumb\" id=\"deliveryLocThumb\" title=\"View on plan\"><img src=\"" + loc.snapshot.dataUrl + "\" alt=\"Delivery location snapshot\"></button>"
+        : "";
+      itemDeliveryLocation.innerHTML =
+        "<div class=\"delivery-loc-row\">" + thumbHtml +
+        "<button type=\"button\" class=\"btn secondary\" id=\"deliveryLocViewBtn\">Pin drop location</button></div>";
+      var goToPin = function(){ viewDeliveryLocationOnPlan(item, loc.pin); };
+      var thumbBtn = document.getElementById("deliveryLocThumb");
+      if (thumbBtn) thumbBtn.addEventListener("click", goToPin);
+      document.getElementById("deliveryLocViewBtn").addEventListener("click", goToPin);
+    }).catch(function(err){
+      console.error("Reading delivery location failed:", err);
+      itemDeliveryLocation.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load the delivery location.</p>";
+    });
+  }
+  // Jumps to this item's own level plan, centred and zoomed on the exact
+  // point Delivery ITP's pin was dropped at -- NOT necessarily the same
+  // spot as this item's own roomlink marker (the pin is placed by hand
+  // during delivery, and could sit slightly off the marker), so this
+  // passes the raw {x,y} through rather than reusing viewOnPlanBtn's own
+  // marker-lookup path (see openPlanCanvasForLevel's own point-vs-marker
+  // handling).
+  function viewDeliveryLocationOnPlan(item, pin){
+    planCanvasReturnScreen = "joineryItem";
+    activeLevelName = item.level;
+    roomsLevelLabel.textContent = activeProjectName + " — " + item.level;
+    openPlanCanvasBtn.hidden = false;
+    openPlanCanvasForLevel({ x: pin.x, y: pin.y }).catch(function(err){
+      console.error("Opening plan for delivery location failed:", err);
+      showToast("Couldn't open that level's plan — it may have been moved or renamed.");
     });
   }
   function wireJoineryItemWorkOrderBackfillBtn(item){
@@ -3616,6 +4282,7 @@
     roomDetail: document.getElementById("screenRoomDetail"),
     planCanvas: document.getElementById("screenPlanCanvas"),
     register: document.getElementById("screenRegister"),
+    reworkRegister: document.getElementById("screenReworkRegister"),
     joineryItem: document.getElementById("screenJoineryItem")
   };
   function showScreen(name){
@@ -3992,7 +4659,9 @@
     readJoinerySchedule: readJoinerySchedule,
     findScheduleRecord: findScheduleRecord,
     computeDelayInfo: computeDelayInfo,
-    setJoineryItemWorkOrderNo: setJoineryItemWorkOrderNo
+    setJoineryItemWorkOrderNo: setJoineryItemWorkOrderNo,
+    getPlanView: function(){ return planView; },
+    readDeliveryLocationForItem: readDeliveryLocationForItem
   };
 
   boot();

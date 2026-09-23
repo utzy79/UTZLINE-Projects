@@ -244,12 +244,103 @@
 // genuinely collide on the same (room, code) key the way Site Measure's
 // resolveJoineryItemPageKey does -- joineryItemKey() here always uses the
 // plain, unsuffixed key, correct for the normal (non-colliding) case.
+//
+// (v16 / README v11 / cache v19, 2026-09-23: NOTE ON NUMBERING -- this
+// file's own "(vN, ...)" comment count (now 16), the README's own
+// sequential release number (now 11), and this CACHE_NAME's own counter
+// (now 19) have never been the same scale in this app -- e.g. README v9
+// shipped as cache v17, README v10 as cache v18 -- so all three are called
+// out explicitly here to avoid confusion for a future reader trying to
+// match one to another. Two changes land in this round:
+//   1. listJobNotesForItem's own jobNoteSortKey (added the same day
+//      source.html/Site Measure shipped v45.8) keeps working correctly now
+//      that Site Measure moved a job note's filename timestamp from a
+//      PREFIX to a SUFFIX -- this app only ever READS that shared Job
+//      Notes folder, so there was no filename format of its own to change,
+//      only its own sort key needed updating to keep finding the
+//      timestamp wherever it now sits in the name.
+//   2. Andrew, verbatim: "in the project app joinery item status, we need
+//      to add the following items. Delivery ITP, All itps to be viewable
+//      from here (like job notes and shop drawings are)... Pin drop
+//      location button that takes you to it on the map / snapshot taken
+//      from the delivery itp." The Joinery Item page's ITP card (renamed
+//      "ITPs", from "Manufacture + Install ITP") now also lists Delivery
+//      ITP -- it turned out to need no new reader code at all, since
+//      Delivery ITP already uses the exact same flat "Project Saves/
+//      UTZLINE ITP/<branch>/" + "PDF Files/UTZLINE ITP/<branch>/"
+//      convention Install ITP and Manufacture ITP already used here. A new
+//      "Delivery location" card reads that same Delivery ITP checklist's
+//      own `deliveryLocationPin`/`locationSnapshot` fields (read-only, same
+//      file) and shows the pin-drop snapshot with a "Pin drop location"
+//      button that jumps straight to that exact point on the item's own
+//      level plan -- openPlanCanvasForLevel now accepts a raw {x,y} world
+//      point as an alternative to its original {room, joineryId}
+//      marker-lookup shape, since a delivery pin is placed by hand and
+//      isn't guaranteed to sit exactly on the item's own roomlink marker.)
+//
+// (v17 / README v12 / cache v20, 2026-09-23: Andrew, on the Register's own
+// status-history popup: "these status windows to show days between each
+// process." A gap marker now sits between each pair of consecutive rows
+// showing the elapsed time between them -- "Same day" for under a day, "1
+// day" (singular) for exactly one, otherwise "N days" -- formatDaysBetween,
+// wired into showStatusHistoryPop. No gap after the oldest row, and none
+// at all for an item with only one history entry. The identical change was
+// made the same day to Scheduler's own ported copy of this popup.)
+//
+// (v18 / README v13 / cache v21, 2026-09-23: Andrew, on Install ITP's new
+// rework tracker: "fully trackable via this system and via utzline projects
+// summary pages per project." A new, read-only "Rework" card on the
+// Joinery Item page (alongside Shop drawings/Job notes/ITPs/Delivery
+// location) lists every rework entry Install ITP has logged for that item
+// -- cabinet number, free text, photos, and its own independent "received
+// back on site" status/date -- newest first. Reads Install ITP's own
+// "Install ITP Rework" flat branch via the exact same readItpChecklistRaw
+// walk every other ITP branch already uses here (readInstallReworkForItem),
+// so no new folder-reading code was needed. This app never writes rework
+// data -- Install ITP is the only app that does.)
+//
+// (v19 / README v14 / cache v22, 2026-09-23: Andrew, verbatim: "Projects to
+// have a rework section per project where you can press a button and see a
+// status list of all reworks for that project. Sortable, filterable and
+// clicking on a rework takes you to that rework. Also need the ability to
+// print the rework page or email / share it." A new "Rework register"
+// button on the Levels screen opens a project-wide table -- one row per
+// REWORK ENTRY (not per joinery item, since one item can have several) --
+// built the same filter/sort/table way the Joinery Register already is,
+// reading every item's rework file via the existing readInstallReworkForItem
+// reader. Clicking a row opens that item's own Joinery Item page and
+// scrolls to/flashes the exact entry clicked (pendingReworkHighlightId).
+// "Print / Save PDF" and "Share…" are this app's first-ever PDF EXPORT
+// (everything before this only ever read PDFs, via pdf.js) -- jsPDF is
+// vendored locally (jspdf.umd.min.js, same file/convention the ITP apps
+// already use) rather than CDN-loaded, so it keeps working fully offline
+// once installed. Print opens the generated PDF in a new tab (this app
+// family has never had an in-app print stylesheet -- the browser's own PDF
+// viewer handles printing from there, same as every ITP app's own "Export
+// PDF" button); Share reuses Site Measure/Viewer's own isShareSupported()/
+// shareFile()/browserDownloadBlob() pattern verbatim, so the Share button
+// only appears where the Web Share API can actually take a file, falling
+// back to a plain download elsewhere. Neither the new-tab-PDF design for
+// Print nor the Share-with-download-fallback behavior was separately
+// confirmed with Andrew beyond his own wording above -- both simply carry
+// over this app family's own existing conventions.)
+//
+// (v20 / README v15 / cache v23, 2026-09-23: Andrew, verbatim: "Where there
+// is a table it needs to open the full width of the screen. To minimise
+// scrolling." The Joinery Register and Rework Register screens now stretch
+// to the full viewport width (a new .wide-table CSS class, max-width:none,
+// applied via the same override pattern .plan-canvas-screen already
+// established for the plan canvas) instead of being capped to this app's
+// usual 640px centered content column -- their tables already fill their
+// own container at width:100%, so the container was the only thing holding
+// them back. No other screen's width changed.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v18";
+var CACHE_NAME = "utzline-projects-cache-v23";
 
 var PRECACHE_URLS = [
   "./",
   "./index.html",
+  "./jspdf.umd.min.js",
   "./manifest.json?v=" + ICON_VERSION,
   "./icons/icon-192.png?v=" + ICON_VERSION,
   "./icons/icon-512.png?v=" + ICON_VERSION,
