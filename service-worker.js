@@ -210,8 +210,42 @@
 // the Viewer, and both ITP apps (Andrew's own scoping named only those
 // four) -- its own plan screen shows no status badge.)
 
+// v15, 2026-09-23 (same day): this app now DOES get the joinery-status
+// system -- Andrew, on the Joinery Register: "joinery register in Utzline
+// Projects to be updated based on current status ... status overview
+// should be linked to all parts of the chain, / shop drawings / job
+// notes, itps. remove the status overview button and page." Reads the
+// same shared, project-root joinery-status.json the other four apps
+// already write (read-only here -- this app never advances a status
+// itself). Two new pipeline stages land project-wide this same round:
+// "in_manufacture" (Manufacture ITP checklist opened, not yet signed) and
+// "delivered" (reserved for a future Delivery ITP app, not yet reachable
+// by anything); the existing "manufactured" stage is unchanged internally
+// but now displays as "Ready to dispatch" everywhere (Andrew confirmed
+// its trigger stays the Manufacture ITP sign-off, only the label is new).
+// The Register's Status column shows the real label + icon for each item
+// (Created/Check measured/In manufacture/Ready to dispatch/Delivered/
+// Installed) instead of the always-"created" joinery-items.json field,
+// sortable/filterable by real pipeline order; hovering (or tapping, for
+// touch) a status cell shows that item's full change history -- status,
+// date, and who -- from the record's own `history` array. The Status
+// Overview screen and its button are removed entirely, per Andrew's own
+// instruction -- the Register plus the Joinery Item page now cover both
+// jobs. The Joinery Item page's Shop drawings, Job notes (new card), and
+// Manufacture + Install ITP sections are wired to real, read-only listings
+// pulled straight from the same Project Saves/Shop Drawings, Project
+// Saves/Job Notes, and Project Saves+PDF Files/UTZLINE ITP folders the
+// other apps already write into -- no data is duplicated or migrated,
+// this app just reads what's already there. Site Measure overlays and
+// Photos remain unwired placeholders (not named in Andrew's own "shop
+// drawings / job notes, itps" list for this round). Known, disclosed
+// limitation carried over from the plan: this app has no live on-plan
+// marker positions, so it can't disambiguate two joinery items that
+// genuinely collide on the same (room, code) key the way Site Measure's
+// resolveJoineryItemPageKey does -- joineryItemKey() here always uses the
+// plain, unsuffixed key, correct for the normal (non-colliding) case.
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v14";
+var CACHE_NAME = "utzline-projects-cache-v15";
 
 var PRECACHE_URLS = [
   "./",

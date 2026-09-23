@@ -212,7 +212,6 @@
   .dot{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .dot.yes{ background: #33c46a; }
   .dot.no{ background: var(--muted2); }
-  .dot.status-created{ background: #f0a93b; }
   .section-title{ font-size: 15px; margin: 0 0 8px; }
   .field{ margin-bottom: 14px; }
   .field label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
@@ -364,21 +363,35 @@
   .register-table th.sorted.desc::after{ content: " \25BC"; }
   .register-table td{ padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   .register-table tbody tr:last-child td{ border-bottom: none; }
-  .register-table td.status-cell{ white-space: nowrap; }
+  .register-table td.status-cell{ white-space: nowrap; cursor: default; }
   .register-table tbody tr{ cursor: pointer; }
   .register-table tbody tr:hover{ background: var(--panel2); }
+  .status-label{ display: inline-flex; align-items: center; gap: 6px; }
+  .status-label .status-icon{ font-size: 13px; }
 
-  /* ---- Status Overview ---- */
-  .status-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-  .status-tile{
-    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px; text-align: left; cursor: pointer; color: var(--text);
-    display: flex; flex-direction: column; gap: 6px; font: inherit;
+  /* ---- Status-history hover popup (2026-09-23) ---- */
+  .status-history-pop{
+    position: fixed; z-index: 60; max-width: 300px;
+    background: #241818; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font-size: 12px; color: var(--text);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); pointer-events: none;
   }
-  .status-tile:hover{ border-color: var(--accent); }
-  .status-tile .status-tile-id{ font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px; }
-  .status-tile .status-tile-loc{ font-size: 12px; color: var(--muted); }
-  .status-tile .status-tile-desc{ font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status-history-pop .shp-title{ font-weight: 700; margin-bottom: 6px; }
+  .status-history-pop .shp-row{ display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-top: 1px solid var(--border); }
+  .status-history-pop .shp-row:first-of-type{ border-top: none; }
+  .status-history-pop .shp-status{ font-weight: 600; }
+  .status-history-pop .shp-meta{ color: var(--muted); text-align: right; white-space: nowrap; }
+  .status-history-pop .shp-empty{ color: var(--muted); }
+
+  /* ---- Joinery item page: linked-document lists (Shop drawings, Job
+       notes, Manufacture + Install ITP) -- 2026-09-23 ---- */
+  .doc-row{
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 0; border-top: 1px solid var(--border);
+  }
+  .doc-row:first-child{ border-top: none; }
+  .doc-row-name{ font-size: 13px; }
+  .doc-row-sub{ font-size: 12px; color: var(--muted); }
 
   #toast{
     position: fixed;
@@ -475,7 +488,6 @@
       <div class="row">
         <button class="btn" id="newLevelBtn">+ New Level</button>
         <button class="btn secondary" id="openRegisterBtn">Joinery Register</button>
-        <button class="btn secondary" id="openStatusOverviewBtn">Status Overview</button>
       </div>
     </div>
     <div class="card">
@@ -512,7 +524,7 @@
     <div class="backrow"><button class="btn secondary" id="backToRoomsBtn">&larr; Rooms</button></div>
     <h1 id="roomDetailLabel">Room</h1>
     <div class="card">
-      <p class="sub" style="margin:0;">Rooms share their level's own floor plan -- there's no separate photo for this room. Joinery markers are placed from the level's own plan (open the level, then "Place joinery items"), and every joinery item has its own page (see the Joinery Register or Status Overview, from the level list).</p>
+      <p class="sub" style="margin:0;">Rooms share their level's own floor plan -- there's no separate photo for this room. Joinery markers are placed from the level's own plan (open the level, then "Place joinery items"), and every joinery item has its own page (see the Joinery Register, from the level list).</p>
     </div>
   </section>
 
@@ -561,10 +573,18 @@
     </div>
   </section>
 
+  <!-- ---- Status-history hover popup (2026-09-23): "if you hover over a
+       joinery item on this page, it gives you a list of all the status
+       changes for that joinery item, dates and who changed it." One shared,
+       reusable, absolutely-positioned element -- shown/positioned/filled by
+       JS next to whichever status cell is currently hovered (or tapped, on
+       a touch device -- hover alone isn't reachable there). ---- -->
+  <div class="status-history-pop" id="statusHistoryPop" hidden></div>
+
   <!-- ---- Joinery Item page: one page per joinery item record, keyed by
        (level, room, joineryId) -- there's no markerId, so this triple is
-       the record's own identity. Reachable from the Register, from Status
-       Overview, or by tapping a placed marker on the plan canvas. ---- -->
+       the record's own identity. Reachable from the Register, or by
+       tapping a placed marker on the plan canvas. ---- -->
   <section id="screenJoineryItem" class="screen">
     <div class="backrow"><button class="btn secondary" id="backFromJoineryItemBtn">&larr; Back</button></div>
     <h1 id="joineryItemTitle">Joinery item</h1>
@@ -578,29 +598,19 @@
     </div>
     <div class="card">
       <h2 class="section-title">Shop drawings</h2>
-      <p class="sub" style="margin:0;">Coming in a later step.</p>
+      <div id="itemShopDrawingsList"></div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Job notes</h2>
+      <div id="itemJobNotesList"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Manufacture + Install ITP</h2>
-      <p class="sub" style="margin:0;">Coming in a later step -- this section will link this item's Manufacture ITP and Install ITP checklist entries once those apps are updated to key off joinery item records directly.</p>
+      <div id="itemItpList"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Photos</h2>
       <p class="sub" style="margin:0;">Coming in a later step.</p>
-    </div>
-  </section>
-
-  <!-- ---- Status Overview: project-wide grid of every joinery item, status
-       at a glance -- every item is "created" in V1, since no app updates
-       status yet, but the grid itself is written to reflect whatever
-       status is actually on each record, not hardcoded. ---- -->
-  <section id="screenStatusOverview" class="screen">
-    <div class="backrow"><button class="btn secondary" id="backFromStatusOverviewBtn">&larr; Levels</button></div>
-    <h1 id="statusOverviewProjectLabel">Status Overview</h1>
-    <p class="sub">Every joinery item in this project, at a glance.</p>
-    <div class="card" id="statusOverviewCard">
-      <div class="status-grid" id="statusOverviewGrid"></div>
-      <div class="empty-note" id="statusOverviewEmpty" hidden>No joinery items yet -- place some from a level's plan ("Place joinery items", once it has a floor plan).</div>
     </div>
   </section>
 
@@ -1859,6 +1869,241 @@
     });
   }
 
+  /* ============================== Shared joinery-status pipeline (2026-09-23) ==============================
+     Read-only here -- this app never writes joinery-status.json itself (Site
+     Measure's own "Mark as check measured", and each ITP's own checklist
+     sign-off/open, are still the only writers). Andrew, on the Joinery
+     Register: "joinery register in Utzline Projects to be updated based on
+     current status (check measured / in manufacture / ready to dispatch /
+     delivered / installed... if you hover over a joinery item on this page,
+     it gives you a list of all the status changes for that joinery item,
+     dates and who changed it." Mirrors source.html/Install ITP/Manufacture
+     ITP's own rank table exactly (see source.html's own comment for why
+     "manufactured" is still the internal string for "Ready to dispatch",
+     and why "delivered" is a reserved-but-currently-unreachable stage). */
+  function joineryStatusRank(status){
+    switch (status){
+      case "installed": return 5;
+      case "delivered": return 4;
+      case "manufactured": return 3;
+      case "in_manufacture": return 2;
+      case "measured": return 1;
+      default: return 0;
+    }
+  }
+  function joineryStatusLabel(status){
+    switch (status){
+      case "installed": return "Installed";
+      case "delivered": return "Delivered";
+      case "manufactured": return "Ready to dispatch";
+      case "in_manufacture": return "In manufacture";
+      case "measured": return "Check measured";
+      default: return "Created";
+    }
+  }
+  function joineryStatusIcon(status){
+    switch (status){
+      case "installed": return "🏆";
+      case "delivered": return "🚚";
+      case "manufactured": return "📦";
+      case "in_manufacture": return "🏭";
+      case "measured": return "📏";
+      default: return "";
+    }
+  }
+  function readJoineryStatuses(projectHandle){
+    if (!projectHandle) return Promise.resolve([]);
+    return projectHandle.getFileHandle("joinery-status.json", { create: false }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
+    }, function(){ return []; }); // no file yet -- not an error, every item just reads as unset
+  }
+  function findJoineryStatus(list, level, room, joineryId){
+    for (var i = 0; i < list.length; i++){
+      var rec = list[i];
+      if (rec && rec.level === level && (rec.room || "") === (room || "") && (rec.joineryId || "") === (joineryId || "")) return rec;
+    }
+    return null;
+  }
+  // A joinery-items.json record's own status history, newest first, for the
+  // Register's hover popup. A record that's never reached "measured" or
+  // beyond has no joinery-status.json entry at all -- reads as an empty
+  // list, not an error.
+  function joineryStatusHistoryFor(statusList, item){
+    var rec = findJoineryStatus(statusList, item.level, item.room, item.joineryId);
+    var hist = (rec && Array.isArray(rec.history)) ? rec.history.slice() : [];
+    hist.sort(function(a, b){ return (b.at || "").localeCompare(a.at || ""); });
+    return hist;
+  }
+
+  /* ============================== Linked-document readers (2026-09-23) ==============================
+     Andrew: "status overview should be linked to all parts of the chain /
+     shop drawings / job notes, itps." The Joinery Item page below reads
+     these three shared, project-root branches directly -- the exact same
+     storage source.html/Install ITP/Manufacture ITP already write into --
+     rather than duplicating any of their own data. Read-only, create:false
+     everywhere: previewing an item's page must never create an empty
+     folder for a chain-link nobody's used yet.
+     Item identity: the plain (unsuffixed) key -- sanitizeFileBase(level) +
+     " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(joineryId) --
+     matching joineryItemPageKey in source.html. A KNOWN, disclosed
+     limitation (same one already documented against resolveJoineryItemPageKey
+     there): if two markers on the same level ever collide on this exact
+     base key (same room + same joinery code), Site Measure disambiguates
+     with a numbered suffix using their live on-plan positions -- data this
+     app doesn't have loaded here, so this reader always looks at the plain,
+     unsuffixed key. Harmless for the common case (no collision); for a
+     genuine collision, this shows whichever colliding item saved under the
+     plain key. No stable per-item ID exists anywhere in this ecosystem yet
+     to do better (see the Unified Implementation Brief's own note on this). */
+  function joineryItemKey(item){
+    return sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + (item.joineryId ? " - " + sanitizeFileBase(item.joineryId) : "");
+  }
+  // Every file (optionally filtered) directly inside a directory handle,
+  // sorted newest-name-first (every filename convention in this family
+  // embeds a sortable timestamp, so a plain reverse string sort is already
+  // chronological).
+  function listFilesInDir(dirHandle, testFn){
+    if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
+    var out = [];
+    var iter = dirHandle.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return out;
+        if (res.value && res.value.kind === "file" && (!testFn || testFn(res.value.name))) out.push({ fileName: res.value.name, handle: res.value });
+        return step();
+      });
+    }
+    return step().then(function(list){
+      list.sort(function(a, b){ return b.fileName.localeCompare(a.fileName); });
+      return list;
+    });
+  }
+  function everySubdir(dirHandle){
+    if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
+    var out = [];
+    var iter = dirHandle.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return out;
+        if (res.value && res.value.kind === "directory") out.push(res.value);
+        return step();
+      });
+    }
+    return step();
+  }
+
+  /* ---- Job notes (mirrors source.html's own getJobNotesDirForItem/listJobNotes) ---- */
+  function getJobNotesDirForItem(projectHandle, key){
+    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
+      return psH.getDirectoryHandle("Job Notes", { create: false });
+    }).then(function(jnH){
+      return jnH.getDirectoryHandle(key, { create: false });
+    });
+  }
+  function listJobNotesForItem(projectHandle, item){
+    return getJobNotesDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
+      return listFilesInDir(dirH, function(name){ return /\.pdf$/i.test(name); });
+    }, function(){ return []; });
+  }
+
+  /* ---- Shop drawings (mirrors source.html's own getShopDrawingsDirForItem/
+     listShopDrawingRevisions/listShopDrawings) -- one entry per independent
+     drawing, each with its own revisions (oldest first). */
+  function getShopDrawingsDirForItem(projectHandle, key){
+    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
+      return psH.getDirectoryHandle("Shop Drawings", { create: false });
+    }).then(function(sdH){
+      return sdH.getDirectoryHandle(key, { create: false });
+    });
+  }
+  function parseShopDrawingRevisionFileName(fileName){
+    var m = /^REV (\d+) - /.exec(fileName) || /^Rev([A-Z]+) - /.exec(fileName);
+    var revLabel = "REV ?";
+    if (m) revLabel = (/^\d+$/.test(m[1]) ? "REV " + m[1] : "Rev" + m[1]);
+    var afterRev = m ? fileName.slice(m[0].length) : fileName;
+    var idx = afterRev.indexOf(" - ");
+    var displayName = idx >= 0 ? afterRev.slice(idx + 3) : afterRev;
+    return { revLabel: revLabel, displayName: displayName };
+  }
+  function revLabelValue(revLabel){
+    var m = /^REV (\d+)$/.exec(revLabel || "");
+    if (m) return parseInt(m[1], 10);
+    var legacy = /^Rev([A-Z]+)$/.exec(revLabel || "");
+    if (legacy){
+      var letters = legacy[1], n = 0;
+      for (var i = 0; i < letters.length; i++){ n = n * 26 + (letters.charCodeAt(i) - 64); }
+      return n - 1000000;
+    }
+    return -1;
+  }
+  function listShopDrawingsForItem(projectHandle, item){
+    return getShopDrawingsDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
+      return everySubdir(dirH).then(function(groupHandles){
+        return Promise.all(groupHandles.map(function(groupH){
+          return listFilesInDir(groupH, function(name){ return /\.pdf$/i.test(name); }).then(function(files){
+            var revisions = files.map(function(f){
+              var parsed = parseShopDrawingRevisionFileName(f.fileName);
+              return { fileName: f.fileName, handle: f.handle, revLabel: parsed.revLabel, displayName: parsed.displayName };
+            });
+            revisions.sort(function(a, b){ return revLabelValue(a.revLabel) - revLabelValue(b.revLabel); });
+            return { drawingId: groupH.name, revisions: revisions };
+          });
+        }));
+      });
+    }, function(){ return []; }).then(function(groups){
+      groups = (groups || []).filter(function(g){ return g.revisions.length > 0; });
+      groups.sort(function(a, b){ return b.drawingId.localeCompare(a.drawingId); });
+      return groups;
+    });
+  }
+
+  /* ---- Manufacture + Install ITP (mirrors each ITP app's own flat-project
+     folder convention: Project Saves/UTZLINE ITP/<App>/ for the checklist
+     JSON, PDF Files/UTZLINE ITP/<App>/ for exported PDFs -- see either
+     app's own itpAppBranchName/getItpChecklistsDirFlat/getItpPdfDirFlat).
+     UTZLINE Projects only ever creates flat projects, so there's no legacy
+     per-Level/Room branch to also check here. */
+  function itpChecklistFileNameForItem(item){
+    return sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + " - " + sanitizeFileBase(item.joineryId) + ".json";
+  }
+  function itpPdfBaseNameForItem(item){
+    return sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + " - " + sanitizeFileBase(item.joineryId);
+  }
+  function readItpChecklistSummary(projectHandle, appBranch, roleKeys, item){
+    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
+      return psH.getDirectoryHandle("UTZLINE ITP", { create: false });
+    }).then(function(branchH){
+      return branchH.getDirectoryHandle(appBranch, { create: false });
+    }).then(function(dirH){
+      return dirH.getFileHandle(itpChecklistFileNameForItem(item), { create: false });
+    }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){ return file.text(); }).then(function(text){
+      var data = null;
+      try{ data = JSON.parse(text); }catch(e){ data = null; }
+      if (!data) return null;
+      var total = Array.isArray(data.rows) ? data.rows.length : 0;
+      var answered = Array.isArray(data.rows) ? data.rows.filter(function(r){ return r && r.status; }).length : 0;
+      var hasNo = Array.isArray(data.rows) && data.rows.some(function(r){ return r && r.status === "no"; });
+      var bothSigned = !!(data.signoff && roleKeys.every(function(role){ return data.signoff[role] && data.signoff[role].sig; }));
+      return { started: true, answered: answered, total: total, hasNo: hasNo, signed: bothSigned && !hasNo };
+    }, function(){ return { started: false }; });
+  }
+  function listItpPdfsForItem(projectHandle, appBranch, item){
+    return projectHandle.getDirectoryHandle("PDF Files", { create: false }).then(function(pfH){
+      return pfH.getDirectoryHandle("UTZLINE ITP", { create: false });
+    }).then(function(branchH){
+      return branchH.getDirectoryHandle(appBranch, { create: false });
+    }).then(function(dirH){
+      var prefix = itpPdfBaseNameForItem(item) + "_";
+      return listFilesInDir(dirH, function(name){ return name.indexOf(prefix) === 0 && /\.pdf$/i.test(name); });
+    }, function(){ return []; });
+  }
+
   /* ============================== legacy plan reading (migration only) ==============================
      As of the 2026-09-22 flat-structure cutover, a Level's roomlink
      markers and floorplan photo both live together in its own Project
@@ -2264,8 +2509,16 @@
      the CURRENT project (joinery-items.json), regardless of which level or
      room it's on -- this is the project-wide view Andrew's original spec
      called out by name, separate from a level's own room list. Reads only
-     -- editing a record's status/description from here is a later step
-     (Joinery Item Pages, the next build-sequence task). */
+     -- editing a record's status/description from here is a later step.
+     2026-09-23 (Andrew): the Status column now reads from the shared
+     joinery-status.json pipeline (see joineryStatusLabel/joineryStatusIcon
+     above) instead of the always-"created" joinery-items.json field, and
+     hovering (or tapping, on touch) a status cell shows that item's full
+     history -- see showStatusHistoryPop below. The separate Status Overview
+     screen is REMOVED this same round (Andrew: "remove the status overview
+     button and page, we will keep joinery register page and the page in
+     the attached photo page") -- this Register plus the Joinery Item page
+     is now the one place both jobs are done from. */
   var registerProjectLabel = document.getElementById("registerProjectLabel");
   var registerLevelFilter = document.getElementById("registerLevelFilter");
   var registerStatusFilter = document.getElementById("registerStatusFilter");
@@ -2276,13 +2529,21 @@
   var registerEmptyProject = document.getElementById("registerEmptyProject");
   var openRegisterBtn = document.getElementById("openRegisterBtn");
   var backFromRegisterBtn = document.getElementById("backFromRegisterBtn");
+  var statusHistoryPop = document.getElementById("statusHistoryPop");
 
   var registerAllItems = [];
+  var registerStatusList = []; // the raw joinery-status.json array, read alongside joinery-items.json
   var registerSort = { col: "level", dir: "asc" };
 
+  // The item's own effective status KEY (not label) -- "" (Created) when it
+  // has no joinery-status.json record at all, i.e. never reached "measured".
+  function registerItemStatusKey(item){
+    var rec = findJoineryStatus(registerStatusList, item.level, item.room, item.joineryId);
+    return rec ? (rec.status || "") : "";
+  }
   function registerMatchesFilters(item){
     if (registerLevelFilter.value && item.level !== registerLevelFilter.value) return false;
-    if (registerStatusFilter.value && item.status !== registerStatusFilter.value) return false;
+    if (registerStatusFilter.value !== "" && registerStatusFilter.selectedIndex >= 0 && registerItemStatusKey(item) !== registerStatusFilter.value) return false;
     var q = registerSearchInput.value.trim().toLowerCase();
     if (q){
       var hay = ((item.joineryId || "") + " " + (item.description || "")).toLowerCase();
@@ -2292,23 +2553,77 @@
   }
   function registerCompare(a, b){
     var col = registerSort.col;
-    var av = String(a[col] || "").toLowerCase(), bv = String(b[col] || "").toLowerCase();
-    var cmp = av < bv ? -1 : (av > bv ? 1 : 0);
+    var cmp;
+    if (col === "status"){
+      cmp = joineryStatusRank(registerItemStatusKey(a)) - joineryStatusRank(registerItemStatusKey(b));
+    } else {
+      var av = String(a[col] || "").toLowerCase(), bv = String(b[col] || "").toLowerCase();
+      cmp = av < bv ? -1 : (av > bv ? 1 : 0);
+    }
     return registerSort.dir === "desc" ? -cmp : cmp;
   }
+  function statusLabelHtml(statusKey){
+    var icon = joineryStatusIcon(statusKey);
+    return "<span class=\"status-label\">" + (icon ? "<span class=\"status-icon\">" + icon + "</span>" : "") + escapeHtml(joineryStatusLabel(statusKey)) + "</span>";
+  }
+  function formatHistoryDate(iso){
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso || "";
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+  function hideStatusHistoryPop(){ statusHistoryPop.hidden = true; }
+  // Andrew: "if you hover over a joinery item on this page, it gives you a
+  // list of all the status changes for that joinery item, dates and who
+  // changed it." Also opens on click/tap, since plain hover isn't reachable
+  // on a touch device -- the popup is a look-only, non-interactive overlay
+  // either way, closed by moving away (hover) or tapping elsewhere (touch).
+  function showStatusHistoryPop(cellEl, item){
+    var hist = joineryStatusHistoryFor(registerStatusList, item);
+    var rows = hist.length
+      ? hist.map(function(h){
+          return "<div class=\"shp-row\"><span class=\"shp-status\">" + statusLabelHtml(h.status) + "</span><span class=\"shp-meta\">" + escapeHtml(formatHistoryDate(h.at)) + (h.by ? "<br>" + escapeHtml(h.by) : "") + "</span></div>";
+        }).join("")
+      : "<div class=\"shp-empty\">No status changes yet.</div>";
+    statusHistoryPop.innerHTML = "<div class=\"shp-title\">" + escapeHtml(item.joineryId || "(no ID)") + "</div>" + rows;
+    statusHistoryPop.hidden = false;
+    var r = cellEl.getBoundingClientRect();
+    var top = r.bottom + 6, left = r.left;
+    // Keep it on-screen -- flip above the cell if there's not enough room
+    // below, and clamp its right edge to the viewport rather than letting
+    // it run off the side on a narrow screen.
+    var popRect = statusHistoryPop.getBoundingClientRect();
+    if (top + popRect.height > window.innerHeight) top = Math.max(6, r.top - popRect.height - 6);
+    if (left + popRect.width > window.innerWidth) left = Math.max(6, window.innerWidth - popRect.width - 6);
+    statusHistoryPop.style.top = top + "px";
+    statusHistoryPop.style.left = left + "px";
+  }
+  document.addEventListener("click", function(e){
+    if (!statusHistoryPop.hidden && !e.target.closest(".status-cell")) hideStatusHistoryPop();
+  });
   function renderRegisterTable(){
     var filtered = registerAllItems.filter(registerMatchesFilters);
     filtered.sort(registerCompare);
     registerTableBody.innerHTML = "";
     filtered.forEach(function(item){
+      var statusKey = registerItemStatusKey(item);
       var tr = document.createElement("tr");
       tr.innerHTML =
         "<td>" + escapeHtml(item.level) + "</td>" +
         "<td>" + escapeHtml(item.room) + "</td>" +
         "<td>" + escapeHtml(item.joineryId) + "</td>" +
         "<td>" + escapeHtml(item.description) + "</td>" +
-        "<td class=\"status-cell\">" + escapeHtml(item.status) + "</td>";
-      tr.addEventListener("click", function(){ openJoineryItemPage(item, "register"); });
+        "<td class=\"status-cell\">" + statusLabelHtml(statusKey) + "</td>";
+      tr.addEventListener("click", function(e){
+        if (e.target.closest(".status-cell")) return; // the status cell handles its own tap (history), not row navigation
+        openJoineryItemPage(item, "register");
+      });
+      var statusCell = tr.querySelector(".status-cell");
+      statusCell.addEventListener("mouseenter", function(){ showStatusHistoryPop(statusCell, item); });
+      statusCell.addEventListener("mouseleave", hideStatusHistoryPop);
+      statusCell.addEventListener("click", function(e){
+        e.stopPropagation();
+        if (statusHistoryPop.hidden) showStatusHistoryPop(statusCell, item); else hideStatusHistoryPop();
+      });
       registerTableBody.appendChild(tr);
     });
     registerTable.hidden = registerAllItems.length === 0;
@@ -2339,14 +2654,22 @@
     showScreen("register");
     return Promise.all([
       readJoineryItems(activeProjectHandle),
-      listExistingLevels(activeProjectHandle)
+      listExistingLevels(activeProjectHandle),
+      readJoineryStatuses(activeProjectHandle)
     ]).then(function(results){
       registerAllItems = results[0] || [];
       var levelNames = results[1] || [];
-      var statuses = []; // distinct statuses actually present, in first-seen order -- V1 only ever writes "created", but this stays correct once other apps start updating status
+      registerStatusList = results[2] || [];
+      // Distinct status KEYS actually present (in pipeline order, "Created"
+      // first), not raw joinery-items.json values -- V1 only ever wrote
+      // "created" there; the real, evolving status lives in
+      // joinery-status.json now.
+      var presentKeys = [""];
       registerAllItems.forEach(function(item){
-        if (item.status && statuses.indexOf(item.status) === -1) statuses.push(item.status);
+        var k = registerItemStatusKey(item);
+        if (presentKeys.indexOf(k) === -1) presentKeys.push(k);
       });
+      presentKeys.sort(function(a, b){ return joineryStatusRank(a) - joineryStatusRank(b); });
       var prevLevel = registerLevelFilter.value, prevStatus = registerStatusFilter.value;
       registerLevelFilter.innerHTML = "<option value=\"\">All levels</option>";
       levelNames.forEach(function(name){
@@ -2355,13 +2678,13 @@
         registerLevelFilter.appendChild(opt);
       });
       registerStatusFilter.innerHTML = "<option value=\"\">All statuses</option>";
-      statuses.forEach(function(s){
+      presentKeys.forEach(function(k){
         var opt = document.createElement("option");
-        opt.value = s; opt.textContent = s;
+        opt.value = k; opt.textContent = joineryStatusLabel(k);
         registerStatusFilter.appendChild(opt);
       });
       if (levelNames.indexOf(prevLevel) !== -1) registerLevelFilter.value = prevLevel;
-      if (statuses.indexOf(prevStatus) !== -1) registerStatusFilter.value = prevStatus;
+      if (presentKeys.indexOf(prevStatus) !== -1) registerStatusFilter.value = prevStatus;
       renderRegisterTable();
     }).catch(function(err){
       console.error("Opening Joinery Register failed:", err);
@@ -2374,24 +2697,140 @@
   /* ============================== Joinery Item page ==============================
      One page per record, keyed by (level, room, joineryId) -- there's no
      markerId, so this triple stands in for one. Reachable from the
-     Register, from Status Overview, or by tapping a placed marker on the
-     plan canvas -- "back" returns to whichever of those it came from. */
+     Register, or by tapping a placed marker on the plan canvas -- "back"
+     returns to whichever of those it came from.
+     2026-09-23 (Andrew): the status line uses the same shared pipeline
+     label/icon as the Register, and three of its cards -- Shop drawings,
+     Job notes, Manufacture + Install ITP -- are now wired to real,
+     read-only listings of what those other apps have already saved for
+     this exact item (see the "Linked-document readers" block above). Site
+     Measure overlays and Photos are deliberately left as still-pending
+     placeholders -- not named in Andrew's own "shop drawings / job notes,
+     itps" list for this round. */
   var joineryItemTitle = document.getElementById("joineryItemTitle");
   var joineryItemMetaGrid = document.getElementById("joineryItemMetaGrid");
   var viewOnPlanBtn = document.getElementById("viewOnPlanBtn");
   var backFromJoineryItemBtn = document.getElementById("backFromJoineryItemBtn");
+  var itemShopDrawingsList = document.getElementById("itemShopDrawingsList");
+  var itemJobNotesList = document.getElementById("itemJobNotesList");
+  var itemItpList = document.getElementById("itemItpList");
   var activeJoineryItem = null;
   var joineryItemReturnScreen = "levels";
+  // Opens a file handle's contents in a new tab -- same pattern source.html
+  // already uses for "View job note"/"View shop drawing" (an object URL,
+  // revoked a minute later, long enough for the browser to have opened it).
+  function openLinkedFileHandle(handle){
+    handle.getFile().then(function(file){
+      var url = URL.createObjectURL(file);
+      window.open(url, "_blank");
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+    }).catch(function(err){
+      console.error("Open failed:", err);
+      showToast("Couldn't open that file — try again.");
+    });
+  }
+  function docRow(nameHtml, subText, handle){
+    var row = document.createElement("div");
+    row.className = "doc-row";
+    var left = document.createElement("div");
+    left.innerHTML = "<div class=\"doc-row-name\">" + nameHtml + "</div>" + (subText ? "<div class=\"doc-row-sub\">" + escapeHtml(subText) + "</div>" : "");
+    row.appendChild(left);
+    var openBtn = document.createElement("button");
+    openBtn.type = "button"; openBtn.className = "btn secondary";
+    openBtn.textContent = "Open";
+    openBtn.addEventListener("click", function(e){ e.stopPropagation(); openLinkedFileHandle(handle); });
+    row.appendChild(openBtn);
+    return row;
+  }
+  function renderJoineryItemLinkedSections(item){
+    itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+
+    listShopDrawingsForItem(activeProjectHandle, item).then(function(groups){
+      if (activeJoineryItem !== item) return; // navigated away before this resolved
+      itemShopDrawingsList.innerHTML = "";
+      if (!groups.length){
+        itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No shop drawings yet for this item.</p>";
+        return;
+      }
+      groups.forEach(function(g){
+        var latest = g.revisions[g.revisions.length - 1];
+        itemShopDrawingsList.appendChild(docRow(escapeHtml(latest.displayName), latest.revLabel + " · " + g.revisions.length + (g.revisions.length === 1 ? " revision" : " revisions"), latest.handle));
+      });
+    }).catch(function(err){
+      console.error("Listing shop drawings failed:", err);
+      itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load shop drawings.</p>";
+    });
+
+    listJobNotesForItem(activeProjectHandle, item).then(function(notes){
+      if (activeJoineryItem !== item) return;
+      itemJobNotesList.innerHTML = "";
+      if (!notes.length){
+        itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No job notes yet for this item.</p>";
+        return;
+      }
+      notes.forEach(function(n){
+        itemJobNotesList.appendChild(docRow(escapeHtml(n.fileName), "", n.handle));
+      });
+    }).catch(function(err){
+      console.error("Listing job notes failed:", err);
+      itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load job notes.</p>";
+    });
+
+    var itpApps = [
+      { branch: "Manufacture ITP", roles: ["builder", "supervisor"], name: "Manufacture ITP" },
+      { branch: "Install ITP", roles: ["installer", "supervisor"], name: "Install ITP" }
+    ];
+    Promise.all(itpApps.map(function(app){
+      return Promise.all([
+        readItpChecklistSummary(activeProjectHandle, app.branch, app.roles, item),
+        listItpPdfsForItem(activeProjectHandle, app.branch, item)
+      ]).then(function(res){ return { app: app, summary: res[0], pdfs: res[1] }; });
+    })).then(function(results){
+      if (activeJoineryItem !== item) return;
+      itemItpList.innerHTML = "";
+      results.forEach(function(r){
+        var summaryText;
+        if (!r.summary.started) summaryText = "Not started";
+        else if (r.summary.signed) summaryText = "Signed off";
+        else if (r.summary.hasNo) summaryText = "In progress — a row is flagged No";
+        else summaryText = r.summary.answered + " of " + r.summary.total + " answered";
+        var header = document.createElement("div");
+        header.className = "doc-row";
+        header.innerHTML = "<div class=\"doc-row-name\">" + escapeHtml(r.app.name) + "</div><div class=\"doc-row-sub\">" + escapeHtml(summaryText) + "</div>";
+        itemItpList.appendChild(header);
+        r.pdfs.forEach(function(p){
+          itemItpList.appendChild(docRow(escapeHtml(p.fileName), "", p.handle));
+        });
+      });
+    }).catch(function(err){
+      console.error("Listing ITP checklists failed:", err);
+      itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load ITP checklists.</p>";
+    });
+  }
   function openJoineryItemPage(item, returnScreen){
     activeJoineryItem = item;
     joineryItemReturnScreen = returnScreen || "levels";
     joineryItemTitle.textContent = item.joineryId ? item.joineryId : "(no ID)";
+    var statusKey = registerAllItems.length ? registerItemStatusKey(item) : ""; // registerStatusList may be empty if opened straight from a marker tap, not the Register -- see below
     joineryItemMetaGrid.innerHTML =
       "<dt>Description</dt><dd>" + escapeHtml(item.description || "(none)") + "</dd>" +
       "<dt>Level</dt><dd>" + escapeHtml(item.level) + "</dd>" +
       "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
-      "<dt>Status</dt><dd><span class=\"dot status-" + escapeHtml(item.status) + "\"></span> " + escapeHtml(item.status) + "</dd>";
+      "<dt>Status</dt><dd>" + statusLabelHtml(statusKey) + "</dd>";
     showScreen("joineryItem");
+    // Opened directly from a marker tap (not via the Register), or the
+    // Register's own status list hasn't loaded in this session yet -- read
+    // it fresh here so the status line above is still correct rather than
+    // silently showing "Created" for an item that's actually further along.
+    readJoineryStatuses(activeProjectHandle).then(function(list){
+      if (activeJoineryItem !== item) return;
+      registerStatusList = list;
+      var rec = findJoineryStatus(list, item.level, item.room, item.joineryId);
+      joineryItemMetaGrid.querySelector("dd:last-child").outerHTML = "<dd>" + statusLabelHtml(rec ? (rec.status || "") : "") + "</dd>";
+    }).catch(function(err){ console.error("Reading joinery status failed:", err); });
+    renderJoineryItemLinkedSections(item);
   }
   backFromJoineryItemBtn.addEventListener("click", function(){ showScreen(joineryItemReturnScreen); });
   viewOnPlanBtn.addEventListener("click", function(){
@@ -2413,41 +2852,6 @@
     });
   });
 
-  /* ============================== Status Overview ==============================
-     A project-wide grid of every joinery item's status, at a glance --
-     every record reads "created" in V1 (no app updates status yet), but
-     the grid renders whatever status is actually on each record, so it
-     stays correct as soon as a later app starts changing it. */
-  var statusOverviewProjectLabel = document.getElementById("statusOverviewProjectLabel");
-  var statusOverviewGrid = document.getElementById("statusOverviewGrid");
-  var statusOverviewEmpty = document.getElementById("statusOverviewEmpty");
-  var openStatusOverviewBtn = document.getElementById("openStatusOverviewBtn");
-  var backFromStatusOverviewBtn = document.getElementById("backFromStatusOverviewBtn");
-  function openStatusOverview(){
-    statusOverviewProjectLabel.textContent = activeProjectName + " — Status Overview";
-    showScreen("statusOverview");
-    return readJoineryItems(activeProjectHandle).then(function(items){
-      statusOverviewGrid.innerHTML = "";
-      items.forEach(function(item){
-        var tile = document.createElement("button");
-        tile.type = "button";
-        tile.className = "status-tile";
-        tile.innerHTML =
-          "<span class=\"status-tile-id\"><span class=\"dot status-" + escapeHtml(item.status) + "\"></span>" + escapeHtml(item.joineryId || "(no ID)") + "</span>" +
-          "<span class=\"status-tile-loc\">" + escapeHtml(item.level) + " — " + escapeHtml(item.room) + "</span>" +
-          "<span class=\"status-tile-desc\">" + escapeHtml(item.description || "") + "</span>";
-        tile.addEventListener("click", function(){ openJoineryItemPage(item, "statusOverview"); });
-        statusOverviewGrid.appendChild(tile);
-      });
-      statusOverviewEmpty.hidden = items.length !== 0;
-    }).catch(function(err){
-      console.error("Opening Status Overview failed:", err);
-      showToast("Couldn't open the Status Overview.");
-    });
-  }
-  openStatusOverviewBtn.addEventListener("click", openStatusOverview);
-  backFromStatusOverviewBtn.addEventListener("click", function(){ showScreen("levels"); });
-
   function folderPickerErrorMessage(err){
     if (err && err.name === "SecurityError"){
       return "Folder access isn't available in this embedded preview. Open the self-hosted or installed version of this app to use project folders.";
@@ -2465,11 +2869,11 @@
     roomDetail: document.getElementById("screenRoomDetail"),
     planCanvas: document.getElementById("screenPlanCanvas"),
     register: document.getElementById("screenRegister"),
-    joineryItem: document.getElementById("screenJoineryItem"),
-    statusOverview: document.getElementById("screenStatusOverview")
+    joineryItem: document.getElementById("screenJoineryItem")
   };
   function showScreen(name){
     Object.keys(screens).forEach(function(k){ screens[k].hidden = (k !== name); });
+    if (name !== "register") hideStatusHistoryPop();
   }
 
   var projectsRootHandle = null, projectsRootName = "";
