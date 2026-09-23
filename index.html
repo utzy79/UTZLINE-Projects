@@ -370,6 +370,15 @@
   .status-label .status-icon{ font-size: 13px; }
   .muted-cell{ color: var(--muted2); }
 
+  /* ---- Delivery status (Scheduler's joinery-schedule.json, read-only
+       here) + work order # backfill action (2026-09-23) -- kept as plain
+       text with a colour/weight cue for the overdue states, matching this
+       app's existing convention of plain text + one accent cue rather than
+       introducing Scheduler's own pill-shaped badges into this app. ---- */
+  .delay-overdue{ color: var(--danger); font-weight: 700; }
+  .delay-warn{ color: #e0a12c; font-weight: 600; }
+  .wo-backfill-btn{ margin-left: 6px; padding: 0; font-size: 12px; vertical-align: baseline; }
+
   /* ---- Status-history hover popup (2026-09-23) ---- */
   .status-history-pop{
     position: fixed; z-index: 60; max-width: 300px;
@@ -566,6 +575,7 @@
             <th data-col="description">Description</th>
             <th data-col="workOrderNo">Work order #</th>
             <th data-col="status">Status</th>
+            <th data-col="delivery">Delivery</th>
           </tr>
         </thead>
         <tbody id="registerTableBody"></tbody>
@@ -1030,7 +1040,7 @@
   // show up here as a bogus "Level" named "base-plan").
   function legacyLevelFolderNames(projectHandle){
     return listSubdirNames(projectHandle).then(function(names){
-      return names.filter(function(n){ return n !== "itp" && n !== "itp-install" && n !== "itp-manufacture" && n !== "base-plan" && n !== projectSavesDirName() && n !== "PDF Files" && n !== "Backups"; });
+      return names.filter(function(n){ return n !== "itp" && n !== "itp-install" && n !== "itp-manufacture" && n !== "itp-delivery" && n !== "base-plan" && n !== projectSavesDirName() && n !== "PDF Files" && n !== "Backups"; });
     });
   }
   // v8-specific migration (2026-09-22, same-day-superseded): a project
@@ -1872,6 +1882,66 @@
     });
   }
 
+  /* ---- Work order # backfill (2026-09-23) ----
+     Andrew's own required-going-forward field (see the Add joinery item
+     dialog's own comment) has no value on any item created before it
+     existed. No field on a joinery item anywhere in this family has ever
+     had a post-creation edit affordance -- Level/Room/Joinery ID/
+     Description are all set once and never touched again -- so this is a
+     deliberate, narrow, FIRST-EVER exception, scoped ONLY to work order #
+     and ONLY for filling in a value that is CURRENTLY MISSING. It must
+     never let anyone change a work order # that's already set: this
+     function itself refuses to overwrite an existing value (defence in
+     depth beyond the UI only ever showing the backfill action when the
+     value is missing), so the "immutable once set" guarantee holds even if
+     something else ever calls this directly. Finds the record by the same
+     (level, room, joineryId) triple used everywhere else in this file. */
+  function setJoineryItemWorkOrderNo(projectHandle, level, room, joineryId, workOrderNo){
+    return readJoineryItems(projectHandle).then(function(items){
+      var rec = null;
+      for (var i = 0; i < items.length; i++){
+        var it = items[i];
+        if (it && it.level === level && (it.room || "") === (room || "") && (it.joineryId || "") === (joineryId || "")){ rec = it; break; }
+      }
+      if (!rec) return Promise.reject(new Error("Joinery item not found: " + level + " / " + room + " / " + joineryId));
+      if (rec.workOrderNo) return rec; // already set -- never overwrite
+      rec.workOrderNo = workOrderNo;
+      return writeJoineryItems(projectHandle, items).then(function(){ return rec; });
+    });
+  }
+  var WO_BACKFILL_BTN_CLASS = "wo-backfill-btn";
+  // Shared by the Register's Work order # column and the Joinery Item
+  // page's own meta-grid row -- an item that already has a value shows it
+  // as plain text (exactly as today, no edit action, ever); one that's
+  // missing shows the usual "—" muted placeholder plus a small inline
+  // "Add work order #" action (this app's existing .btn.link convention,
+  // already used for e.g. the company logo's own "Remove" action).
+  function workOrderCellHtml(item){
+    if (item.workOrderNo) return escapeHtml(item.workOrderNo);
+    return "<span class=\"muted-cell\">—</span> <button type=\"button\" class=\"btn link " + WO_BACKFILL_BTN_CLASS + "\">Add work order #</button>";
+  }
+  // Opens this app's own generic single-line prompt dialog (same one "New
+  // level name"/"New room name" already use) asking for the work order #,
+  // validates non-empty the same way the Add Joinery Item dialog's own
+  // required-field check already does (toast + no-op on empty, never
+  // silently saves a blank), and saves it. `onSaved` re-renders whatever
+  // UI called this once the value is actually persisted.
+  function promptBackfillWorkOrder(item, onSaved){
+    showPromptDialog("Work order #", "").then(function(value){
+      if (value === null) return; // cancelled
+      var trimmed = value.trim();
+      if (!trimmed){ showToast("Enter a work order # for this item."); return; }
+      return setJoineryItemWorkOrderNo(activeProjectHandle, item.level, item.room, item.joineryId, trimmed).then(function(updatedRec){
+        item.workOrderNo = updatedRec.workOrderNo;
+        showToast("Work order # saved.");
+        if (onSaved) onSaved();
+      });
+    }).catch(function(err){
+      console.error("Saving work order # failed:", err);
+      showToast("Couldn't save that work order #.");
+    });
+  }
+
   /* ============================== Shared joinery-status pipeline (2026-09-23) ==============================
      Read-only here -- this app never writes joinery-status.json itself (Site
      Measure's own "Mark as check measured", and each ITP's own checklist
@@ -1940,6 +2010,102 @@
     var hist = (rec && Array.isArray(rec.history)) ? rec.history.slice() : [];
     hist.sort(function(a, b){ return (b.at || "").localeCompare(a.at || ""); });
     return hist;
+  }
+
+  /* ============================== Delivery status (2026-09-23) ==============================
+     Read-only integration with UTZLINE Scheduler's own "joinery-schedule.json"
+     -- a sibling of joinery-status.json/joinery-items.json at the project
+     root, owned exclusively by Scheduler. Projects never writes this file,
+     the exact same read-only relationship Scheduler already has with
+     Projects' own files, just in the other direction. Same defensive
+     try/catch-empty-array read as readJoineryStatuses above -- a project
+     Scheduler has never touched (or never scheduled this particular item)
+     simply has no record, which is a normal, common, non-error state, not
+     a missing-file error. readJoinerySchedule/findScheduleRecord/
+     computeDelayInfo/todayDateStr/formatDateDisplay below mirror Scheduler's
+     own identically-named functions (index.html there) exactly, so the
+     wording/severity of a delay flag never drifts between the two apps --
+     this app only LABELS a delay using dates Scheduler already computed
+     and stored (manufactureStartDate); it never computes scheduling math
+     of its own. */
+  function joineryScheduleFilename(){ return "joinery-schedule.json"; }
+  function readJoinerySchedule(projectHandle){
+    if (!projectHandle) return Promise.resolve([]);
+    return projectHandle.getFileHandle(joineryScheduleFilename(), { create: false }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){
+      return file.text();
+    }).then(function(text){
+      try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
+    }, function(){ return []; }); // no file (or no record for this item) -- not an error, just "not scheduled yet"
+  }
+  function findScheduleRecord(list, level, room, joineryId){
+    for (var i = 0; i < list.length; i++){
+      var rec = list[i];
+      if (rec && rec.level === level && (rec.room || "") === (room || "") && (rec.joineryId || "") === (joineryId || "")) return rec;
+    }
+    return null;
+  }
+  // "Today", as a plain local calendar date string -- same convention (and
+  // same reasoning: judge a delay against the day the person viewing this
+  // is actually living in, not a UTC day that might already differ from
+  // it) as Scheduler's own todayDateStr.
+  function todayDateStr(){
+    var d = new Date();
+    var mm = String(d.getMonth() + 1);
+    var dd = String(d.getDate());
+    if (mm.length < 2) mm = "0" + mm;
+    if (dd.length < 2) dd = "0" + dd;
+    return d.getFullYear() + "-" + mm + "-" + dd;
+  }
+  function formatDateDisplay(dateStr){
+    if (!dateStr) return "";
+    var d = new Date(dateStr + "T00:00:00Z");
+    if (isNaN(d.getTime())) return dateStr;
+    try{
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+    }catch(e){ return dateStr; }
+  }
+  // Mirrors Scheduler's own computeDelayInfo exactly (same disclosed design
+  // call, documented there and in next-version-notes.md):
+  //   - No schedule record at all (or no requiredDeliveryDate on it) ->
+  //     "No schedule set" (neutral, not a delay).
+  //   - today > requiredDeliveryDate AND status hasn't reached "installed"
+  //     -> "Delivery overdue" (most severe).
+  //   - today > manufactureStartDate AND status hasn't reached
+  //     "in_manufacture" or later -> "Manufacture start overdue".
+  //   - else -> "On track".
+  function computeDelayInfo(scheduleRec, statusKey, todayStr){
+    if (!scheduleRec || !scheduleRec.requiredDeliveryDate){
+      return { key: "none", label: "No schedule set", severity: 0 };
+    }
+    var rank = joineryStatusRank(statusKey);
+    if (todayStr > scheduleRec.requiredDeliveryDate && rank < 5){
+      return { key: "delivery", label: "Delivery overdue", severity: 3 };
+    }
+    if (scheduleRec.manufactureStartDate && todayStr > scheduleRec.manufactureStartDate && rank < 2){
+      return { key: "start", label: "Manufacture start overdue", severity: 2 };
+    }
+    return { key: "ontrack", label: "On track", severity: 1 };
+  }
+  // The CSS class (if any) that gives a delay label its colour/weight cue --
+  // "Delivery overdue" (most severe) gets the strongest cue; "Manufacture
+  // start overdue" a lighter one; "On track"/"No schedule set" are plain
+  // text, no cue needed.
+  function delayCueClass(delayKey){
+    if (delayKey === "delivery") return "delay-overdue";
+    if (delayKey === "start") return "delay-warn";
+    return "";
+  }
+  // One line of "<date> — <delay label>" (or "— (no schedule set)"),
+  // shared by the Joinery Item page's meta-grid row.
+  function deliveryLineHtml(scheduleRec, delay){
+    if (!scheduleRec || !scheduleRec.requiredDeliveryDate){
+      return "<span class=\"muted-cell\">— (no schedule set)</span>";
+    }
+    var cls = delayCueClass(delay.key);
+    return escapeHtml(formatDateDisplay(scheduleRec.requiredDeliveryDate)) + " — " +
+      (cls ? "<span class=\"" + cls + "\">" : "<span>") + escapeHtml(delay.label) + "</span>";
   }
 
   /* ============================== Linked-document readers (2026-09-23) ==============================
@@ -2549,6 +2715,7 @@
 
   var registerAllItems = [];
   var registerStatusList = []; // the raw joinery-status.json array, read alongside joinery-items.json
+  var registerScheduleList = []; // the raw joinery-schedule.json array (Scheduler's file, read-only here), read alongside the other two
   var registerSort = { col: "level", dir: "asc" };
 
   // The item's own effective status KEY (not label) -- "" (Created) when it
@@ -2557,12 +2724,18 @@
     var rec = findJoineryStatus(registerStatusList, item.level, item.room, item.joineryId);
     return rec ? (rec.status || "") : "";
   }
+  function registerItemScheduleRecord(item){
+    return findScheduleRecord(registerScheduleList, item.level, item.room, item.joineryId);
+  }
+  function registerItemDelayInfo(item){
+    return computeDelayInfo(registerItemScheduleRecord(item), registerItemStatusKey(item), todayDateStr());
+  }
   function registerMatchesFilters(item){
     if (registerLevelFilter.value && item.level !== registerLevelFilter.value) return false;
     if (registerStatusFilter.value !== "" && registerStatusFilter.selectedIndex >= 0 && registerItemStatusKey(item) !== registerStatusFilter.value) return false;
     var q = registerSearchInput.value.trim().toLowerCase();
     if (q){
-      var hay = ((item.joineryId || "") + " " + (item.description || "") + " " + (item.workOrderNo || "")).toLowerCase();
+      var hay = ((item.joineryId || "") + " " + (item.description || "") + " " + (item.workOrderNo || "") + " " + registerItemDelayInfo(item).label).toLowerCase();
       if (hay.indexOf(q) === -1) return false;
     }
     return true;
@@ -2572,6 +2745,11 @@
     var cmp;
     if (col === "status"){
       cmp = joineryStatusRank(registerItemStatusKey(a)) - joineryStatusRank(registerItemStatusKey(b));
+    } else if (col === "delivery"){
+      // Sortable by urgency, the same way Scheduler's own "delay" column
+      // is -- ascending runs from least to most severe (no schedule <
+      // on track < manufacture start overdue < delivery overdue).
+      cmp = registerItemDelayInfo(a).severity - registerItemDelayInfo(b).severity;
     } else {
       var av = String(a[col] || "").toLowerCase(), bv = String(b[col] || "").toLowerCase();
       cmp = av < bv ? -1 : (av > bv ? 1 : 0);
@@ -2622,16 +2800,23 @@
     registerTableBody.innerHTML = "";
     filtered.forEach(function(item){
       var statusKey = registerItemStatusKey(item);
+      var scheduleRec = registerItemScheduleRecord(item);
+      var delay = registerItemDelayInfo(item);
+      var deliveryCellHtml = scheduleRec && scheduleRec.requiredDeliveryDate
+        ? deliveryLineHtml(scheduleRec, delay)
+        : "<span class=\"muted-cell\">—</span>";
       var tr = document.createElement("tr");
       tr.innerHTML =
         "<td>" + escapeHtml(item.level) + "</td>" +
         "<td>" + escapeHtml(item.room) + "</td>" +
         "<td>" + escapeHtml(item.joineryId) + "</td>" +
         "<td>" + escapeHtml(item.description) + "</td>" +
-        "<td>" + (item.workOrderNo ? escapeHtml(item.workOrderNo) : "<span class=\"muted-cell\">—</span>") + "</td>" +
-        "<td class=\"status-cell\">" + statusLabelHtml(statusKey) + "</td>";
+        "<td>" + workOrderCellHtml(item) + "</td>" +
+        "<td class=\"status-cell\">" + statusLabelHtml(statusKey) + "</td>" +
+        "<td>" + deliveryCellHtml + "</td>";
       tr.addEventListener("click", function(e){
         if (e.target.closest(".status-cell")) return; // the status cell handles its own tap (history), not row navigation
+        if (e.target.closest("." + WO_BACKFILL_BTN_CLASS)) return; // the backfill button handles its own click, not row navigation
         openJoineryItemPage(item, "register");
       });
       var statusCell = tr.querySelector(".status-cell");
@@ -2641,6 +2826,13 @@
         e.stopPropagation();
         if (statusHistoryPop.hidden) showStatusHistoryPop(statusCell, item); else hideStatusHistoryPop();
       });
+      var woBtn = tr.querySelector("." + WO_BACKFILL_BTN_CLASS);
+      if (woBtn){
+        woBtn.addEventListener("click", function(e){
+          e.stopPropagation();
+          promptBackfillWorkOrder(item, renderRegisterTable);
+        });
+      }
       registerTableBody.appendChild(tr);
     });
     registerTable.hidden = registerAllItems.length === 0;
@@ -2672,11 +2864,13 @@
     return Promise.all([
       readJoineryItems(activeProjectHandle),
       listExistingLevels(activeProjectHandle),
-      readJoineryStatuses(activeProjectHandle)
+      readJoineryStatuses(activeProjectHandle),
+      readJoinerySchedule(activeProjectHandle)
     ]).then(function(results){
       registerAllItems = results[0] || [];
       var levelNames = results[1] || [];
       registerStatusList = results[2] || [];
+      registerScheduleList = results[3] || [];
       // Distinct status KEYS actually present (in pipeline order, "Created"
       // first), not raw joinery-items.json values -- V1 only ever wrote
       // "created" there; the real, evolving status lives in
@@ -2826,6 +3020,19 @@
       itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load ITP checklists.</p>";
     });
   }
+  function wireJoineryItemWorkOrderBackfillBtn(item){
+    var cell = document.getElementById("jiWorkOrderCell");
+    if (!cell) return;
+    var btn = cell.querySelector("." + WO_BACKFILL_BTN_CLASS);
+    if (!btn) return;
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      promptBackfillWorkOrder(item, function(){
+        cell.innerHTML = workOrderCellHtml(item);
+        wireJoineryItemWorkOrderBackfillBtn(item);
+      });
+    });
+  }
   function openJoineryItemPage(item, returnScreen){
     activeJoineryItem = item;
     joineryItemReturnScreen = returnScreen || "levels";
@@ -2833,21 +3040,36 @@
     var statusKey = registerAllItems.length ? registerItemStatusKey(item) : ""; // registerStatusList may be empty if opened straight from a marker tap, not the Register -- see below
     joineryItemMetaGrid.innerHTML =
       "<dt>Description</dt><dd>" + escapeHtml(item.description || "(none)") + "</dd>" +
-      "<dt>Work order #</dt><dd>" + escapeHtml(item.workOrderNo || "—") + "</dd>" +
+      "<dt>Work order #</dt><dd id=\"jiWorkOrderCell\">" + workOrderCellHtml(item) + "</dd>" +
       "<dt>Level</dt><dd>" + escapeHtml(item.level) + "</dd>" +
       "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
-      "<dt>Status</dt><dd>" + statusLabelHtml(statusKey) + "</dd>";
+      "<dt>Status</dt><dd id=\"jiStatusCell\">" + statusLabelHtml(statusKey) + "</dd>" +
+      "<dt>Required delivery</dt><dd id=\"jiDeliveryCell\">Loading…</dd>";
+    wireJoineryItemWorkOrderBackfillBtn(item);
     showScreen("joineryItem");
     // Opened directly from a marker tap (not via the Register), or the
-    // Register's own status list hasn't loaded in this session yet -- read
-    // it fresh here so the status line above is still correct rather than
-    // silently showing "Created" for an item that's actually further along.
-    readJoineryStatuses(activeProjectHandle).then(function(list){
+    // Register's own status list/schedule list haven't loaded in this
+    // session yet -- read both fresh here so the Status and Required
+    // delivery lines above are still correct rather than silently showing
+    // "Created"/"No schedule set" for an item that's actually further
+    // along or already scheduled.
+    Promise.all([
+      readJoineryStatuses(activeProjectHandle),
+      readJoinerySchedule(activeProjectHandle)
+    ]).then(function(results){
       if (activeJoineryItem !== item) return;
+      var list = results[0], scheduleList = results[1];
       registerStatusList = list;
+      registerScheduleList = scheduleList;
       var rec = findJoineryStatus(list, item.level, item.room, item.joineryId);
-      joineryItemMetaGrid.querySelector("dd:last-child").outerHTML = "<dd>" + statusLabelHtml(rec ? (rec.status || "") : "") + "</dd>";
-    }).catch(function(err){ console.error("Reading joinery status failed:", err); });
+      var freshStatusKey = rec ? (rec.status || "") : "";
+      var statusCell = document.getElementById("jiStatusCell");
+      if (statusCell) statusCell.innerHTML = statusLabelHtml(freshStatusKey);
+      var scheduleRec = findScheduleRecord(scheduleList, item.level, item.room, item.joineryId);
+      var delay = computeDelayInfo(scheduleRec, freshStatusKey, todayDateStr());
+      var deliveryCell = document.getElementById("jiDeliveryCell");
+      if (deliveryCell) deliveryCell.innerHTML = deliveryLineHtml(scheduleRec, delay);
+    }).catch(function(err){ console.error("Reading joinery status/schedule failed:", err); });
     renderJoineryItemLinkedSections(item);
   }
   backFromJoineryItemBtn.addEventListener("click", function(){ showScreen(joineryItemReturnScreen); });
@@ -3256,7 +3478,12 @@
     listLevelFiles: listLevelFiles,
     migrateLegacyLevelsIfNeeded: migrateLegacyLevelsIfNeeded,
     listExistingLevels: listExistingLevels,
-    listExistingRoomsInLevel: listExistingRoomsInLevel
+    listExistingRoomsInLevel: listExistingRoomsInLevel,
+    writeJoineryItems: writeJoineryItems,
+    readJoinerySchedule: readJoinerySchedule,
+    findScheduleRecord: findScheduleRecord,
+    computeDelayInfo: computeDelayInfo,
+    setJoineryItemWorkOrderNo: setJoineryItemWorkOrderNo
   };
 
   boot();

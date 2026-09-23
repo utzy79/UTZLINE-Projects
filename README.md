@@ -1,6 +1,26 @@
 # UTZLINE Projects — installable app
 
-**Current version: v8** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships.)
+**Current version: v9** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships.)
+
+**v9 (2026-09-23):** two additions, both requested alongside the new
+UTZLINE Delivery ITP app. (1) **Delivery status surfaced read-only from
+UTZLINE Scheduler's own `joinery-schedule.json`** — a "Required delivery"
+line on the Joinery Item page and a new sortable "Delivery" column on the
+Joinery Register, each showing the delivery date plus a delay cue ("On
+track" / "Manufacture start overdue" / "Delivery overdue"), computed with
+the exact same wording/severity as Scheduler's own delay logic so the two
+apps never drift; an item with nothing scheduled yet shows a plain dash,
+never an error. Projects never writes to this file — same read-only
+relationship Scheduler already has with Projects' own files, just now
+symmetric. (2) **A way to backfill a missing work order #** — the
+one-and-only, deliberately narrow exception to this app's own
+"every joinery-item field is set once at creation, never edited again"
+rule: an item currently showing the "—" placeholder (created before the
+work order # field existed) gets a small "Add work order #" action on
+both the Register and the Joinery Item page; using it saves the value
+directly to that item's record. An item that already has one shows no
+edit action anywhere, ever — the "set once" guarantee holds for every
+other case.
 
 **v8 (2026-09-23):** added a required **Work order #** field to the Add
 Joinery Item dialog, per Andrew's request ("Every single joinery item gets
