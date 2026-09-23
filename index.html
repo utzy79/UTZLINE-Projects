@@ -1889,6 +1889,14 @@
   // Site Measure, from one Site Measure itself would have placed.
   var planNextId = 1;
   function planUid(){ return "o" + (planNextId++); }
+  // Andrew (2026-09-22): the on-plan label only needs to show the joinery
+  // code now, not "Room · Code" -- see source.html's own roomlinkDisplayText
+  // for the full reasoning (this mirrors it exactly, computed at render
+  // time so already-saved markers' baked-in obj.label.text, produced by
+  // makeRoomLinkObject below, never needs touching).
+  function roomlinkDisplayText(obj){
+    return obj.joineryCode || obj.roomName || "";
+  }
   function makeRoomLinkObject(x, y, roomName, joineryCode){
     var color = "#c8391c"; // COLORS[0], same default defaultColorFor("roomlink") resolves to on a fresh style
     var fontSize = 32; // defaultFontSize() on this app's own always-fresh defaultStyleObject()
@@ -1982,7 +1990,7 @@
         text.setAttribute("paint-order", "stroke");
         text.setAttribute("stroke", "#0b0707");
         text.setAttribute("stroke-width", "4");
-        text.textContent = obj.label.text;
+        text.textContent = roomlinkDisplayText(obj);
         planCanvasMarkersG.appendChild(text);
       }
     });

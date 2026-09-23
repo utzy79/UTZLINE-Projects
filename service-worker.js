@@ -197,8 +197,21 @@
 // so it's never mistaken for a pre-cutover Level folder during migration.
 // No other functional change in this app.)
 
+// (v14, 2026-09-23: a roomlink marker's on-plan label on this app's own
+// Level Plan screen now shows only its joinery code, never "Room · Code"
+// -- computed fresh at render time (roomlinkDisplayText()), matching the
+// same change made across Site Measure, the Viewer, and both ITP apps.
+// makeRoomLinkObject()'s own baked-in creation-time label string is
+// deliberately left as-is (no migration needed, since every renderer now
+// recomputes its own display text); this app's own status-word toasts
+// (e.g. "Added X · Y") are unchanged, as informational/transient text
+// rather than the on-plan label Andrew meant. This app was NOT given the
+// new joinery-status/job-notes system built the same day in Site Measure,
+// the Viewer, and both ITP apps (Andrew's own scoping named only those
+// four) -- its own plan screen shows no status badge.)
+
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v13";
+var CACHE_NAME = "utzline-projects-cache-v14";
 
 var PRECACHE_URLS = [
   "./",
