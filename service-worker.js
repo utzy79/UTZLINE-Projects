@@ -334,8 +334,33 @@
 // usual 640px centered content column -- their tables already fill their
 // own container at width:100%, so the container was the only thing holding
 // them back. No other screen's width changed.)
+//
+// (v21 / README v16 / cache v24, 2026-09-23: Andrew, verbatim: "Manufacture
+// status needs to be split up into 2 parts. We need a machined and a
+// manufactured tab. All traceable by user name. Machined to have its own
+// app. Called machine schedule. This is where the machinist can mark off a
+// joinery item as complete. It will add their name and date time to the
+// system." A new "machined" stage is inserted into the shared joinery-status
+// pipeline, between "in_manufacture" and "manufactured": Created(0) ->
+// Check measured(1) -> In manufacture(2) -> Machined(3, NEW, gear icon) ->
+// Ready to dispatch/"manufactured"(4, was 3) -> Delivered(5, was 4) ->
+// Installed(6, was 5). "machined" is written exclusively by the brand-new
+// sibling app UTZLINE Machine Schedule (the machinist marks an item
+// complete there and it stamps their PIN-verified name + date/time into
+// joinery-status.json, same as every other stage's history entry) -- this
+// app stays a strictly read-only consumer of it, same relationship it
+// already has with every other stage. joineryStatusRank/Label/Icon are the
+// only functions touched; the Register's status filter is built dynamically
+// from whatever statuses are actually present in a project's data (sorted
+// by rank), so "Machined" appears there and in the hover/tap status-history
+// popup automatically, with no separate dropdown/list to update. Also fixed
+// a now-stale hardcoded rank threshold in computeDelayInfo -- its "hasn't
+// reached installed yet" check compared against the OLD rank(installed)==5,
+// which needed bumping to 6 to match installed's new rank; the other
+// threshold (rank(in_manufacture)==2) was untouched since that stage's rank
+// didn't move.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v23";
+var CACHE_NAME = "utzline-projects-cache-v24";
 
 var PRECACHE_URLS = [
   "./",

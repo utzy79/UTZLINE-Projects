@@ -2585,12 +2585,28 @@
      dates and who changed it." Mirrors source.html/Install ITP/Manufacture
      ITP's own rank table exactly (see source.html's own comment for why
      "manufactured" is still the internal string for "Ready to dispatch",
-     and why "delivered" is a reserved-but-currently-unreachable stage). */
+     and why "delivered" is a reserved-but-currently-unreachable stage).
+
+     UPDATE (still 2026-09-23) -- "machined" stage added. Andrew, verbatim:
+     "Manufacture status needs to be split up into 2 parts. We need a
+     machined and a manufactured tab. All traceable by user name. Machined
+     to have its own app. Called machine schedule. This is where the
+     machinist can mark off a joinery item as complete. It will add their
+     name and date time to the system." "machined" sits between
+     "in_manufacture" and "manufactured" in the pipeline (rank 3), pushing
+     "manufactured"/"delivered"/"installed" up one rank each (now 4/5/6).
+     It is written exclusively by the new sibling app UTZLINE Machine
+     Schedule -- this app stays a pure read-only consumer of it, same as
+     every other stage here: it shows up in the Register's status column,
+     status filter (built dynamically from whatever statuses are actually
+     present, so it needs no code change there) and hover/tap history popup
+     purely because those all key off joineryStatusRank/Label/Icon below. */
   function joineryStatusRank(status){
     switch (status){
-      case "installed": return 5;
-      case "delivered": return 4;
-      case "manufactured": return 3;
+      case "installed": return 6;
+      case "delivered": return 5;
+      case "manufactured": return 4;
+      case "machined": return 3;
       case "in_manufacture": return 2;
       case "measured": return 1;
       default: return 0;
@@ -2601,6 +2617,7 @@
       case "installed": return "Installed";
       case "delivered": return "Delivered";
       case "manufactured": return "Ready to dispatch";
+      case "machined": return "Machined";
       case "in_manufacture": return "In manufacture";
       case "measured": return "Check measured";
       default: return "Created";
@@ -2611,6 +2628,7 @@
       case "installed": return "🏆";
       case "delivered": return "🚚";
       case "manufactured": return "📦";
+      case "machined": return "⚙️";
       case "in_manufacture": return "🏭";
       case "measured": return "📏";
       default: return "";
@@ -2707,12 +2725,17 @@
   //   - today > manufactureStartDate AND status hasn't reached
   //     "in_manufacture" or later -> "Manufacture start overdue".
   //   - else -> "On track".
+  // NOTE (2026-09-23): these are rank thresholds, not stage names, so the
+  // "machined" stage inserted between "in_manufacture" and "manufactured"
+  // shifted "installed" from rank 5 to rank 6 -- the first threshold below
+  // was bumped to match. The second threshold (rank < 2, "in_manufacture")
+  // is untouched since in_manufacture's own rank didn't move.
   function computeDelayInfo(scheduleRec, statusKey, todayStr){
     if (!scheduleRec || !scheduleRec.requiredDeliveryDate){
       return { key: "none", label: "No schedule set", severity: 0 };
     }
     var rank = joineryStatusRank(statusKey);
-    if (todayStr > scheduleRec.requiredDeliveryDate && rank < 5){
+    if (todayStr > scheduleRec.requiredDeliveryDate && rank < 6){
       return { key: "delivery", label: "Delivery overdue", severity: 3 };
     }
     if (scheduleRec.manufactureStartDate && todayStr > scheduleRec.manufactureStartDate && rank < 2){
