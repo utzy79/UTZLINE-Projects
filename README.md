@@ -1,6 +1,32 @@
 # UTZLINE Projects — installable app
 
-**Current version: v9** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships.)
+**Current version: v10** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships.)
+
+**v10 (2026-09-23):** added the shared name+PIN identity selector, per
+Andrew's own follow-up request, verbatim: *"implement the username as per
+the delivery itp throughout the entire system, but instead of it opening a
+popup, the button is the selector, when you pick a name it opens a
+numberpad to input the pin (4 digit pin)."* Projects had no identity/name
+feature of its own before this, so this is a brand-new addition here (not a
+replacement of an older, simpler one, unlike the sibling apps this pattern
+started on). A new `<select id="identitySelector">` on the Projects screen
+— the button IS the selector — lists every known name plus "+ Add a new
+name…"; picking an existing name opens an on-screen 0–9 numberpad to enter
+its 4-digit PIN (wrong PIN shakes/clears for another attempt, right PIN
+signs this device in); picking "+ Add a new name…" prompts for the name as
+text, then the same numberpad twice (choose, then confirm) to set its PIN,
+then a "show me in" app-tickbox list ("Projects" pre-checked) for Andrew's
+own admin reference. Reads and writes the exact same shared registry every
+other UTZLINE app in the family uses — the `utzline-identity` IndexedDB
+database (one per-device name pointer, same DB/store/key names, since
+IndexedDB is scoped per-origin) and `utzline-users.csv` at the Projects-root
+level (`Name,PIN,ShowInApps`, plain CSV so Andrew can edit it directly) — so
+a name set in Site Measure, Viewer, either ITP app, or here shows up
+everywhere else too, and vice versa. This app doesn't yet stamp the signed-
+in name into any saved file (nothing here plays Delivery ITP's "savedBy"
+role yet), so for now this only gets a name recognised consistently across
+the family; the hint text next to the selector says so honestly rather than
+implying an attribution this build doesn't do.
 
 **v9 (2026-09-23):** two additions, both requested alongside the new
 UTZLINE Delivery ITP app. (1) **Delivery status surfaced read-only from
@@ -209,35 +235,36 @@ folder is safe to try immediately.
 
 ## Getting this installed as its own app
 
-Same pattern as the other four apps: a subfolder of the same GitHub Pages
-site they already live on, so all five install as separate, independent
-apps from one repo:
+**This app lives in its own separate GitHub repository** — not a
+subfolder of Site Measure's, the Viewer's, or any sibling app's repo.
+Every app in the UTZLINE family (Site Measure, Viewer, Install ITP,
+Manufacture ITP, UTZLINE Projects, UTZLINE Scheduler, UTZLINE Delivery
+ITP) is its own repo with its own GitHub Pages URL.
 
-1. In the `UTZLINE-Site-Measure` repo, add everything from this folder
-   under a `projects/` subfolder — so it ends up live at
-   `https://utzy79.github.io/UTZLINE-Site-Measure/projects/`. Keep the
-   `icons/` folder structure intact.
+1. In this app's own repo, add every file from this bundle at the repo
+   root (not inside a subfolder) — keep the `icons/` folder structure
+   intact. It'll go live at that repo's own GitHub Pages URL.
 2. Open that URL once in a normal browser tab while online, so the service
    worker can cache it for offline use.
 3. Install it: Chrome/Edge's install icon in the address bar ("Install this
-   site as an app") while on the `projects/` URL specifically. Because it
-   has its own `manifest.json` (its own name and icons — red, to tell it
-   apart from the editor's orange, the Viewer's blue, Install ITP's green,
-   and Manufacture ITP's purple), Chrome and Windows/Android treat it as a
-   wholly separate, independently installable app.
+   site as an app"). Because it has its own `manifest.json` (its own name
+   and icons — red, to tell it apart from every sibling app's own colour),
+   Chrome and Windows/Android treat it as a wholly separate, independently
+   installable app.
 4. On a phone or tablet, "Install this site as an app" is under the
-   browser's own menu (Chrome: ⋮ → "Add to Home screen" / "Install app").
+   browser's own menu (Chrome: menu -> "Add to Home screen" / "Install app").
 
 ## Updating this app
 
-Same process as the others: unzip whatever's shared in chat, upload the
-files into this app's own `projects/` folder in the repo (overwriting
-existing ones, keeping `icons/` intact), commit, wait for GitHub Pages to
-redeploy, then close and reopen the installed app to pick up the change.
-Bump `service-worker.js`'s `CACHE_NAME` (and the version note at the top of
-that file) with every change that ships, same convention as every other
-app in the family, so installed copies actually pick up the update instead
-of serving a stale cached copy forever.
+Same process every time a new build ships: unzip whatever's shared in
+chat, upload the files into this app's own repo root (overwriting existing
+ones, keeping `icons/` intact), commit, wait for GitHub Pages to redeploy,
+then close and reopen the installed app to pick up the change. **Bump the
+"Current version" line at the top of this README (with a dated changelog
+entry) and `service-worker.js`'s `CACHE_NAME` every single time a change
+ships** — both need to move together, or installed copies keep serving a
+stale cached build and this README stops being a reliable record of
+what's actually live.
 
 ## What's in this folder
 

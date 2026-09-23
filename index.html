@@ -256,6 +256,21 @@
   .logo-preview img{ max-width: 100%; max-height: 100%; }
   .logo-preview .placeholder{ color: var(--muted2); font-size: 10px; text-align:center; }
 
+  /* Shared name+PIN identity selector (2026-09-23) -- the <select> IS the
+     button (see the JS section of the same name for the full story). */
+  .identity-select{
+    background: #140d0d;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+    max-width: 190px;
+    cursor: pointer;
+  }
+  @keyframes numberpadShake{ 10%,90%{transform:translateX(-1px);} 20%,80%{transform:translateX(2px);} 30%,50%,70%{transform:translateX(-5px);} 40%,60%{transform:translateX(5px);} }
+  .numberpad-shake{ animation:numberpadShake .4s; }
+
   /* floorplan preview (static, non-interactive -- the pan/zoom/marker canvas is a later step) */
   .plan-preview{
     position: relative;
@@ -470,6 +485,22 @@
         <input type="file" id="companyLogoFileInput" accept="image/*" hidden>
       </div>
       <p class="sub" style="margin:10px 0 0;font-size:12px;">One logo for the whole company, shared by every project and every UTZLINE app -- not set per project.</p>
+    </div>
+    <!-- Shared name+PIN identity (2026-09-23) -- reads from/writes to the
+         same "utzline-identity" IndexedDB database and the same
+         utzline-users.csv (at the Projects-root level) every UTZLINE app in
+         the family uses, so a name set in any app shows up in all of them.
+         The <select> IS the button (Andrew, verbatim: "the button is the
+         selector, when you pick a name it opens a numberpad to input the
+         pin") -- see populateIdentitySelector() further down. -->
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px;">
+        <strong style="font-size:14px;">Your name &amp; PIN</strong>
+      </div>
+      <div class="row" style="justify-content:space-between;gap:14px;flex-wrap:wrap;">
+        <div class="sub" id="deviceUserNameText" style="margin:0;font-size:12px;flex:1 1 220px;">Your name &amp; PIN: not set — the same name you use across every UTZLINE app on this device.</div>
+        <select class="identity-select" id="identitySelector" aria-label="Your name"></select>
+      </div>
     </div>
     <div class="card">
       <button class="btn" id="newProjectBtn">+ New Project</button>
@@ -740,6 +771,43 @@
   </div>
 </div>
 
+<!-- ---- shared name+PIN identity: numberpad + "show me in" modals (2026-09-23,
+     copied from UTZLINE Delivery ITP's own tested implementation -- see the
+     JS section of the same name for the full design/rationale). Andrew's
+     instruction, verbatim: "implement the username as per the delivery itp
+     throughout the entire system, but instead of it opening a popup, the
+     button is the selector, when you pick a name it opens a numberpad to
+     input the pin (4 digit pin)." The <select id="identitySelector"> above
+     (on the Projects screen) IS the button -- choosing a name opens ONLY
+     this numberpad (a proper on-screen 0-9 keypad, not a text field) to
+     enter/verify the 4-digit PIN. Adding a brand new name still needs its
+     name typed as text (showPromptDialog, this app's own existing generic
+     prompt) and its "show me in" app list ticked (the small dedicated modal
+     below) -- only the PIN itself is numberpad-only. -->
+<div class="modal-backdrop" id="numberpadBackdrop" hidden>
+  <div class="modal" style="max-width:300px;text-align:center;">
+    <h2 id="numberpadTitle">Enter PIN</h2>
+    <p class="sub" id="numberpadSubtitle" style="margin:0 0 14px;font-size:12px;"></p>
+    <div id="numberpadDots" style="display:flex;justify-content:center;gap:14px;margin-bottom:18px;"></div>
+    <div id="numberpadGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:16px;"></div>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="btn secondary" id="numberpadCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="identityAppChecksBackdrop" hidden>
+  <div class="modal" style="max-width:320px;">
+    <h2>Show me in</h2>
+    <p class="sub" style="font-size:12px;">Reference only, for Andrew's own admin use -- doesn't restrict which app this name can actually sign in on.</p>
+    <div id="identityAppChecksList" style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px;font-size:13px;"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="identityAppChecksCancel">Cancel</button>
+      <button class="btn" id="identityAppChecksSave">Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -789,6 +857,445 @@
         rq.onsuccess = function(){ res(rq.result); };
         rq.onerror = function(){ rej(rq.error); };
       });
+    });
+  }
+
+  /* ============================== shared name+PIN identity (2026-09-23) ==============================
+     Andrew, verbatim: "implement the username as per the delivery itp
+     throughout the entire system, but instead of it opening a popup, the
+     button is the selector, when you pick a name it opens a numberpad to
+     input the pin (4 digit pin)." Copied from UTZLINE Delivery ITP's own
+     (tested, working) implementation of this exact pattern -- this app had
+     no identity/name feature of its own before this, so everything in this
+     section and the CSV registry section right after it is new.
+
+     A per-device "who's using this device" pointer, shared with EVERY
+     UTZLINE app on this origin via one small IndexedDB database
+     ("utzline-identity") -- deliberately separate from this app's own
+     "utzline-projects-db" session store above. Same DB/store/key names as
+     every sibling app, since IndexedDB is scoped per-ORIGIN, not per-page:
+     a name set in Site Measure/Viewer/either ITP app shows up here too, and
+     vice versa. */
+  var IDENTITY_DB_NAME = "utzline-identity", IDENTITY_STORE = "kv", IDENTITY_KEY = "deviceUserName";
+  var deviceUserName = "";
+  function identityDbOpen(){
+    return new Promise(function(resolve, reject){
+      var req = indexedDB.open(IDENTITY_DB_NAME, 1);
+      req.onupgradeneeded = function(){ req.result.createObjectStore(IDENTITY_STORE); };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  }
+  function getDeviceUserName(){
+    return identityDbOpen().then(function(db){
+      return new Promise(function(resolve, reject){
+        var tx = db.transaction(IDENTITY_STORE, "readonly");
+        var req = tx.objectStore(IDENTITY_STORE).get(IDENTITY_KEY);
+        req.onsuccess = function(){ resolve(req.result || ""); };
+        req.onerror = function(){ reject(req.error); };
+      });
+    });
+  }
+  function setDeviceUserName(name){
+    name = String(name || "").trim();
+    return identityDbOpen().then(function(db){
+      return new Promise(function(resolve, reject){
+        var tx = db.transaction(IDENTITY_STORE, "readwrite");
+        tx.objectStore(IDENTITY_STORE).put(name, IDENTITY_KEY);
+        tx.oncomplete = function(){ resolve(name); };
+        tx.onerror = function(){ reject(tx.error); };
+      });
+    });
+  }
+  // This app doesn't stamp deviceUserName into any saved file yet (unlike
+  // Delivery ITP's "savedBy" on a completed checklist) -- it's still worth
+  // having here so a name set in this app is recognised everywhere else in
+  // the family, and vice versa. The hint text reflects that honestly: it
+  // names the shared cross-app identity, not a Projects-specific
+  // attribution that doesn't exist yet.
+  function updateDeviceUserNameText(){
+    var el = document.getElementById("deviceUserNameText");
+    if (!el) return;
+    el.textContent = deviceUserName
+      ? "Your name & PIN: " + deviceUserName + " — the same name you use across every UTZLINE app on this device."
+      : "Your name & PIN: not set — the same name you use across every UTZLINE app on this device.";
+  }
+  function loadDeviceUserName(){
+    return getDeviceUserName().then(function(name){
+      deviceUserName = name || "";
+      updateDeviceUserNameText();
+      populateIdentitySelector(); // in case this resolves after the root folder (order isn't guaranteed -- both are fired at boot)
+    }).catch(function(){
+      deviceUserName = "";
+      updateDeviceUserNameText();
+    });
+  }
+
+  /* ---- shared name+PIN registry: <Projects root>/utzline-users.csv ----
+     PROJECTS-ROOT level (a sibling of every individual Project folder, not
+     inside one) -- the SAME file every UTZLINE app in the family reads and
+     writes, via projectsRootHandle (this app's own name for the folder
+     handle Delivery ITP calls state.rootHandle). Plain CSV so Andrew can
+     open it directly (add a name/PIN by hand, edit a PIN, delete a row to
+     free a name for reuse) without touching any project data. ShowInApps is
+     a semicolon-separated list of app codes, purely a directory field for
+     Andrew's own admin use -- it never gates or restricts anything here.
+     No in-app "forgot PIN" flow, by design -- recovery is file-manager-only. */
+  var USERS_CSV_NAME = "utzline-users.csv";
+  var USERS_CSV_HEADER = ["Name", "PIN", "ShowInApps"];
+  // Fixed set Andrew specified, in this exact order for the checkbox list.
+  var APP_CODES = [
+    ["SiteMeasure", "Site Measure"],
+    ["Viewer", "Viewer"],
+    ["InstallITP", "Install ITP"],
+    ["ManufactureITP", "Manufacture ITP"],
+    ["DeliveryITP", "Delivery ITP"],
+    ["Projects", "Projects"],
+    ["Scheduler", "Scheduler"]
+  ];
+  // Small, defensive CSV parse/stringify pair (RFC 4180 minimal subset) --
+  // values here are short and simple (a name, a few digits, a short code
+  // list) but this still handles a quote/comma/newline inside a field
+  // rather than assuming it'll never happen.
+  function csvEscapeField(v){
+    v = String(v == null ? "" : v);
+    return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+  function csvStringifyRows(rows){
+    return rows.map(function(r){ return r.map(csvEscapeField).join(","); }).join("\r\n") + "\r\n";
+  }
+  function csvParseText(text){
+    var rows = [], row = [], field = "", inQuotes = false;
+    var i = 0, len = text.length;
+    while (i < len){
+      var c = text[i];
+      if (inQuotes){
+        if (c === '"'){
+          if (text[i + 1] === '"'){ field += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        field += c; i++; continue;
+      }
+      if (c === '"'){ inQuotes = true; i++; continue; }
+      if (c === ','){ row.push(field); field = ""; i++; continue; }
+      if (c === '\r'){ i++; continue; }
+      if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+      field += c; i++;
+    }
+    if (field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+    return rows;
+  }
+  // Always re-reads the live file -- never trusts a stale in-memory copy,
+  // since another device or another app could have changed it since this
+  // page loaded. Resolves to [] both when the file doesn't exist yet and
+  // when it's empty/unparseable, so callers never need a separate
+  // "not found" branch.
+  function readUsersCsv(){
+    if (!projectsRootHandle) return Promise.resolve([]);
+    return projectsRootHandle.getFileHandle(USERS_CSV_NAME, { create: false }).then(function(fh){
+      return fh.getFile();
+    }).then(function(file){ return file.text(); }).then(function(text){
+      var rows = csvParseText(text);
+      if (!rows.length) return [];
+      var start = (rows[0] && String(rows[0][0] || "").trim().toLowerCase() === "name") ? 1 : 0;
+      var out = [];
+      for (var i = start; i < rows.length; i++){
+        var r = rows[i];
+        if (!r || !r.length || (r.length === 1 && r[0] === "")) continue; // trailing blank line
+        out.push({ name: r[0] || "", pin: r[1] || "", showInApps: r[2] || "" });
+      }
+      return out;
+    }, function(){ return []; }); // no file yet -- not an error
+  }
+  function writeUsersCsv(rows){
+    var lines = [USERS_CSV_HEADER];
+    rows.forEach(function(r){ lines.push([r.name, r.pin, r.showInApps]); });
+    var text = csvStringifyRows(lines);
+    return projectsRootHandle.getFileHandle(USERS_CSV_NAME, { create: true }).then(function(fh){
+      return fh.createWritable();
+    }).then(function(w){ return w.write(text).then(function(){ return w.close(); }); });
+  }
+  function findUserRowCI(rows, name){
+    var n = String(name || "").trim().toLowerCase();
+    for (var i = 0; i < rows.length; i++){
+      if (String(rows[i].name || "").trim().toLowerCase() === n) return rows[i];
+    }
+    return null;
+  }
+
+  /* ---- numberpad (4-digit PIN entry) ----
+     A small, self-contained on-screen keypad modal. openNumberpad(opts)
+     returns a Promise that resolves with the 4-digit string once entered
+     (and, if opts.verify is given, only once verify(pin) resolves truthy --
+     a wrong PIN shakes the dialog and clears it for another attempt rather
+     than closing), or resolves null if the user cancels. Used for every PIN
+     step: verifying an existing name's PIN, and choosing/confirming a new
+     one -- entering a NAME (text) still goes through showPromptDialog, only
+     the PIN itself is numberpad-only, per Andrew's own explicit split. */
+  var numberpadBackdrop = document.getElementById("numberpadBackdrop");
+  var numberpadTitleEl = document.getElementById("numberpadTitle");
+  var numberpadSubtitleEl = document.getElementById("numberpadSubtitle");
+  var numberpadDotsEl = document.getElementById("numberpadDots");
+  var numberpadGridEl = document.getElementById("numberpadGrid");
+  var numberpadCancelBtn = document.getElementById("numberpadCancel");
+  var NUMBERPAD_LENGTH = 4;
+  var numberpadState = null; // { entered:"", verify:fn|null, resolve:fn, busy:bool }
+  function renderNumberpadDots(){
+    numberpadDotsEl.innerHTML = "";
+    for (var i = 0; i < NUMBERPAD_LENGTH; i++){
+      var dot = document.createElement("div");
+      var filled = numberpadState && i < numberpadState.entered.length;
+      dot.style.cssText = "width:14px; height:14px; border-radius:50%; border:2px solid var(--border); background:" + (filled ? "var(--accent)" : "transparent") + "; transition:background .1s;";
+      numberpadDotsEl.appendChild(dot);
+    }
+  }
+  function numberpadShakeAndClear(){
+    var box = numberpadBackdrop.querySelector(".modal");
+    box.classList.remove("numberpad-shake");
+    void box.offsetWidth; // restart the CSS animation
+    box.classList.add("numberpad-shake");
+    showToast("Incorrect PIN — try again.");
+    setTimeout(function(){
+      if (numberpadState){ numberpadState.entered = ""; numberpadState.busy = false; renderNumberpadDots(); }
+    }, 260);
+  }
+  function finishNumberpad(pin){
+    numberpadBackdrop.hidden = true;
+    var st = numberpadState; numberpadState = null;
+    if (st && st.resolve) st.resolve(pin);
+  }
+  function cancelNumberpad(){
+    if (!numberpadState) return;
+    numberpadBackdrop.hidden = true;
+    var st = numberpadState; numberpadState = null;
+    if (st && st.resolve) st.resolve(null);
+  }
+  function numberpadPressDigit(d){
+    if (!numberpadState || numberpadState.busy || numberpadState.entered.length >= NUMBERPAD_LENGTH) return;
+    numberpadState.entered += d;
+    renderNumberpadDots();
+    if (numberpadState.entered.length === NUMBERPAD_LENGTH){
+      var pin = numberpadState.entered;
+      var verify = numberpadState.verify;
+      if (!verify){ finishNumberpad(pin); return; }
+      numberpadState.busy = true;
+      Promise.resolve(verify(pin)).then(function(ok){
+        if (!numberpadState) return; // cancelled while verifying
+        if (ok) finishNumberpad(pin);
+        else numberpadShakeAndClear();
+      }, function(){
+        if (numberpadState) numberpadShakeAndClear();
+      });
+    }
+  }
+  function numberpadBackspace(){
+    if (!numberpadState || numberpadState.busy || !numberpadState.entered.length) return;
+    numberpadState.entered = numberpadState.entered.slice(0, -1);
+    renderNumberpadDots();
+  }
+  numberpadCancelBtn.addEventListener("click", cancelNumberpad);
+  numberpadBackdrop.addEventListener("click", function(e){ if (e.target === numberpadBackdrop) cancelNumberpad(); });
+  document.addEventListener("keydown", function(e){
+    if (!numberpadState || numberpadBackdrop.hidden) return;
+    if (e.key >= "0" && e.key <= "9"){ e.preventDefault(); numberpadPressDigit(e.key); }
+    else if (e.key === "Backspace"){ e.preventDefault(); numberpadBackspace(); }
+    else if (e.key === "Escape"){ e.preventDefault(); cancelNumberpad(); }
+  });
+  (function buildNumberpadGrid(){
+    var layout = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "back"];
+    layout.forEach(function(key){
+      var cell = document.createElement("button");
+      cell.type = "button";
+      cell.style.cssText = "font-size:18px; padding:12px 0;";
+      if (key === ""){
+        cell.style.visibility = "hidden"; cell.disabled = true;
+      } else if (key === "back"){
+        cell.className = "btn secondary"; cell.textContent = "⌫"; cell.setAttribute("aria-label", "Backspace");
+        cell.addEventListener("click", numberpadBackspace);
+      } else {
+        cell.className = "btn secondary"; cell.textContent = key;
+        cell.addEventListener("click", function(){ numberpadPressDigit(key); });
+      }
+      numberpadGridEl.appendChild(cell);
+    });
+  })();
+  function openNumberpad(opts){
+    opts = opts || {};
+    numberpadTitleEl.textContent = opts.title || "Enter PIN";
+    numberpadSubtitleEl.textContent = opts.subtitle || "";
+    numberpadSubtitleEl.style.display = opts.subtitle ? "" : "none";
+    numberpadState = { entered: "", verify: opts.verify || null, busy: false };
+    renderNumberpadDots();
+    numberpadBackdrop.hidden = false;
+    return new Promise(function(resolve){ numberpadState.resolve = resolve; });
+  }
+
+  /* ---- "show me in" app-list modal (checkboxes only) ---- */
+  var identityAppChecksBackdrop = document.getElementById("identityAppChecksBackdrop");
+  var identityAppChecksList = document.getElementById("identityAppChecksList");
+  var identityAppChecksSaveBtn = document.getElementById("identityAppChecksSave");
+  var identityAppChecksCancelBtn = document.getElementById("identityAppChecksCancel");
+  var identityAppChecksResolve = null;
+  function openAppChecksModal(){
+    identityAppChecksList.innerHTML = "";
+    APP_CODES.forEach(function(pair){
+      var code = pair[0], label = pair[1];
+      var row = document.createElement("label");
+      row.style.cssText = "display:flex; align-items:center; gap:7px;";
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.value = code;
+      if (code === "Projects") cb.checked = true; // pre-checked: the app they're setting this up from
+      row.appendChild(cb);
+      row.appendChild(document.createTextNode(label));
+      identityAppChecksList.appendChild(row);
+    });
+    identityAppChecksBackdrop.hidden = false;
+    return new Promise(function(resolve){ identityAppChecksResolve = resolve; });
+  }
+  function closeAppChecksModal(value){
+    identityAppChecksBackdrop.hidden = true;
+    var r = identityAppChecksResolve; identityAppChecksResolve = null;
+    if (r) r(value);
+  }
+  identityAppChecksSaveBtn.addEventListener("click", function(){
+    var checked = Array.prototype.slice.call(identityAppChecksList.querySelectorAll("input[type=checkbox]:checked")).map(function(cb){ return cb.value; });
+    closeAppChecksModal(checked);
+  });
+  identityAppChecksCancelBtn.addEventListener("click", function(){ closeAppChecksModal(null); });
+  identityAppChecksBackdrop.addEventListener("click", function(e){ if (e.target === identityAppChecksBackdrop) closeAppChecksModal(null); });
+
+  /* ---- name sanitizing ----
+     This app's own sanitizeFileBase() is filename-oriented (falls back to
+     "plan", caps at 120 chars) -- not a fit for a person's name. Minimal
+     equivalent, same hostile-character-stripping rule as every sibling
+     app's own sanitizeUserName(). */
+  function sanitizeUserName(name){
+    var cleaned = String(name || "")
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
+      .trim()
+      .replace(/\s+/g, " ");
+    return cleaned.slice(0, 60);
+  }
+
+  /* ---- the identity selector itself: the <select> IS the button ----
+     Andrew, verbatim (2026-09-23): "implement the username as per the
+     delivery itp throughout the entire system, but instead of it opening a
+     popup, the button is the selector, when you pick a name it opens a
+     numberpad to input the pin (4 digit pin)." Picking a name from this
+     dropdown directly triggers the numberpad; picking "+ Add a new
+     name..." starts the new-name flow (name via this app's own
+     showPromptDialog, PIN chosen+confirmed via two numberpad rounds, then
+     the "show me in" list above). */
+  var identitySelector = document.getElementById("identitySelector");
+  var IDENTITY_NEW_VALUE = "__new__";
+  var IDENTITY_PLACEHOLDER_VALUE = "__none__";
+
+  function populateIdentitySelector(){
+    if (!identitySelector) return Promise.resolve();
+    return readUsersCsv().then(function(rows){
+      var names = rows.map(function(r){ return r.name; }).filter(Boolean);
+      names.sort(function(a, b){ return a.toLowerCase().localeCompare(b.toLowerCase()); });
+      identitySelector.innerHTML = "";
+      if (!deviceUserName || names.indexOf(deviceUserName) === -1){
+        var placeholder = document.createElement("option");
+        placeholder.value = IDENTITY_PLACEHOLDER_VALUE;
+        placeholder.textContent = "Set your name";
+        identitySelector.appendChild(placeholder);
+      }
+      names.forEach(function(n){
+        var opt = document.createElement("option");
+        opt.value = n; opt.textContent = n;
+        identitySelector.appendChild(opt);
+      });
+      var addOpt = document.createElement("option");
+      addOpt.value = IDENTITY_NEW_VALUE; addOpt.textContent = "+ Add a new name…";
+      identitySelector.appendChild(addOpt);
+      identitySelector.value = (deviceUserName && names.indexOf(deviceUserName) !== -1) ? deviceUserName : IDENTITY_PLACEHOLDER_VALUE;
+    }, function(){ /* CSV not readable yet (no root folder chosen) -- leave it empty */ });
+  }
+  function revertIdentitySelector(previousValue){
+    if (!identitySelector) return;
+    var hasOpt = Array.prototype.some.call(identitySelector.options, function(o){ return o.value === previousValue; });
+    identitySelector.value = hasOpt ? previousValue : IDENTITY_PLACEHOLDER_VALUE;
+  }
+  function beginPinVerifyFlow(name, previousValue){
+    return openNumberpad({
+      title: "Enter PIN",
+      subtitle: "for “" + name + "”",
+      verify: function(pin){
+        return readUsersCsv().then(function(rows){
+          var row = findUserRowCI(rows, name);
+          return !!(row && row.pin === pin);
+        });
+      }
+    }).then(function(pin){
+      if (pin === null){ revertIdentitySelector(previousValue); return; }
+      return setDeviceUserName(name).then(function(saved){
+        deviceUserName = saved;
+        updateDeviceUserNameText();
+        showToast("This device is now set to “" + saved + "”.");
+      });
+    }).catch(function(err){
+      console.error("Checking PIN failed:", err);
+      showToast("Couldn't read utzline-users.csv.");
+      revertIdentitySelector(previousValue);
+    });
+  }
+  function beginAddNewIdentityFlow(previousValue){
+    return showPromptDialog("New name", "").then(function(rawName){
+      if (rawName === null){ revertIdentitySelector(previousValue); return; }
+      var newName = sanitizeUserName(rawName);
+      if (!newName){ showToast("Enter a name first."); revertIdentitySelector(previousValue); return; }
+      return readUsersCsv().then(function(rows){
+        if (findUserRowCI(rows, newName)){
+          showToast("“" + newName + "” already exists — pick it from the list and enter its PIN instead.");
+          revertIdentitySelector(previousValue);
+          return;
+        }
+        return openNumberpad({ title: "Choose a 4-digit PIN", subtitle: "for “" + newName + "”" }).then(function(pin1){
+          if (pin1 === null){ revertIdentitySelector(previousValue); return; }
+          return openNumberpad({
+            title: "Confirm PIN",
+            subtitle: "for “" + newName + "”",
+            verify: function(p){ return p === pin1; }
+          }).then(function(pin2){
+            if (pin2 === null){ revertIdentitySelector(previousValue); return; }
+            return openAppChecksModal().then(function(checked){
+              if (checked === null){ revertIdentitySelector(previousValue); return; }
+              return readUsersCsv().then(function(freshRows){
+                if (findUserRowCI(freshRows, newName)){
+                  showToast("“" + newName + "” already exists now — try again and pick it from the list.");
+                  revertIdentitySelector(previousValue);
+                  return;
+                }
+                freshRows.push({ name: newName, pin: pin1, showInApps: checked.join(";") });
+                return writeUsersCsv(freshRows).then(function(){
+                  return setDeviceUserName(newName);
+                }).then(function(saved){
+                  deviceUserName = saved;
+                  updateDeviceUserNameText();
+                  return populateIdentitySelector();
+                }).then(function(){
+                  showToast("This device is now set to “" + deviceUserName + "”.");
+                });
+              });
+            });
+          });
+        });
+      });
+    }).catch(function(err){
+      console.error("Adding a new name/PIN failed:", err);
+      showToast("Couldn't save that to utzline-users.csv.");
+      revertIdentitySelector(previousValue);
+    });
+  }
+  if (identitySelector){
+    identitySelector.addEventListener("change", function(){
+      var picked = identitySelector.value;
+      var previous = (deviceUserName && Array.prototype.some.call(identitySelector.options, function(o){ return o.value === deviceUserName; })) ? deviceUserName : IDENTITY_PLACEHOLDER_VALUE;
+      if (picked === IDENTITY_PLACEHOLDER_VALUE) return; // re-selecting the placeholder itself -- no-op
+      if (picked === IDENTITY_NEW_VALUE) beginAddNewIdentityFlow(previous);
+      else if (picked !== deviceUserName) beginPinVerifyFlow(picked, previous);
     });
   }
 
@@ -3198,6 +3705,7 @@
   var projectListEmpty = document.getElementById("projectListEmpty");
 
   function populateProjectList(){
+    populateIdentitySelector(); // needs projectsRootHandle to read utzline-users.csv -- best-effort, never blocks
     return listExistingProjects(projectsRootHandle).then(function(names){
       projectListItems.innerHTML = "";
       projectListEmpty.hidden = names.length > 0;
@@ -3437,6 +3945,7 @@
       showScreen("setup");
       return;
     }
+    loadDeviceUserName(); // shared device identity -- never blocks boot
     idbGet("projectsRootHandle").then(function(handle){
       if (!handle){ showScreen("setup"); return; }
       projectsRootHandle = handle; projectsRootName = handle.name;

@@ -245,7 +245,7 @@
 // resolveJoineryItemPageKey does -- joineryItemKey() here always uses the
 // plain, unsuffixed key, correct for the normal (non-colliding) case.
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v17";
+var CACHE_NAME = "utzline-projects-cache-v18";
 
 var PRECACHE_URLS = [
   "./",
