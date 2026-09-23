@@ -1,6 +1,19 @@
 # UTZLINE Projects — installable app
 
-**Current version: v7** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships.)
+**Current version: v8** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships.)
+
+**v8 (2026-09-23):** added a required **Work order #** field to the Add
+Joinery Item dialog, per Andrew's request ("Every single joinery item gets
+its own work order #also. That we put in manually when as part of the
+initial add joinery step"). Like every other field on that dialog
+(Level/Room/Joinery ID/Description), it's set once at creation and has no
+edit affordance afterward — no joinery item field anywhere in this app
+family does. It's required going forward for every new item; an item
+created before this field existed simply shows "—" wherever it's
+displayed, with no retroactive backfill. It's stored on the item record as
+`workOrderNo`, shown on the Joinery Item page and as a new sortable/
+searchable column in the Joinery Register, and the same UTZLINE Scheduler
+app reads it (display-only) for its own tables and search.
 
 This folder is the self-contained, installable **UTZLINE Projects** app — the
 **master application** in the UTZLINE family. It's where a project, its
@@ -80,34 +93,34 @@ is being built against.
    by dragging, zoom by pinch/scroll wheel, no drawing tools (that stays
    Site Measure's own job — this is a marker-drop screen, not a canvas).
    Tapping an empty spot on the plan opens a dialog to pick an existing
-   room or create a new one, then enter a Joinery ID and description.
-   Creating a new room uses the same `ensureWorkFolders` call as every
-   other creation flow here. The marker itself is added to the level's own
-   save file's `objects` array in exactly Site Measure's own
-   `makeRoomLink()` shape — the level's existing image data, style, and
-   any other objects are read and preserved untouched, only the new marker
-   is appended — so a level marked up here looks, to Site Measure, exactly
-   like one Site Measure itself would have marked up. Joinery IDs are
-   deduped against siblings already in the same room with the same
-   numbered-suffix convention used everywhere else in this app. The
-   joinery item's own record — `{joineryId, description, level, room,
-   status: "created"}`, Andrew's exact approved shape, no `markerId` — is
-   written to a new project-wide `joinery-items.json` file (see "Where
-   things are saved" below); a marker and its record correlate by matching
-   `(level, room, joineryId)` against the marker's own
-   `(level, roomName, joineryCode)`.
+   room or create a new one, then enter a Joinery ID, description, and
+   (required) work order #. Creating a new room uses the same
+   `ensureWorkFolders` call as every other creation flow here. The marker
+   itself is added to the level's own save file's `objects` array in
+   exactly Site Measure's own `makeRoomLink()` shape — the level's existing
+   image data, style, and any other objects are read and preserved
+   untouched, only the new marker is appended — so a level marked up here
+   looks, to Site Measure, exactly like one Site Measure itself would have
+   marked up. Joinery IDs are deduped against siblings already in the same
+   room with the same numbered-suffix convention used everywhere else in
+   this app. The joinery item's own record — `{joineryId, description,
+   level, room, status: "created", workOrderNo}` — is written to a new
+   project-wide `joinery-items.json` file (see "Where things are saved"
+   below); a marker and its record correlate by matching `(level, room,
+   joineryId)` against the marker's own `(level, roomName, joineryCode)`.
 
 8. **Joinery Register** — a "Joinery Register" button on the level list
    opens a flat table of every joinery item in the current project, pulled
    straight from `joinery-items.json` regardless of which level or room
    each one is on. Filter by level, by status, or search Joinery ID/
-   description; click any column heading to sort by it, click again to
-   reverse. Read-only for now — editing a record's status or description
-   from here is a Joinery Item Pages job (next).
+   description/work order #; click any column heading to sort by it, click
+   again to reverse. Read-only for now — editing a record's status or
+   description from here is a Joinery Item Pages job (next).
 
 9. **Joinery Item Pages** — every joinery item now has its own page:
-   description, level, room, and status, plus a "View on plan" button that
-   opens the level's plan canvas centred on that item's own marker.
+   description, work order #, level, room, and status, plus a "View on
+   plan" button that opens the level's plan canvas centred on that item's
+   own marker.
    Reachable three ways — clicking a row in the Joinery Register, clicking
    a tile in Status Overview, or tapping the item's own marker on the plan
    canvas (which used to just name it in a toast; now it opens the page).
@@ -151,14 +164,17 @@ Info UI** — not gradually (see the data standard's decision #12).
                                    three keys too, until the cutover)
     joinery-items.json          <- flat array of every joinery item record
                                    in this project: {joineryId, description,
-                                   level, room, status} -- no markerId; a
-                                   record correlates to its marker by
-                                   matching (level, room, joineryId) against
-                                   the marker's own (level, roomName,
-                                   joineryCode). Storage location is this
-                                   app's own choice -- Andrew's approved
-                                   answer specified the record shape, not
-                                   where to keep it.
+                                   level, room, status, workOrderNo} -- no
+                                   markerId; a record correlates to its
+                                   marker by matching (level, room,
+                                   joineryId) against the marker's own
+                                   (level, roomName, joineryCode). Storage
+                                   location is this app's own choice --
+                                   Andrew's approved answer specified the
+                                   record shape, not where to keep it.
+                                   workOrderNo added 2026-09-23, required
+                                   for new items going forward; items
+                                   created before then simply lack the key.
     <Level>/
       saves/, pdfs/, backup/   <- this level's own floorplan + objects
       <Room>/

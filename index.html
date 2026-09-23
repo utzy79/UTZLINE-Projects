@@ -368,6 +368,7 @@
   .register-table tbody tr:hover{ background: var(--panel2); }
   .status-label{ display: inline-flex; align-items: center; gap: 6px; }
   .status-label .status-icon{ font-size: 13px; }
+  .muted-cell{ color: var(--muted2); }
 
   /* ---- Status-history hover popup (2026-09-23) ---- */
   .status-history-pop{
@@ -551,7 +552,7 @@
         </div>
         <div class="field" style="flex:2 1 220px; margin:0;">
           <label for="registerSearchInput">Search</label>
-          <input type="text" id="registerSearchInput" placeholder="Joinery ID or description…">
+          <input type="text" id="registerSearchInput" placeholder="Joinery ID, description, or work order #…">
         </div>
       </div>
     </div>
@@ -563,6 +564,7 @@
             <th data-col="room">Room</th>
             <th data-col="joineryId">Joinery ID</th>
             <th data-col="description">Description</th>
+            <th data-col="workOrderNo">Work order #</th>
             <th data-col="status">Status</th>
           </tr>
         </thead>
@@ -691,6 +693,7 @@
     </div>
     <div class="field"><label for="addItemJoineryIdInput">Joinery ID</label><input type="text" id="addItemJoineryIdInput"></div>
     <div class="field"><label for="addItemDescriptionInput">Description</label><input type="text" id="addItemDescriptionInput"></div>
+    <div class="field"><label for="addItemWorkOrderInput">Work order #</label><input type="text" id="addItemWorkOrderInput"></div>
     <div class="modal-actions">
       <button class="btn secondary" id="addItemCancelBtn">Cancel</button>
       <button class="btn" id="addItemSaveBtn">Add</button>
@@ -2326,6 +2329,7 @@
   var addItemNewRoomInput = document.getElementById("addItemNewRoomInput");
   var addItemJoineryIdInput = document.getElementById("addItemJoineryIdInput");
   var addItemDescriptionInput = document.getElementById("addItemDescriptionInput");
+  var addItemWorkOrderInput = document.getElementById("addItemWorkOrderInput");
   var addItemSaveBtn = document.getElementById("addItemSaveBtn");
   var addItemCancelBtn = document.getElementById("addItemCancelBtn");
   var ADD_ITEM_NEW_ROOM_VALUE = "__new__";
@@ -2350,6 +2354,7 @@
       addItemNewRoomInput.value = "";
       addItemJoineryIdInput.value = "";
       addItemDescriptionInput.value = "";
+      addItemWorkOrderInput.value = "";
       updateAddItemNewRoomVisibility();
       addItemBackdrop.hidden = false;
     });
@@ -2363,6 +2368,17 @@
     var worldPt = addItemPendingWorldPoint;
     var joineryIdRaw = addItemJoineryIdInput.value.trim();
     var description = addItemDescriptionInput.value.trim();
+    var workOrderNo = addItemWorkOrderInput.value.trim();
+    // Andrew (2026-09-23): "Every single joinery item gets its own work
+    // order #also. That we put in manually when as part of the initial add
+    // joinery step" -- required going forward for every NEW item; an item
+    // created before this field existed simply has none and shows as
+    // "—" everywhere it's displayed (same disclosed pattern as any other
+    // field added after the fact in this ecosystem). Like every other field
+    // on this dialog (Level/Room/Joinery ID/Description), it's set once
+    // here and is not editable afterward -- no joinery item anywhere in
+    // this family has an edit affordance post-creation.
+    if (!workOrderNo){ showToast("Enter a work order # for this item."); return; }
     // Everything about "where does this room/marker live" now goes
     // through this Level's own Project Saves/Floor Plans/ file (2026-09-22
     // cutover, corrected same day to be a human-browsable folder branch
@@ -2427,7 +2443,7 @@
 
       return writeLevelFile(activeProjectHandle, activeProjectName, activeLevelName, entry).then(function(){
         return addJoineryItem(activeProjectHandle, {
-          joineryId: finalCode, description: description, level: activeLevelName, room: finalRoomName, status: "created"
+          joineryId: finalCode, description: description, level: activeLevelName, room: finalRoomName, status: "created", workOrderNo: workOrderNo
         });
       }).then(function(){
         planRenderMarkers();
@@ -2546,7 +2562,7 @@
     if (registerStatusFilter.value !== "" && registerStatusFilter.selectedIndex >= 0 && registerItemStatusKey(item) !== registerStatusFilter.value) return false;
     var q = registerSearchInput.value.trim().toLowerCase();
     if (q){
-      var hay = ((item.joineryId || "") + " " + (item.description || "")).toLowerCase();
+      var hay = ((item.joineryId || "") + " " + (item.description || "") + " " + (item.workOrderNo || "")).toLowerCase();
       if (hay.indexOf(q) === -1) return false;
     }
     return true;
@@ -2612,6 +2628,7 @@
         "<td>" + escapeHtml(item.room) + "</td>" +
         "<td>" + escapeHtml(item.joineryId) + "</td>" +
         "<td>" + escapeHtml(item.description) + "</td>" +
+        "<td>" + (item.workOrderNo ? escapeHtml(item.workOrderNo) : "<span class=\"muted-cell\">—</span>") + "</td>" +
         "<td class=\"status-cell\">" + statusLabelHtml(statusKey) + "</td>";
       tr.addEventListener("click", function(e){
         if (e.target.closest(".status-cell")) return; // the status cell handles its own tap (history), not row navigation
@@ -2816,6 +2833,7 @@
     var statusKey = registerAllItems.length ? registerItemStatusKey(item) : ""; // registerStatusList may be empty if opened straight from a marker tap, not the Register -- see below
     joineryItemMetaGrid.innerHTML =
       "<dt>Description</dt><dd>" + escapeHtml(item.description || "(none)") + "</dd>" +
+      "<dt>Work order #</dt><dd>" + escapeHtml(item.workOrderNo || "—") + "</dd>" +
       "<dt>Level</dt><dd>" + escapeHtml(item.level) + "</dd>" +
       "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
       "<dt>Status</dt><dd>" + statusLabelHtml(statusKey) + "</dd>";
