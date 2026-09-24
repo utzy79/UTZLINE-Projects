@@ -387,8 +387,65 @@
 // hand-off point for the brand-new sibling app UTZLINE Solid Surface
 // Schedule, which reads it to build its own per-item schedule; this app
 // remains the sole writer of joinery-items.json, same as always.)
+//
+// (v23 / README v18 / cache v26, 2026-09-24: Andrew, verbatim: "in utzline
+// projects, need option to edit joinery item (if wrong information put in)
+// this will need a pin to change for the current user. and changes will be
+// traceable." Two changes, shipped together:
+//
+// 1) The full shared name+PIN identity system this app already had (added
+// v10, unchanged in shape) is now load-bearing rather than purely
+// informational -- it's what "the current user" in Andrew's request above
+// actually means. No new registry, database, or numberpad was built for
+// this: same utzline-identity IndexedDB device pointer, same
+// utzline-users.csv at the Projects-root level, same on-screen numberpad,
+// same "the button is the selector" #identitySelector pattern already
+// documented under v10. The identity-selector machinery
+// (populateIdentitySelector/beginPinVerifyFlow/beginAddNewIdentityFlow) was
+// generalised to bind to ANY <select> element, not just the Settings
+// screen's own one, so the new Edit joinery item dialog (below) can carry
+// its own copy of the exact same "sign in" flow without duplicating it.
+//
+// 2) A real Edit joinery item flow on the Joinery Item page, replacing BOTH
+// the old one-way "Add work order #" backfill prompt (which only ever
+// filled in a MISSING value and could never change an existing one) and the
+// old always-live, no-attribution "Has Solid Surface" checkbox. Both are
+// gone; a single "Edit item" button now opens a dialog covering exactly the
+// three fields Andrew confirmed are editable -- Description, Work order #,
+// Has Solid Surface -- with Level/Room/Joinery ID shown dimmed for context
+// only, never editable (every sibling file in this family -- joinery-
+// status.json, joinery-schedule.json, machining-flags.json, solid-surface-
+// schedule.json, rework records -- is keyed off that exact (level, room,
+// joineryId) triple; re-keying all of them safely is out of scope, so a
+// wrong one means delete-and-recreate the item instead). Saving requires
+// TWO things, not one: the device must already be signed in (via the
+// identity system above -- the dialog's own selector prompts for this
+// inline if it isn't), AND that person's PIN must be re-entered on the
+// on-screen numberpad at the exact moment of saving -- being signed in on
+// the device alone is deliberately not enough ("need a pin to change for
+// the current user"). A cancelled or wrong PIN rejects the whole edit with
+// nothing written, same shake-and-retry numberpad UX as every other PIN
+// step in this app family. A save with no actual changes (dialog opened
+// and closed, or reopened and re-saved with identical values) skips the
+// PIN step and the write entirely -- no dialog round-trip should be able to
+// pollute the log with a no-op entry.
+//
+// Traceability: a successful edit appends ONE entry to a new editHistory[]
+// array on that joinery-items.json record -- `{ at: <ISO timestamp>,
+// by: <confirmed signed-in name>, changes: [{ field, from, to }, ...] }` --
+// covering every field actually changed in that one save (a batch edit of
+// e.g. both Description and Work order # together is one history event
+// with two `changes` entries, not two separate events); a field left
+// unchanged is never included. This mirrors joinery-status.json's own
+// established `history[]` per-item convention, just scoped to this app's
+// own record. A new "Edit history" card on the Joinery Item page lists
+// every past edit, newest first, date/time + who + old -> new per field
+// (reusing this page's existing .doc-row-style list convention, not the
+// Register's hover popup, since this lives on a dedicated page rather than
+// a table cell); an item with no editHistory yet shows a plain "No edits
+// yet" line, same empty-state convention as every other card here.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v25";
+var CACHE_NAME = "utzline-projects-cache-v26";
 
 var PRECACHE_URLS = [
   "./",
