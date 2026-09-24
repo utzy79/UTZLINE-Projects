@@ -2776,15 +2776,170 @@
       default: return "";
     }
   }
-  function readJoineryStatuses(projectHandle){
-    if (!projectHandle) return Promise.resolve([]);
+  /* ---- joinery-status.json v2: event-sourced storage (v19, 2026-09-24) ----
+     This app is strictly READ-ONLY against joinery-status.json (Site
+     Measure's own "Mark as check measured"/job notes and the three ITP
+     apps/Machine Schedule write it -- see this section's own top-of-file
+     comment). Ported byte-for-byte from source.html's own identical
+     rewrite -- see that file's "joinery-status.json v2" comment (right
+     above its own readJoineryStatuses) for the FULL design/reasoning.
+     Short version: Andrew is scaling to up to 30 people across five WRITER
+     apps sharing this one file, some via delayed Dropbox sync -- the old
+     shared mutable array had no lock or version check and could silently
+     lose an entire item's status history under real concurrent load.
+     Replaced with one immutable event file per status transition (or
+     job-note signal), under "Project Saves/Joinery Status/<key>/" (key =
+     joineryItemKey -- this app's own name for the same plain, sanitized
+     level+room+joineryId key every sibling app calls joineryItemPageKey) --
+     current status is always computed by folding an item's own events
+     together. This app still only ever READS the result (same return shape
+     as before, so every display/render call site below needs zero
+     changes), but migrateLegacyJoineryStatusIfNeeded is included here too
+     since this app -- which creates and writes far more of a project's own
+     files than any other in the family -- is very often the first one to
+     touch a given project after this update. */
+  function joineryStatusEventsBranchName(){ return "Joinery Status"; }
+  function getJoineryStatusEventsRootDir(projectHandle, create){
+    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: !!create }).then(function(psH){
+      return psH.getDirectoryHandle(joineryStatusEventsBranchName(), { create: !!create });
+    });
+  }
+  function getJoineryStatusItemDir(projectHandle, key, create){
+    return getJoineryStatusEventsRootDir(projectHandle, create).then(function(rootH){
+      return rootH.getDirectoryHandle(key, { create: !!create });
+    });
+  }
+  function statusEventStampFromIso(iso){
+    function p2(n){ return (n < 10 ? "0" : "") + n; }
+    function p3(n){ return (n < 10 ? "00" : n < 100 ? "0" : "") + n; }
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) d = new Date(0);
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + " " +
+      p2(d.getHours()) + "-" + p2(d.getMinutes()) + "-" + p2(d.getSeconds()) + "-" + p3(d.getMilliseconds());
+  }
+  function statusEventFileName(user, stamp, kind){
+    var slug = sanitizeUserName(user) || "Unnamed";
+    return slug + " - " + stamp + " - " + kind + ".json";
+  }
+  function readJsonFileHandle(fh){
+    return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
+      try{ var parsed = JSON.parse(text); return (parsed && typeof parsed === "object") ? parsed : null; }catch(e){ return null; }
+    }, function(){ return null; });
+  }
+  function listJoineryStatusEventsForItem(projectHandle, key){
+    return getJoineryStatusItemDir(projectHandle, key, false).then(function(dirH){
+      if (!dirH || typeof dirH.values !== "function") return [];
+      var handles = [];
+      var iter = dirH.values();
+      function step(){
+        return iter.next().then(function(res){
+          if (res.done) return handles;
+          if (res.value && res.value.kind === "file" && /\.json$/i.test(res.value.name)) handles.push(res.value);
+          return step();
+        });
+      }
+      return step();
+    }, function(){ return []; }).then(function(handles){
+      return Promise.all(handles.map(readJsonFileHandle));
+    }).then(function(events){
+      return events.filter(function(e){ return e && typeof e === "object"; });
+    });
+  }
+  function foldJoineryStatusEvents(events){
+    if (!events || !events.length) return null;
+    var statusEvents = events.filter(function(e){ return e.kind === "status" && e.status; });
+    var jobNoteEvents = events.filter(function(e){ return e.kind === "jobNote"; });
+    if (!statusEvents.length && !jobNoteEvents.length) return null;
+    var any = statusEvents[0] || jobNoteEvents[0];
+    var rec = { level: any.level || "", room: any.room || "", joineryId: any.joineryId || "" };
+    var best = null;
+    statusEvents.forEach(function(e){ if (!best || joineryStatusRank(e.status) > joineryStatusRank(best.status)) best = e; });
+    if (best){
+      rec.status = best.status; rec.updatedAt = best.at; rec.updatedBy = best.by || "";
+      rec.history = statusEvents.slice().sort(function(a, b){
+        return (a.at || "") < (b.at || "") ? -1 : (a.at || "") > (b.at || "") ? 1 : 0;
+      }).map(function(e){ return { status: e.status, at: e.at, by: e.by || "" }; });
+    } else {
+      rec.status = ""; rec.updatedAt = ""; rec.updatedBy = ""; rec.history = [];
+    }
+    var latestJobNote = null;
+    jobNoteEvents.forEach(function(e){ if (!latestJobNote || (e.at || "") > (latestJobNote.at || "")) latestJobNote = e; });
+    if (latestJobNote){ rec.jobNote = true; rec.jobNoteAt = latestJobNote.at; rec.jobNoteBy = latestJobNote.by || ""; }
+    return rec;
+  }
+  function readLegacyJoineryStatusFile(projectHandle){
     return projectHandle.getFileHandle("joinery-status.json", { create: false }).then(function(fh){
       return fh.getFile();
     }).then(function(file){
       return file.text();
     }).then(function(text){
       try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
-    }, function(){ return []; }); // no file yet -- not an error, every item just reads as unset
+    }, function(){ return []; });
+  }
+  function migrateLegacyJoineryStatusIfNeeded(projectHandle){
+    return getJoineryStatusEventsRootDir(projectHandle, false).then(function(){
+      return false;
+    }, function(){
+      return getJoineryStatusEventsRootDir(projectHandle, true).then(function(){
+        return readLegacyJoineryStatusFile(projectHandle);
+      }).then(function(list){
+        var writes = [];
+        list.forEach(function(rec){
+          if (!rec) return;
+          var key = joineryItemKey({ level: rec.level, room: rec.room, joineryId: rec.joineryId });
+          var history = Array.isArray(rec.history) ? rec.history :
+            (rec.status && rec.updatedAt) ? [{ status: rec.status, at: rec.updatedAt, by: rec.updatedBy || "" }] : [];
+          history.forEach(function(h){
+            if (!h || !h.status || !h.at) return;
+            var payload = { kind: "status", level: rec.level || "", room: rec.room || "", joineryId: rec.joineryId || "", status: h.status, by: h.by || "", at: h.at };
+            var stamp = statusEventStampFromIso(h.at);
+            writes.push(getJoineryStatusItemDir(projectHandle, key, true).then(function(dirH){
+              return dirH.getFileHandle(statusEventFileName(h.by, stamp, "status"), { create: true });
+            }).then(function(fh){
+              return fh.createWritable();
+            }).then(function(w){
+              return w.write(JSON.stringify(payload)).then(function(){ return w.close(); });
+            }).catch(function(){}));
+          });
+          if (rec.jobNote){
+            var jnAt = rec.jobNoteAt || rec.updatedAt || new Date(0).toISOString();
+            var jnBy = rec.jobNoteBy || rec.updatedBy || "";
+            var jnPayload = { kind: "jobNote", level: rec.level || "", room: rec.room || "", joineryId: rec.joineryId || "", by: jnBy, at: jnAt };
+            var jnStamp = statusEventStampFromIso(jnAt);
+            writes.push(getJoineryStatusItemDir(projectHandle, key, true).then(function(dirH){
+              return dirH.getFileHandle(statusEventFileName(jnBy, jnStamp, "jobnote"), { create: true });
+            }).then(function(fh){
+              return fh.createWritable();
+            }).then(function(w){
+              return w.write(JSON.stringify(jnPayload)).then(function(){ return w.close(); });
+            }).catch(function(){}));
+          }
+        });
+        return Promise.all(writes);
+      }).then(function(){ return true; }).catch(function(){ return false; });
+    });
+  }
+  function readJoineryStatuses(projectHandle){
+    if (!projectHandle) return Promise.resolve([]);
+    return migrateLegacyJoineryStatusIfNeeded(projectHandle).then(function(){
+      return getJoineryStatusEventsRootDir(projectHandle, false).then(function(rootH){
+        var keys = [];
+        var iter = rootH.values();
+        function step(){
+          return iter.next().then(function(res){
+            if (res.done) return keys;
+            if (res.value && res.value.kind === "directory") keys.push(res.value.name);
+            return step();
+          });
+        }
+        return step();
+      }, function(){ return null; });
+    }).then(function(keys){
+      if (keys === null) return readLegacyJoineryStatusFile(projectHandle);
+      return Promise.all(keys.map(function(key){
+        return listJoineryStatusEventsForItem(projectHandle, key).then(foldJoineryStatusEvents);
+      })).then(function(list){ return list.filter(Boolean); });
+    });
   }
   function findJoineryStatus(list, level, room, joineryId){
     for (var i = 0; i < list.length; i++){
