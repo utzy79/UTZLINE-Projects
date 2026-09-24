@@ -359,8 +359,36 @@
 // which needed bumping to 6 to match installed's new rank; the other
 // threshold (rank(in_manufacture)==2) was untouched since that stage's rank
 // didn't move.)
+//
+// (v22 / README v17 / cache v25, 2026-09-23: Andrew, verbatim: "we will also
+// add a Solid Surface schedule that is a separate app. so when putting on
+// the joinery item we can have a tick box for has Solid Surface. this then
+// puts it on its own schedule." A new plain boolean field on the
+// joinery-items.json record, `hasSolidSurface` (absent/missing on every item
+// written before this existed, same as reading missing as false everywhere
+// it's checked) -- unlike every field the Add Joinery Item dialog itself
+// sets (Level/Room/Joinery ID/Description/Work order #, all set once and
+// never touched again), and unlike the work order # backfill (a narrow,
+// fill-in-once-only exception), this is a genuine two-way toggle: a new
+// "Has Solid Surface" checkbox on the Joinery Item page
+// (setJoineryItemHasSolidSurface, same find-by-(level,room,joineryId)-
+// triple/rewrite-whole-file pattern as setJoineryItemWorkOrderNo) can be
+// switched on or off at any time, on any item old or new, and takes effect
+// immediately with no separate Save step. No by/at attribution is recorded
+// for this field -- this app has no notion of "who is using it" anywhere in
+// its own code (the status-history popup's `by` values come from Site
+// Measure/the ITPs writing joinery-status.json, never from anything this
+// app itself captures), and this is a plain item property, not a pipeline
+// status change, so a bare boolean is all that's added. The Joinery
+// Register's Joinery ID column now shows a small diamond badge (◆) next to
+// the ID for any item with the flag set, so Andrew can see at a glance
+// which items have solid surface, without opening each one -- a new glyph,
+// distinct from every existing status icon (📏🏭⚙️📦🚚🏆). This field is the
+// hand-off point for the brand-new sibling app UTZLINE Solid Surface
+// Schedule, which reads it to build its own per-item schedule; this app
+// remains the sole writer of joinery-items.json, same as always.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v24";
+var CACHE_NAME = "utzline-projects-cache-v25";
 
 var PRECACHE_URLS = [
   "./",

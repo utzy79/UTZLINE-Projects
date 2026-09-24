@@ -396,6 +396,17 @@
   .status-label{ display: inline-flex; align-items: center; gap: 6px; }
   .status-label .status-icon{ font-size: 13px; }
   .muted-cell{ color: var(--muted2); }
+  /* ---- Has Solid Surface badge (2026-09-23) -- Andrew: "we will also add
+     a Solid Surface schedule that is a separate app. so when putting on the
+     joinery item we can have a tick box for has Solid Surface." A small
+     glyph next to the Joinery ID in the Register so it reads at a glance,
+     distinct from the pipeline status icons (which live in the Status
+     column, not here) -- a diamond, since none of the status icons
+     (📏🏭⚙️📦🚚🏆) use one. ---- */
+  .ss-badge{ font-size: 11px; color: var(--accent); margin-left: 4px; }
+  /* ---- Joinery Item page: Has Solid Surface toggle row (2026-09-23) ---- */
+  .meta-grid .ss-toggle-row{ display: flex; align-items: center; gap: 8px; }
+  .meta-grid .ss-toggle-row input[type=checkbox]{ width: 18px; height: 18px; margin: 0; }
 
   /* ---- Delivery status (Scheduler's joinery-schedule.json, read-only
        here) + work order # backfill action (2026-09-23) -- kept as plain
@@ -2574,6 +2585,36 @@
     });
   }
 
+  /* ---- Has Solid Surface flag (2026-09-23) ----
+     Andrew, verbatim: "we will also add a Solid Surface schedule that is a
+     separate app. so when putting on the joinery item we can have a tick
+     box for has Solid Surface. this then puts it on its own schedule."
+     Unlike the work order # backfill above, this is a genuine two-way
+     toggle, not a fill-in-once field -- it can be switched on and off at
+     any time, on any item (new or old), from the Joinery Item page. Plain
+     boolean on the joinery-items.json record, `hasSolidSurface`; missing
+     (every item written before this existed) reads as false everywhere
+     that checks it. No by/at attribution is recorded for this field -- this
+     app has no notion of "who is using it" anywhere in its own code (the
+     status-history popup's `by` values come from Site Measure/the ITPs
+     writing joinery-status.json, never from anything this app itself
+     captures), and this is a plain item property, not a pipeline status
+     change, so adding one here would be new machinery for its own sake.
+     Same find-by-(level,room,joineryId)-triple, rewrite-whole-file pattern
+     as setJoineryItemWorkOrderNo. */
+  function setJoineryItemHasSolidSurface(projectHandle, level, room, joineryId, value){
+    return readJoineryItems(projectHandle).then(function(items){
+      var rec = null;
+      for (var i = 0; i < items.length; i++){
+        var it = items[i];
+        if (it && it.level === level && (it.room || "") === (room || "") && (it.joineryId || "") === (joineryId || "")){ rec = it; break; }
+      }
+      if (!rec) return Promise.reject(new Error("Joinery item not found: " + level + " / " + room + " / " + joineryId));
+      rec.hasSolidSurface = !!value;
+      return writeJoineryItems(projectHandle, items).then(function(){ return rec; });
+    });
+  }
+
   /* ============================== Shared joinery-status pipeline (2026-09-23) ==============================
      Read-only here -- this app never writes joinery-status.json itself (Site
      Measure's own "Mark as check measured", and each ITP's own checklist
@@ -3560,7 +3601,7 @@
       tr.innerHTML =
         "<td>" + escapeHtml(item.level) + "</td>" +
         "<td>" + escapeHtml(item.room) + "</td>" +
-        "<td>" + escapeHtml(item.joineryId) + "</td>" +
+        "<td>" + escapeHtml(item.joineryId) + (item.hasSolidSurface ? " <span class=\"ss-badge\" title=\"Has Solid Surface\">◆</span>" : "") + "</td>" +
         "<td>" + escapeHtml(item.description) + "</td>" +
         "<td>" + workOrderCellHtml(item) + "</td>" +
         "<td class=\"status-cell\">" + statusLabelHtml(statusKey) + "</td>" +
@@ -4229,6 +4270,24 @@
       });
     });
   }
+  // Takes effect immediately on toggle, like any checkbox -- no separate
+  // Save step. Reverts the checkbox itself if the write fails, so the UI
+  // never shows a checked state that isn't actually persisted.
+  function wireJoineryItemHasSolidSurfaceCheckbox(item){
+    var cb = document.getElementById("jiHasSolidSurfaceCheckbox");
+    if (!cb) return;
+    cb.addEventListener("change", function(){
+      var newValue = cb.checked;
+      setJoineryItemHasSolidSurface(activeProjectHandle, item.level, item.room, item.joineryId, newValue).then(function(updatedRec){
+        item.hasSolidSurface = updatedRec.hasSolidSurface;
+        showToast(newValue ? "Added to the Solid Surface schedule." : "Removed from the Solid Surface schedule.");
+      }).catch(function(err){
+        console.error("Saving Has Solid Surface failed:", err);
+        cb.checked = !newValue; // revert -- the write didn't actually persist
+        showToast("Couldn't save that change.");
+      });
+    });
+  }
   function openJoineryItemPage(item, returnScreen){
     activeJoineryItem = item;
     joineryItemReturnScreen = returnScreen || "levels";
@@ -4240,8 +4299,10 @@
       "<dt>Level</dt><dd>" + escapeHtml(item.level) + "</dd>" +
       "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
       "<dt>Status</dt><dd id=\"jiStatusCell\">" + statusLabelHtml(statusKey) + "</dd>" +
-      "<dt>Required delivery</dt><dd id=\"jiDeliveryCell\">Loading…</dd>";
+      "<dt>Required delivery</dt><dd id=\"jiDeliveryCell\">Loading…</dd>" +
+      "<dt>Has Solid Surface</dt><dd><label class=\"ss-toggle-row\"><input type=\"checkbox\" id=\"jiHasSolidSurfaceCheckbox\"" + (item.hasSolidSurface ? " checked" : "") + "> Goes on the Solid Surface schedule</label></dd>";
     wireJoineryItemWorkOrderBackfillBtn(item);
+    wireJoineryItemHasSolidSurfaceCheckbox(item);
     showScreen("joineryItem");
     // Opened directly from a marker tap (not via the Register), or the
     // Register's own status list/schedule list haven't loaded in this
@@ -4683,6 +4744,7 @@
     findScheduleRecord: findScheduleRecord,
     computeDelayInfo: computeDelayInfo,
     setJoineryItemWorkOrderNo: setJoineryItemWorkOrderNo,
+    setJoineryItemHasSolidSurface: setJoineryItemHasSolidSurface,
     getPlanView: function(){ return planView; },
     readDeliveryLocationForItem: readDeliveryLocationForItem
   };
