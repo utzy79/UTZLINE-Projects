@@ -445,7 +445,7 @@
 // a table cell); an item with no editHistory yet shows a plain "No edits
 // yet" line, same empty-state convention as every other card here.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v27";
+var CACHE_NAME = "utzline-projects-cache-v28";
 
 var PRECACHE_URLS = [
   "./",
