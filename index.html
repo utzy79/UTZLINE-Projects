@@ -491,6 +491,18 @@
   }
   .delivery-loc-thumb img{ width: 100%; height: 100%; object-fit: cover; display: block; }
 
+  /* ---- Joinery item page: Site Measure overlay preview (2026-09-24) --
+       the flattened snapshot image Site Measure saves alongside each
+       permanent overlay (see renderJoineryOverlaySnapshot in
+       redline-projects/source.html). Shown full-width, not as a small
+       icon-sized thumb the way the delivery-location pin above is -- it's
+       this card's whole point, not a secondary detail. ---- */
+  .overlay-snapshot-img{
+    display: block; width: 100%; max-height: 420px; object-fit: contain;
+    border-radius: 8px; border: 1px solid var(--border); background: #f4f4f4;
+  }
+  .overlay-snapshot-caption{ margin-top: 8px; }
+
   #toast{
     position: fixed;
     left: 50%;
@@ -782,9 +794,21 @@
       <h2 class="section-title">Edit history</h2>
       <div id="itemEditHistoryList"></div>
     </div>
+    <!-- ---- Site Measure overlays (2026-09-24) -- Andrew, verbatim: "the
+         joinery status page needs finishing... it currently does not show
+         the site measure overlay. this should come from joinery item
+         (image)." Reads every permanent overlay file Site Measure has ever
+         saved for this item (readSiteMeasureOverlaysForItem, below) and
+         shows each one's flattened preview image (payload.overlaySnapshotDataURL,
+         written by Site Measure itself at Save time -- see
+         renderJoineryOverlaySnapshot in redline-projects/source.html) --
+         newest first, labelled by who saved it and when. An item nobody's
+         ever measured yet just shows the empty state; an item saved before
+         this snapshot field existed shows up with no image, labelled as
+         such, rather than being hidden entirely. -->
     <div class="card">
       <h2 class="section-title">Site Measure overlays</h2>
-      <p class="sub" style="margin:0;">Coming in a later step -- this section will show this item's measured overlay once Site Measure is updated to read and write joinery item records directly, instead of its own separate room-marker objects.</p>
+      <div id="itemOverlaysList"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Shop drawings</h2>
@@ -808,15 +832,12 @@
          readInstallReworkForItem's own comment. -->
     <div class="card">
       <h2 class="section-title">Rework</h2>
+      <div id="itemReworkPdfRow"></div>
       <div id="itemReworkList"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Delivery location</h2>
       <div id="itemDeliveryLocation"></div>
-    </div>
-    <div class="card">
-      <h2 class="section-title">Photos</h2>
-      <p class="sub" style="margin:0;">Coming in a later step.</p>
     </div>
   </section>
 
@@ -3312,6 +3333,82 @@
     });
   }
 
+  /* ---- Site Measure overlays (2026-09-24, mirrors source.html's own
+     getJoineryOverlaysDir/parseJoineryOverlayFileName) -- Andrew, verbatim:
+     "the joinery status page needs finishing... it currently does not show
+     the site measure overlay. this should come from joinery item (image)."
+     Read-only, same as every other card here -- this app never writes an
+     overlay, only Site Measure does. "This item's measured overlay" is
+     treated as one item-wide thing on this page (the single most recent
+     Save across every user who's ever measured it), unlike Site Measure's
+     own per-user layer picker -- see readLatestJoineryOverlayForItem. */
+  function getSiteMeasuresDirForItem(projectHandle, key){
+    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
+      return psH.getDirectoryHandle("Site Measures", { create: false });
+    }).then(function(smH){
+      return smH.getDirectoryHandle(key, { create: false });
+    });
+  }
+  function getJoineryOverlaysDirForItem(projectHandle, key){
+    return getSiteMeasuresDirForItem(projectHandle, key).then(function(dirH){
+      return dirH.getDirectoryHandle("overlays", { create: false });
+    });
+  }
+  function parseJoineryOverlayFileName(fileName){
+    var base = fileName.replace(/\.json$/i, "");
+    var idx = base.lastIndexOf(" - ");
+    if (idx < 0) return { user: base, stamp: "" };
+    return { user: base.slice(0, idx), stamp: base.slice(idx + 3) };
+  }
+  // A raw "YYYY-MM-DD HH-MM-SS" filename stamp turned back into a readable
+  // label -- same cosmetic-only formatting as source.html's own
+  // formatOverlayStamp.
+  function formatOverlayStamp(stamp){
+    var m = /^(\d{4}-\d{2}-\d{2}) (\d{2})-(\d{2})-(\d{2})$/.exec(stamp || "");
+    if (!m) return stamp || "";
+    return m[1] + " " + m[2] + ":" + m[3];
+  }
+  function listJoineryOverlaysForItem(projectHandle, item){
+    return getJoineryOverlaysDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
+      return listFilesInDir(dirH, function(name){ return /\.json$/i.test(name); });
+    }, function(){ return []; }).then(function(list){
+      var parsed = list.map(function(f){
+        var p = parseJoineryOverlayFileName(f.fileName);
+        return { fileName: f.fileName, handle: f.handle, user: p.user, stamp: p.stamp };
+      });
+      // Newest overlay first, across every user -- a plain stamp string
+      // compare is already exactly chronological (zero-padded, colon-free,
+      // left-to-right -- see overlayTimestampStamp's own comment in
+      // source.html), unlike source.html's own listJoineryOverlays sort
+      // (user-then-stamp, for its per-user layer picker -- not what a
+      // single item-wide "latest overlay" card needs).
+      parsed.sort(function(a, b){ return b.stamp.localeCompare(a.stamp); });
+      return parsed;
+    });
+  }
+  // The single most recent overlay across every user, with its flattened
+  // preview image if Site Measure saved one (every overlay from v45.14
+  // onward; an overlay saved before that field existed still shows up
+  // here, just with no image -- see this card's own render code below).
+  // Resolves to null for "nobody has measured this item yet", the normal
+  // empty state for most items.
+  function readLatestJoineryOverlayForItem(projectHandle, item){
+    return listJoineryOverlaysForItem(projectHandle, item).then(function(list){
+      if (!list.length) return null;
+      var latest = list[0];
+      return latest.handle.getFile().then(function(file){ return file.text(); }).then(function(text){
+        var data = null;
+        try{ data = JSON.parse(text); }catch(e){}
+        return {
+          user: latest.user, stamp: latest.stamp, otherCount: list.length - 1,
+          snapshotDataUrl: (data && data.overlaySnapshotDataURL) || null
+        };
+      }, function(){
+        return { user: latest.user, stamp: latest.stamp, otherCount: list.length - 1, snapshotDataUrl: null };
+      });
+    }, function(){ return null; });
+  }
+
   /* ---- Manufacture + Install ITP (mirrors each ITP app's own flat-project
      folder convention: Project Saves/UTZLINE ITP/<App>/ for the checklist
      JSON, PDF Files/UTZLINE ITP/<App>/ for exported PDFs -- see either
@@ -3394,6 +3491,33 @@
       var prefix = itpPdfBaseNameForItem(item) + "_";
       return listFilesInDir(dirH, function(name){ return name.indexOf(prefix) === 0 && /\.pdf$/i.test(name); });
     }, function(){ return []; });
+  }
+  // Install ITP's own cumulative rework PDF for this item (2026-09-24) --
+  // Andrew, verbatim: "the rework section can open the rework pdf to view.
+  // any rework images for this joinery item get attached to that rework
+  // pdf." Unlike the checklist's own ITP PDFs (a new timestamped file per
+  // signed-off state, so listItpPdfsForItem above lists every one that
+  // matches), Install ITP keeps exactly ONE always-current rework PDF per
+  // item -- same fixed, un-timestamped filename as the rework JSON itself,
+  // just under "Install ITP Rework"'s own sibling PDF Files/ branch
+  // (getReworkPdfDirFlat's own comment in redline-itp-pwa) -- so this is a
+  // single getFileHandle lookup, not a listing. Resolves to null (not a
+  // rejection) both when no rework has ever been logged for this item and
+  // when every logged entry has since been deleted (Install ITP removes
+  // the PDF the moment the last entry goes), so the caller can tell "no
+  // rework PDF to show" apart from "couldn't read it" the same way every
+  // other reader here does.
+  function readReworkPdfForItem(projectHandle, item){
+    return projectHandle.getDirectoryHandle("PDF Files", { create: false }).then(function(pfH){
+      return pfH.getDirectoryHandle("UTZLINE ITP", { create: false });
+    }).then(function(branchH){
+      return branchH.getDirectoryHandle("Install ITP Rework", { create: false });
+    }).then(function(dirH){
+      var fileName = itpPdfBaseNameForItem(item) + ".pdf";
+      return dirH.getFileHandle(fileName, { create: false }).then(function(fh){
+        return { fileName: fileName, handle: fh };
+      });
+    }, function(){ return null; }).catch(function(){ return null; });
   }
 
   /* ============================== legacy plan reading (migration only) ==============================
@@ -4397,14 +4521,23 @@
      captured for this item (if any) with a button that jumps straight to
      that exact point on this item's own level plan -- see
      readDeliveryLocationForItem above and viewDeliveryLocationBtn's own
-     click handler below. */
+     click handler below.
+     2026-09-24 (Andrew): "the joinery status page needs finishing... it
+     currently does not show the site measure overlay. this should come
+     from joinery item (image)... Photos card is not required here, as
+     they are attached to each relevant itp / report." The Site Measure
+     overlays card is no longer a placeholder -- see
+     readLatestJoineryOverlayForItem above -- and the Photos card has been
+     removed from this page entirely (screenJoineryItem's own HTML). */
   var joineryItemTitle = document.getElementById("joineryItemTitle");
   var joineryItemMetaGrid = document.getElementById("joineryItemMetaGrid");
   var viewOnPlanBtn = document.getElementById("viewOnPlanBtn");
   var backFromJoineryItemBtn = document.getElementById("backFromJoineryItemBtn");
+  var itemOverlaysList = document.getElementById("itemOverlaysList");
   var itemShopDrawingsList = document.getElementById("itemShopDrawingsList");
   var itemJobNotesList = document.getElementById("itemJobNotesList");
   var itemItpList = document.getElementById("itemItpList");
+  var itemReworkPdfRow = document.getElementById("itemReworkPdfRow");
   var itemReworkList = document.getElementById("itemReworkList");
   var itemDeliveryLocation = document.getElementById("itemDeliveryLocation");
   var activeJoineryItem = null;
@@ -4441,9 +4574,31 @@
     return row;
   }
   function renderJoineryItemLinkedSections(item){
+    itemOverlaysList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    itemReworkPdfRow.innerHTML = "";
+
+    readLatestJoineryOverlayForItem(activeProjectHandle, item).then(function(overlay){
+      if (activeJoineryItem !== item) return; // navigated away before this resolved
+      if (!overlay){
+        itemOverlaysList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No Site Measure overlay saved yet for this item.</p>";
+        return;
+      }
+      var caption = escapeHtml(overlay.user || "Unnamed") + " — " + escapeHtml(formatOverlayStamp(overlay.stamp));
+      if (overlay.otherCount > 0){
+        caption += " · " + overlay.otherCount + (overlay.otherCount === 1 ? " earlier save" : " earlier saves") + " (open Site Measure to see every layer)";
+      }
+      itemOverlaysList.innerHTML =
+        (overlay.snapshotDataUrl
+          ? "<img class=\"overlay-snapshot-img\" src=\"" + overlay.snapshotDataUrl + "\" alt=\"Site Measure overlay for this item\">"
+          : "<p class=\"sub\" style=\"margin:0;\">Saved before overlay previews existed — open Site Measure to view it.</p>") +
+        "<p class=\"sub overlay-snapshot-caption\">" + caption + "</p>";
+    }).catch(function(err){
+      console.error("Reading Site Measure overlay failed:", err);
+      itemOverlaysList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load the Site Measure overlay.</p>";
+    });
 
     listShopDrawingsForItem(activeProjectHandle, item).then(function(groups){
       if (activeJoineryItem !== item) return; // navigated away before this resolved
@@ -4525,6 +4680,28 @@
     // utzline projects summary pages per project." Newest first, same
     // convention as Install ITP's own history list; this app never writes
     // to Install ITP's rework file, only displays it.
+    //
+    // UPDATE (2026-09-24, Round 2): Andrew, on the same page, verbatim:
+    // "the rework section can open the rework pdf to view. any rework
+    // images for this joinery item get attached to that rework pdf...
+    // Photos card is not required here, as they are attached to each
+    // relevant itp / report." Photos are no longer shown inline in this
+    // per-entry summary (they now live in the rework PDF, same reasoning
+    // as the standalone Photos card's own removal in Round 1) -- instead,
+    // an "Open" row for the item's one always-current rework PDF appears
+    // above the entry list, same docRow pattern as every other linked
+    // document on this page, whenever Install ITP has generated one
+    // (readReworkPdfForItem resolves null once there's no rework logged,
+    // or once the last entry's been deleted and Install ITP has removed
+    // its own PDF again).
+    itemReworkPdfRow.innerHTML = "";
+    readReworkPdfForItem(activeProjectHandle, item).then(function(pdf){
+      if (activeJoineryItem !== item) return;
+      if (!pdf) return;
+      itemReworkPdfRow.appendChild(docRow("Rework PDF", "Every rework entry logged for this item, with photos", pdf.handle));
+    }).catch(function(err){
+      console.error("Reading rework PDF failed:", err);
+    });
     itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     readInstallReworkForItem(activeProjectHandle, item).then(function(reworks){
       if (activeJoineryItem !== item) return;
@@ -4542,14 +4719,10 @@
         var statusText = r.received
           ? "Received back on site" + (r.receivedDate ? " (" + escapeHtml(r.receivedDate) + ")" : "")
           : "Not yet received back on site";
-        var photosHtml = (r.photos && r.photos.length)
-          ? "<div class=\"rework-item-photos\">" + r.photos.map(function(p){ return "<img src=\"" + p.dataUrl + "\" alt=\"Rework photo\">"; }).join("") + "</div>"
-          : "";
         row.innerHTML =
           "<div class=\"rework-item-head\"><span class=\"rework-item-cabinet\">" + escapeHtml(cabinetText) + "</span><span class=\"rework-item-date\">" + createdText + "</span></div>" +
           (r.text ? "<p class=\"rework-item-text\">" + escapeHtml(r.text) + "</p>" : "") +
-          "<div class=\"rework-item-status" + (r.received ? " received" : "") + "\">" + escapeHtml(statusText) + "</div>" +
-          photosHtml;
+          "<div class=\"rework-item-status" + (r.received ? " received" : "") + "\">" + escapeHtml(statusText) + "</div>";
         itemReworkList.appendChild(row);
       });
       // "Clicking on a rework takes you to that rework" (Andrew, 2026-09-23,
