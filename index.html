@@ -216,6 +216,10 @@
   }
   .list-item:hover{ background: var(--panel2); border-color: var(--accent); }
   .list-item .chev{ color: var(--muted2); }
+  /* v23 sweep (Android robustness): lists and tables pan with a finger and
+     buttons/rows act as plain taps -- no double-tap-zoom delay, no hover
+     dependence. */
+  .btn, .list-item, .doc-row button, .register-table tbody tr, .pdf-page-cell{ touch-action: manipulation; }
   .empty-note{ color: var(--muted); font-size: 14px; padding: 18px 4px; text-align: center; }
   .meta-grid{ display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
   .meta-grid dt{ color: var(--muted); }
@@ -364,7 +368,7 @@
     background: #170f0f;
   }
   .plan-canvas-topbar span{ font-weight: 600; font-size: 14px; }
-  .plan-canvas-stage{ flex: 1 1 auto; position: relative; overflow: hidden; touch-action: none; }
+  .plan-canvas-stage{ flex: 1 1 auto; position: relative; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .plan-canvas-stage svg{ display: block; width: 100%; height: 100%; cursor: grab; }
   .plan-canvas-hint{
     flex: 0 0 auto;
@@ -521,6 +525,13 @@
   }
   #toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
   .error-note{ color: #ff8080; font-size: 13px; margin-top: 10px; }
+  /* v23 sweep: shown while a screen painted from its last-known snapshot
+     (or from what it showed a moment ago) is being refreshed from the
+     folder behind it. */
+  .refresh-note{ color: var(--muted); font-size: 12px; font-style: italic; margin: 0 0 10px; }
+  .refresh-note[hidden]{ display: none; }
+  .tick-label{ display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text); cursor: pointer; touch-action: manipulation; }
+  .tick-label input[type=checkbox]{ width: 18px; height: 18px; margin: 0; }
   .error-note[hidden]{ display: none; }
 </style>
 </head>
@@ -591,6 +602,7 @@
       <button class="btn" id="newProjectBtn">+ New Project</button>
     </div>
     <div class="card">
+      <p class="refresh-note" id="projectListRefreshNote" hidden>Showing last-known projects — refreshing…</p>
       <div class="list" id="projectListItems"></div>
       <div class="empty-note" id="projectListEmpty" hidden>No projects yet -- start one above.</div>
     </div>
@@ -606,7 +618,7 @@
       <button class="btn secondary" id="editProjectInfoBtn" style="margin-top:14px;">Edit project info</button>
     </div>
     <div class="card" id="projectMetaEmptyCard">
-      <p class="sub" style="margin:0 0 10px;">This project has no metadata yet.</p>
+      <p class="sub" style="margin:0 0 10px;" id="projectMetaEmptyText">This project has no metadata yet.</p>
       <button class="btn secondary" id="addProjectInfoBtn">Add project info</button>
     </div>
     <p class="sub">Choose a level to browse its rooms, or start a new one.</p>
@@ -618,6 +630,7 @@
       </div>
     </div>
     <div class="card">
+      <p class="refresh-note" id="levelListRefreshNote" hidden>Refreshing levels…</p>
       <div class="list" id="levelListItems"></div>
       <div class="empty-note" id="levelListEmpty" hidden>No levels yet -- start one above.</div>
     </div>
@@ -681,8 +694,17 @@
           <input type="text" id="registerSearchInput" placeholder="Joinery ID, description, or work order #…">
         </div>
       </div>
+      <!-- Filter tick boxes (v23, 2026-09-26) -- Andrew, verbatim: "add in
+           tick boxes for filtering out installed and delivered items." See
+           registerMatchesFilters / hideStatusCheckbox. -->
+      <div class="row tick-row" style="margin-top:10px;">
+        <label class="tick-label"><input type="checkbox" id="registerHideDelivered"> Hide delivered</label>
+        <label class="tick-label"><input type="checkbox" id="registerHideInstalled"> Hide installed</label>
+        <span class="sub" id="registerCountNote" style="margin:0 0 0 auto; align-self:center;"></span>
+      </div>
     </div>
     <div class="card" id="registerTableCard">
+      <p class="refresh-note" id="registerRefreshNote" hidden>Showing last-known register — refreshing…</p>
       <table class="register-table" id="registerTable">
         <thead>
           <tr>
@@ -875,6 +897,7 @@
       </div>
     </div>
     <div class="modal-actions">
+      <button class="btn link" id="cropCancelBtn" style="margin-right:auto;">Cancel</button>
       <button class="btn secondary" id="cropSkipBtn">Use whole photo</button>
       <button class="btn" id="cropApplyBtn">Crop</button>
     </div>
@@ -1053,15 +1076,35 @@
   // same one-database-per-concern pattern already established across the
   // family.
   var DB_NAME = "utzline-projects-db", STORE = "session";
+  /* One connection, opened once and reused (v23, 2026-09-25/26 family-wide
+     sweep -- Andrew: "ok, now a full sweep of all the scheduling software";
+     the same fix Install ITP v35 and UTZLINE Scheduler v19 shipped after
+     his "still having slow down after a little use, (possibly caching
+     issues)"). This used to open a NEW IndexedDB connection on every
+     idbGet/idbSet and never close it -- harmless when the app touched
+     IndexedDB once at boot, but this round also puts every main screen's
+     last-known snapshot, the level-name stat cache and the folded-status
+     cache in here (see the snapshot helpers below), so it is now read on
+     every screen open and written on every refresh. Now: open once, keep
+     it; reopen only if the browser closes it (versionchange / close). Same
+     fix for the shared identity store further down. */
+  var idbConnP = null;
   function idbOpen(){
-    return new Promise(function(res, rej){
+    if (idbConnP) return idbConnP;
+    idbConnP = new Promise(function(res, rej){
       try{
         var r = indexedDB.open(DB_NAME, 1);
         r.onupgradeneeded = function(){ r.result.createObjectStore(STORE); };
-        r.onsuccess = function(){ res(r.result); };
-        r.onerror = function(){ rej(r.error); };
-      }catch(e){ rej(e); }
+        r.onsuccess = function(){
+          var db = r.result;
+          db.onversionchange = function(){ db.close(); idbConnP = null; };
+          db.onclose = function(){ idbConnP = null; };
+          res(db);
+        };
+        r.onerror = function(){ idbConnP = null; rej(r.error); };
+      }catch(e){ idbConnP = null; rej(e); }
     });
+    return idbConnP;
   }
   function idbSet(key, val){
     return idbOpen().then(function(db){
@@ -1084,6 +1127,26 @@
     });
   }
 
+  /* ---- Last-known snapshots (v23 sweep -- "icon caching like we just
+     did"). The design rule proven on Andrew's tablet during the ITP rounds:
+     on Android + Dropbox every File System Access call costs hundreds of
+     ms and a named lookup scans its folder, so a screen must never make
+     the person wait on the folder to show what it showed last time. Each
+     main screen's last successful result (the project list, a project's
+     level list + project info, a project's Joinery Register rows with
+     their folded statuses/schedules) is kept in this app's own IndexedDB,
+     keyed under the current Projects-root name so a different root never
+     paints another root's data; on open the screen paints that snapshot
+     instantly (with a "refreshing…" note), reads the folder in the
+     background, then repaints and re-saves. Best-effort in both directions
+     -- a failed get paints nothing early, a failed set is ignored -- the
+     folder read is always the truth, and nothing is ever WRITTEN to the
+     folder from a snapshot (every read-modify-write path below re-reads
+     the file it is about to rewrite, strictly -- see readTextFileStrict). */
+  function snapKey(kind, name){ return "snap\u0000" + (projectsRootName || "") + "\u0000" + kind + (name != null ? "\u0000" + name : ""); }
+  function snapGet(kind, name){ return idbGet(snapKey(kind, name)).catch(function(){ return null; }); }
+  function snapSet(kind, name, value){ return idbSet(snapKey(kind, name), value).catch(function(){}); }
+
   /* ============================== shared name+PIN identity (2026-09-23) ==============================
      Andrew, verbatim: "implement the username as per the delivery itp
      throughout the entire system, but instead of it opening a popup, the
@@ -1102,13 +1165,23 @@
      vice versa. */
   var IDENTITY_DB_NAME = "utzline-identity", IDENTITY_STORE = "kv", IDENTITY_KEY = "deviceUserName";
   var deviceUserName = "";
-  function identityDbOpen(){
-    return new Promise(function(resolve, reject){
-      var req = indexedDB.open(IDENTITY_DB_NAME, 1);
-      req.onupgradeneeded = function(){ req.result.createObjectStore(IDENTITY_STORE); };
-      req.onsuccess = function(){ resolve(req.result); };
-      req.onerror = function(){ reject(req.error); };
+  var identityConnP = null;
+  function identityDbOpen(){ // one connection, reused -- see idbOpen above
+    if (identityConnP) return identityConnP;
+    identityConnP = new Promise(function(resolve, reject){
+      try{
+        var req = indexedDB.open(IDENTITY_DB_NAME, 1);
+        req.onupgradeneeded = function(){ req.result.createObjectStore(IDENTITY_STORE); };
+        req.onsuccess = function(){
+          var db = req.result;
+          db.onversionchange = function(){ db.close(); identityConnP = null; };
+          db.onclose = function(){ identityConnP = null; };
+          resolve(db);
+        };
+        req.onerror = function(){ identityConnP = null; reject(req.error); };
+      }catch(e){ identityConnP = null; reject(e); }
     });
+    return identityConnP;
   }
   function getDeviceUserName(){
     return identityDbOpen().then(function(db){
@@ -1209,16 +1282,95 @@
     if (field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
     return rows;
   }
+  /* ============================== "unreadable is not empty" (v23 sweep) ==============================
+     Site Measure v46's rule (see its readFlatLevelFileByName), applied to
+     EVERY read in this app that feeds a WRITE or a "nothing exists, start
+     fresh" decision -- and this app is the family's hub, the one that
+     WRITES the level files and joinery-items.json every other app reads,
+     so this is the single most important part of its sweep. On a Dropbox-
+     synced Android folder a file mid-sync reads as truncated or
+     unparseable for a moment; before this round every such failure
+     collapsed to null/[]/{}, and these paths then acted on that empty
+     result as if it were the truth:
+       - readLevelFileByName -> null -> "Import floor plan", "Add joinery
+         item", "New Room" and "New Level" each took null as "no level file
+         yet" and REWROTE the level file from a fresh, empty shape -- every
+         room, every marker, and everything Site Measure has drawn on that
+         level (`objects`) gone in one write;
+       - listLevelFiles -> [] (every level file unreadable for a moment) ->
+         migrateLegacyLevelsIfNeeded took "no Floor Plans files" to mean
+         "not migrated yet" and re-wrote every level from the frozen
+         pre-cutover folders, wiping everything added since;
+       - readJoineryItems -> [] -> "Add joinery item" wrote a
+         joinery-items.json holding ONLY the new item; the Edit dialog
+         reported "item not found";
+       - readUsersCsv -> [] -> "Add a new name" wrote a utzline-users.csv
+         holding ONLY the new name, wiping every other person's row;
+       - readProjectMeta -> null -> the Project info dialog opened blank
+         and Save wrote blanks over the real metadata;
+       - migrateLegacyJoineryStatusIfNeeded / ...ScheduleIfNeeded created
+         the events folder FIRST and then read the legacy file -> [] -> an
+         empty events folder, after which no app in the family ever reads
+         the legacy file again.
+     These helpers tell the two cases apart: NotFoundError (genuinely
+     absent -> fresh is fine) versus anything else (-> one retry after a
+     short pause, since the field failures are transient, then reject with
+     {code:"read_failed"} so the caller surfaces an error and does NOT
+     write). Pure-display reads that keep failing soft say so in their own
+     comment at the call site. */
+  function isNotFoundErr(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError")); }
+  function readFailedErr(what, err){ var e = new Error("Couldn't read " + what + (err && err.message ? " (" + err.message + ")" : "")); e.code = "read_failed"; e.cause = err; return e; }
+  function isReadFailed(err){ return !!(err && err.code === "read_failed"); }
+  function pause(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  var READ_RETRY_MS = 600;
+  // Resolves { found:true, value } / { found:false, value:null }; rejects
+  // read_failed for anything that isn't a clean NotFound. `parse(text)`
+  // turns the file's text into the resolved value and may throw (a
+  // truncated file that won't JSON.parse is the transient case this exists
+  // for), so it sits INSIDE the retried attempt.
+  function readTextFileStrict(dirHandle, fileName, what, parse){
+    function attempt(){
+      return dirHandle.getFileHandle(fileName, { create: false }).then(function(fh){
+        return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
+          var value;
+          try{ value = parse ? parse(text) : text; }catch(e){ return Promise.reject(readFailedErr(what, e)); }
+          return { found: true, value: value };
+        }, function(err){ return Promise.reject(isReadFailed(err) ? err : readFailedErr(what, err)); });
+      }, function(err){
+        if (isNotFoundErr(err)) return { found: false, value: null };
+        return Promise.reject(readFailedErr(what, err));
+      });
+    }
+    return attempt().catch(function(){ return pause(READ_RETRY_MS).then(attempt); });
+  }
+  // Same, for a JSON array file: resolves the array, or [] ONLY when the
+  // file genuinely isn't there; a file that exists but won't parse (or
+  // parses to something that isn't an array) rejects read_failed.
+  function readJsonArrayFileStrict(dirHandle, fileName, what){
+    return readTextFileStrict(dirHandle, fileName, what, function(text){
+      var parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) throw new Error("not a JSON array");
+      return parsed;
+    }).then(function(res){ return res.found ? res.value : []; });
+  }
+  // The one wording every "couldn't read" toast in this app shares, so a
+  // transient sync failure always reads as "try again", never as "gone".
+  function readFailedToast(what){ showToast("Couldn't read " + what + " (still syncing?) — nothing was changed. Try again in a moment.", 4500); }
+
   // Always re-reads the live file -- never trusts a stale in-memory copy,
   // since another device or another app could have changed it since this
-  // page loaded. Resolves to [] both when the file doesn't exist yet and
-  // when it's empty/unparseable, so callers never need a separate
-  // "not found" branch.
+  // page loaded. Resolves to [] ONLY when the file genuinely doesn't exist
+  // yet. (v23 sweep -- "unreadable is not empty") It used to resolve []
+  // for ANY failure, and beginAddNewIdentityFlow then pushed the new row
+  // onto that empty list and wrote it back whole -- so a utzline-users.csv
+  // that was mid-Dropbox-sync for a moment would have been rewritten with
+  // only the new name in it, every other person's row gone. Now a file
+  // that exists but can't be read rejects (read_failed, after one retry);
+  // the add-name flow refuses to write and says so, and the PIN check
+  // reports a read problem rather than "Incorrect PIN".
   function readUsersCsv(){
     if (!projectsRootHandle) return Promise.resolve([]);
-    return projectsRootHandle.getFileHandle(USERS_CSV_NAME, { create: false }).then(function(fh){
-      return fh.getFile();
-    }).then(function(file){ return file.text(); }).then(function(text){
+    return readTextFileStrict(projectsRootHandle, USERS_CSV_NAME, USERS_CSV_NAME, function(text){
       var rows = csvParseText(text);
       if (!rows.length) return [];
       var start = (rows[0] && String(rows[0][0] || "").trim().toLowerCase() === "name") ? 1 : 0;
@@ -1229,7 +1381,7 @@
         out.push({ name: r[0] || "", pin: r[1] || "", showInApps: r[2] || "" });
       }
       return out;
-    }, function(){ return []; }); // no file yet -- not an error
+    }).then(function(res){ return res.found ? res.value : []; });
   }
   function writeUsersCsv(rows){
     var lines = [USERS_CSV_HEADER];
@@ -1273,12 +1425,12 @@
       numberpadDotsEl.appendChild(dot);
     }
   }
-  function numberpadShakeAndClear(){
+  function numberpadShakeAndClear(message){
     var box = numberpadBackdrop.querySelector(".modal");
     box.classList.remove("numberpad-shake");
     void box.offsetWidth; // restart the CSS animation
     box.classList.add("numberpad-shake");
-    showToast("Incorrect PIN — try again.");
+    showToast(message || "Incorrect PIN — try again.");
     setTimeout(function(){
       if (numberpadState){ numberpadState.entered = ""; numberpadState.busy = false; renderNumberpadDots(); }
     }, 260);
@@ -1307,8 +1459,10 @@
         if (!numberpadState) return; // cancelled while verifying
         if (ok) finishNumberpad(pin);
         else numberpadShakeAndClear();
-      }, function(){
-        if (numberpadState) numberpadShakeAndClear();
+      }, function(err){
+        // (v23 sweep) A verify that couldn't READ the registry is not a
+        // wrong PIN -- say what actually happened.
+        if (numberpadState) numberpadShakeAndClear(isReadFailed(err) ? "Couldn't read utzline-users.csv (still syncing?) — try again." : undefined);
       });
     }
   }
@@ -1477,7 +1631,7 @@
       });
     }).catch(function(err){
       console.error("Checking PIN failed:", err);
-      showToast("Couldn't read utzline-users.csv.");
+      showToast(isReadFailed(err) ? "Couldn't read utzline-users.csv (still syncing?) — try again in a moment." : "Couldn't read utzline-users.csv.");
       revertIdentitySelectorEl(selectEl, previousValue);
     });
   }
@@ -1529,7 +1683,11 @@
       });
     }).catch(function(err){
       console.error("Adding a new name/PIN failed:", err);
-      showToast("Couldn't save that to utzline-users.csv.");
+      // (v23 sweep) A registry that exists but couldn't be read means the
+      // new row was NOT written -- writing it would have replaced the
+      // whole file with one name. Say so, rather than a generic "couldn't
+      // save".
+      showToast(isReadFailed(err) ? "Couldn't read utzline-users.csv (still syncing?) — nothing was changed. Try again in a moment." : "Couldn't save that to utzline-users.csv.");
       revertIdentitySelectorEl(selectEl, previousValue);
     });
   }
@@ -1665,10 +1823,55 @@
      can stay simple without needing to double as the source of truth. */
   function projectSavesDirName(){ return "Project Saves"; }
   function floorPlansDirName(){ return "Floor Plans"; }
-  function getFloorPlansDir(projectHandle, create){
-    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: !!create }).then(function(psH){
-      return psH.getDirectoryHandle(floorPlansDirName(), { create: !!create });
+
+  /* ============================== directory-handle cache (v23 sweep) ==============================
+     Ported in shape from Install ITP's getCachedDir/projectDir and UTZLINE
+     Scheduler v19. On Android every getDirectoryHandle() is a real
+     cross-process Storage Access Framework call (hundreds of ms on
+     Andrew's tablet, and a named lookup scans its folder), and this app
+     re-walked the same fixed paths from a project root on every read --
+     one Joinery Item page open did "Project Saves" -> "Site Measures",
+     "Project Saves" -> "Shop Drawings", "Project Saves" -> "Job Notes",
+     "Project Saves" -> "UTZLINE ITP" -> <branch> (x4), "PDF Files" ->
+     "UTZLINE ITP" -> <branch> (x4), plus "Project Saves" -> "Joinery
+     Status"/"Joinery Schedule" again per item. A directory handle stays
+     valid for as long as the folder exists, so every such walk is memoised
+     here per project name (unique under one Projects root). Cleared when a
+     different root is chosen; any one entry is dropped the moment an
+     operation through it fails (folder renamed/removed underneath us) so
+     the next call re-resolves from scratch. Only SUCCESSFUL resolutions are
+     cached -- a create:false miss is never remembered, because that folder
+     may legitimately appear a moment later (another app creating it, or
+     Dropbox syncing it in). */
+  var dirHandleCache = {};
+  var migratedThisSession = {};
+  function invalidateDirHandleCache(){ dirHandleCache = {}; migratedThisSession = {}; }
+  function dirCacheKey(baseKey, segments){ return baseKey + "\u0000" + segments.join("\u0000"); }
+  function getCachedDir(baseHandle, baseKey, segments, create){
+    var key = dirCacheKey(baseKey, segments);
+    if (dirHandleCache[key]) return Promise.resolve(dirHandleCache[key]);
+    var parentP = segments.length > 1
+      ? getCachedDir(baseHandle, baseKey, segments.slice(0, -1), create)
+      : Promise.resolve(baseHandle);
+    return parentP.then(function(parentH){
+      return parentH.getDirectoryHandle(segments[segments.length - 1], { create: !!create });
+    }).then(function(h){
+      dirHandleCache[key] = h;
+      return h;
     });
+  }
+  function projectDir(projectHandle, segments, create){
+    return getCachedDir(projectHandle, "project\u0000" + (projectHandle && projectHandle.name || ""), segments, create);
+  }
+  function forgetProjectDir(projectHandle, segments){
+    var prefix = dirCacheKey("project\u0000" + (projectHandle && projectHandle.name || ""), segments);
+    Object.keys(dirHandleCache).forEach(function(k){
+      if (k === prefix || k.indexOf(prefix + "\u0000") === 0) delete dirHandleCache[k];
+    });
+  }
+
+  function getFloorPlansDir(projectHandle, create){
+    return projectDir(projectHandle, [projectSavesDirName(), floorPlansDirName()], !!create);
   }
   // Filename is presentation only -- "<Project> - <Level>.json", the same
   // "job/project name repeated in the filename" convention Andrew's own
@@ -1677,40 +1880,53 @@
   function levelFileName(projectName, levelName){
     return sanitizeFileBase(projectName) + " - " + sanitizeFileBase(levelName) + ".json";
   }
+  function parseLevelFileText(text){
+    var parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || !parsed.name) throw new Error("level file has no name field");
+    return {
+      name: parsed.name,
+      imageDataURL: parsed.imageDataURL || null,
+      imageTiles: parsed.imageTiles || null,
+      imageW: parsed.imageW || 0,
+      imageH: parsed.imageH || 0,
+      rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
+      markers: Array.isArray(parsed.markers) ? parsed.markers : [],
+      // `objects`/`savedBy` (2026-09-22, Site Measure flat-structure
+      // interop): this app never draws anything, so it never populates
+      // either field itself -- but Site Measure now stores its own
+      // drawn annotations for this Level directly in this same file
+      // (`objects`), stamped with whoever saved them (`savedBy`). Every
+      // caller here already does read-modify-write (see writeLevelFile's
+      // own comment), so round-tripping these two through unread/
+      // unchanged is what stops this app's own writes (placing a
+      // marker, importing a floor plan) from silently wiping out
+      // whatever Site Measure has drawn on this Level.
+      objects: Array.isArray(parsed.objects) ? parsed.objects : [],
+      savedBy: typeof parsed.savedBy === "string" ? parsed.savedBy : ""
+    };
+  }
+  // Resolves the parsed level, or null ONLY when the file genuinely isn't
+  // there (no Floor Plans folder yet / no such file -- a brand-new level).
+  // (v23 sweep -- Site Measure v46's readFlatLevelFileByName shape, the
+  // most important read in this app.) A file that EXISTS but can't be read
+  // or parsed (a Dropbox placeholder still syncing in, a truncated read on
+  // an Android SAF folder, a half-written file) REJECTS with
+  // {code:"read_failed"} after one retry, instead of quietly reading as
+  // "no level yet". Before this, every failure collapsed to null, and all
+  // four writers of this file (Import floor plan, Add joinery item, New
+  // Room, New Level) took null to mean "start fresh" -- so a transient
+  // read failure on Andrew's tablet would have rewritten a real level
+  // (rooms, markers, and everything Site Measure has drawn on it) from an
+  // empty shape. Every caller now tells the two cases apart and refuses to
+  // write on read_failed.
   function readLevelFileByName(projectHandle, fname){
     return getFloorPlansDir(projectHandle, false).then(function(dirH){
-      return dirH.getFileHandle(fname);
-    }).then(function(fh){
-      return fh.getFile();
-    }).then(function(file){
-      return file.text();
-    }).then(function(text){
-      try{
-        var parsed = JSON.parse(text);
-        if (!parsed || typeof parsed !== "object" || !parsed.name) return null;
-        return {
-          name: parsed.name,
-          imageDataURL: parsed.imageDataURL || null,
-          imageTiles: parsed.imageTiles || null,
-          imageW: parsed.imageW || 0,
-          imageH: parsed.imageH || 0,
-          rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
-          markers: Array.isArray(parsed.markers) ? parsed.markers : [],
-          // `objects`/`savedBy` (2026-09-22, Site Measure flat-structure
-          // interop): this app never draws anything, so it never populates
-          // either field itself -- but Site Measure now stores its own
-          // drawn annotations for this Level directly in this same file
-          // (`objects`), stamped with whoever saved them (`savedBy`). Every
-          // caller here already does read-modify-write (see writeLevelFile's
-          // own comment), so round-tripping these two through unread/
-          // unchanged is what stops this app's own writes (placing a
-          // marker, importing a floor plan) from silently wiping out
-          // whatever Site Measure has drawn on this Level.
-          objects: Array.isArray(parsed.objects) ? parsed.objects : [],
-          savedBy: typeof parsed.savedBy === "string" ? parsed.savedBy : ""
-        };
-      }catch(e){ return null; }
-    }, function(){ return null; });
+      return readTextFileStrict(dirH, fname, "level file " + fname, parseLevelFileText).then(function(res){ return res.found ? res.value : null; });
+    }, function(err){
+      if (isNotFoundErr(err)) return null; // no "Project Saves/Floor Plans" at all -- a legacy or brand-new project
+      forgetProjectDir(projectHandle, [projectSavesDirName()]);
+      return Promise.reject(readFailedErr("Floor Plans folder", err));
+    });
   }
   function readLevelFile(projectHandle, projectName, levelName){
     if (!projectHandle) return Promise.resolve(null);
@@ -1720,70 +1936,177 @@
   // modify-write on their own end, same pattern Site Measure's own
   // saveActiveLevelFile always used). Creates "Project Saves/Floor Plans/"
   // the first time any Level in this project needs it.
+  // (v23 sweep) Belt-and-braces guard, same as Site Measure v46's
+  // saveFlatLevelFile: a write that would replace a level file which
+  // currently holds a floor plan with one holding NO plan AND no rooms/
+  // markers/objects is refused -- the only way this app can be holding
+  // that shape for an existing level is a read that went wrong on the way
+  // in, and the file on disk is the copy to keep. Every caller already
+  // reads strictly first, so this should never fire; it's here so a future
+  // caller can't reintroduce the bug by accident.
   function writeLevelFile(projectHandle, projectName, levelName, data){
     return getFloorPlansDir(projectHandle, true).then(function(dirH){
-      var payload = JSON.stringify({
-        name: levelName,
-        imageDataURL: data.imageTiles ? null : (data.imageDataURL || null),
-        imageTiles: data.imageTiles || null,
-        imageW: data.imageW || 0,
-        imageH: data.imageH || 0,
-        rooms: data.rooms || [],
-        markers: data.markers || [],
-        // See readLevelFileByName's own comment -- carried through
-        // unchanged by every caller here (each already reads the current
-        // file into `data` before mutating just the field it actually
-        // cares about), never populated by this app itself.
-        objects: data.objects || [],
-        savedBy: data.savedBy || ""
+      var fname = levelFileName(projectName, levelName);
+      var newHasPlan = !!(data.imageDataURL || (data.imageTiles && data.imageTiles.length));
+      var newIsBlank = !newHasPlan && !(data.rooms && data.rooms.length) && !(data.markers && data.markers.length) && !(data.objects && data.objects.length);
+      var guardP = newIsBlank
+        ? readTextFileStrict(dirH, fname, "level file " + fname, parseLevelFileText).then(function(res){
+            var existing = res.found ? res.value : null;
+            var existingHasContent = !!(existing && (existing.imageDataURL || (existing.imageTiles && existing.imageTiles.length) || existing.rooms.length || existing.markers.length || existing.objects.length));
+            if (existingHasContent){
+              var guardErr = new Error("Refusing to overwrite “" + levelName + "” with an empty level");
+              guardErr.code = "blank_over_real_level";
+              return Promise.reject(guardErr);
+            }
+          })
+        : Promise.resolve();
+      return guardP.then(function(){
+        var payload = JSON.stringify({
+          name: levelName,
+          imageDataURL: data.imageTiles ? null : (data.imageDataURL || null),
+          imageTiles: data.imageTiles || null,
+          imageW: data.imageW || 0,
+          imageH: data.imageH || 0,
+          rooms: data.rooms || [],
+          markers: data.markers || [],
+          // See parseLevelFileText's own comment -- carried through
+          // unchanged by every caller here (each already reads the current
+          // file into `data` before mutating just the field it actually
+          // cares about), never populated by this app itself.
+          objects: data.objects || [],
+          savedBy: data.savedBy || ""
+        });
+        return dirH.getFileHandle(fname, { create: true }).then(function(fh){
+          return fh.createWritable();
+        }).then(function(w){
+          return w.write(payload).then(function(){ return w.close(); });
+        });
+      }).then(function(){
+        // Keep the level-name stat cache honest without a re-stat: the
+        // next listing re-reads this one file (its size/lastModified
+        // changed), nothing else.
+        forgetLevelNameCacheEntry(projectHandle, fname);
       });
-      return dirH.getFileHandle(levelFileName(projectName, levelName), { create: true }).then(function(fh){
-        return fh.createWritable();
-      }).then(function(w){
-        return w.write(payload).then(function(){ return w.close(); });
+    });
+  }
+  // Every .json file handle directly inside "Project Saves/Floor Plans/".
+  // [] ONLY when that folder genuinely doesn't exist yet (a brand-new or
+  // pre-cutover project); a folder that exists but can't be listed rejects
+  // read_failed -- migrateLegacyLevelsIfNeeded keys its "is this project
+  // migrated yet?" decision off THIS listing (the mere presence of files,
+  // never whether they happened to parse), so it must never see a
+  // transient failure as "no files".
+  function listLevelFileHandles(projectHandle){
+    return getFloorPlansDir(projectHandle, false).then(function(dirH){
+      var handles = [];
+      var iter = dirH.values();
+      function step(){
+        return iter.next().then(function(res){
+          if (res.done) return handles;
+          if (res.value && res.value.kind === "file" && /\.json$/i.test(res.value.name)) handles.push(res.value);
+          return step();
+        });
+      }
+      return step().catch(function(err){
+        forgetProjectDir(projectHandle, [projectSavesDirName()]);
+        return Promise.reject(readFailedErr("Floor Plans folder", err));
       });
+    }, function(err){
+      if (isNotFoundErr(err)) return [];
+      forgetProjectDir(projectHandle, [projectSavesDirName()]);
+      return Promise.reject(readFailedErr("Floor Plans folder", err));
     });
   }
   // Every Level in a project is just one of these files -- so listing
   // Levels means opening "Floor Plans" and reading each file's own `name`
   // field (never parsed back out of the filename, which stays
-  // presentation-only). Trivial I/O for a project with a normal handful
-  // of Levels.
-  function listLevelFiles(projectHandle){
-    return getFloorPlansDir(projectHandle, false).then(function(dirH){
-      var fnames = [];
-      var iter = dirH.values();
-      function step(){
-        return iter.next().then(function(res){
-          if (res.done) return fnames;
-          if (res.value && res.value.kind === "file" && /\.json$/i.test(res.value.name)) fnames.push(res.value.name);
-          return step();
+  // presentation-only).
+  // (v23 sweep -- speed, Site Measure v46's listFlatLevelNames) Used to
+  // read and JSON.parse EVERY level file in the project -- each one
+  // carrying its full base64 floor plan, often several MB -- one after
+  // another, just to pull out each file's `name`, every time the level
+  // list was shown (opening a project, Back out of a level, the Register's
+  // level filter, the Rework Register's level filter...). On Andrew's
+  // tablet that alone was seconds per visit. Now: the files are stat'ed in
+  // parallel (getFile() gives size + lastModified without reading the
+  // body), and a per-project IndexedDB note of "<file> -> name @
+  // size/lastModified" answers every file that hasn't changed since last
+  // time; only a new or changed file is actually read. A cache entry is
+  // trusted only when the stat actually carries numeric size/lastModified.
+  // Resolves { names, unreadable } -- `unreadable` lists files that exist
+  // but couldn't be read right now (mid-sync): a DISPLAY of the list may
+  // carry on without them (and say so), but anything that DECIDES from the
+  // list (New Level's name dedupe) must refuse while it's non-empty.
+  function levelNameCacheKey(projectHandle){ return "flatLevelNames\u0000" + (projectsRootName || "") + "\u0000" + ((projectHandle && projectHandle.name) || ""); }
+  function forgetLevelNameCacheEntry(projectHandle, fname){
+    var cacheKey = levelNameCacheKey(projectHandle);
+    idbGet(cacheKey).then(function(cached){
+      if (!cached || typeof cached !== "object" || !cached[fname]) return;
+      delete cached[fname];
+      return idbSet(cacheKey, cached);
+    }).catch(function(){});
+  }
+  function listLevelNames(projectHandle){
+    var cacheKey = levelNameCacheKey(projectHandle);
+    return listLevelFileHandles(projectHandle).then(function(handles){
+      if (!handles.length) return { names: [], unreadable: [] };
+      return idbGet(cacheKey).catch(function(){ return null; }).then(function(cached){
+        cached = (cached && typeof cached === "object") ? cached : {};
+        var next = {}, unreadable = [];
+        return Promise.all(handles.map(function(fh){
+          return fh.getFile().then(function(file){
+            var statOk = typeof file.size === "number" && typeof file.lastModified === "number";
+            var hit = cached[fh.name];
+            if (statOk && hit && hit.name && hit.size === file.size && hit.lastModified === file.lastModified){
+              next[fh.name] = hit;
+              return hit.name;
+            }
+            return file.text().then(function(text){
+              var parsed = parseLevelFileText(text);
+              if (statOk) next[fh.name] = { name: parsed.name, size: file.size, lastModified: file.lastModified };
+              return parsed.name;
+            });
+          }).catch(function(){ unreadable.push(fh.name); return null; });
+        })).then(function(names){
+          idbSet(cacheKey, next).catch(function(){});
+          names = names.filter(Boolean);
+          names.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+          return { names: names, unreadable: unreadable };
         });
-      }
-      return step();
-    }, function(){ return []; }).then(function(fnames){
-      return fnames.reduce(function(chain, fname){
-        return chain.then(function(acc){
-          return readLevelFileByName(projectHandle, fname).then(function(level){
-            if (level) acc.push(level);
-            return acc;
-          });
-        });
-      }, Promise.resolve([]));
+      });
     });
   }
+  // Display listing: sorted names, with a one-off toast naming how many
+  // level files couldn't be read right now (never silently "fewer levels").
   function listExistingLevels(projectHandle){
     return migrateLegacyLevelsIfNeeded(projectHandle).then(function(){
-      return listLevelFiles(projectHandle);
-    }).then(function(levels){
-      return levels.map(function(l){ return l.name; }).sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+      return listLevelNames(projectHandle);
+    }).then(function(res){
+      if (res.unreadable.length) showToast("Couldn't read " + res.unreadable.length + (res.unreadable.length === 1 ? " level file" : " level files") + " (still syncing?) — showing the rest. Try again in a moment.", 4500);
+      return res.names;
     });
   }
+  // Deciding listing (New Level's dedupe): rejects read_failed while ANY
+  // level file is unreadable, since a name that collides with an unreadable
+  // level would otherwise be handed out as "free".
+  function listExistingLevelsStrict(projectHandle){
+    return migrateLegacyLevelsIfNeeded(projectHandle).then(function(){
+      return listLevelNames(projectHandle);
+    }).then(function(res){
+      if (res.unreadable.length) return Promise.reject(readFailedErr("level file " + res.unreadable[0]));
+      return res.names;
+    });
+  }
+  // Rejects read_failed (never "no rooms") when the level file exists but
+  // can't be read -- New Room dedupes against this.
   function listExistingRoomsInLevel(projectHandle, projectName, levelName){
     return readLevelFile(projectHandle, projectName, levelName).then(function(level){
-      var names = level ? level.rooms.map(function(r){ return r.name; }) : [];
-      return names.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+      return roomNamesOf(level);
     });
+  }
+  function roomNamesOf(level){
+    var names = level ? level.rooms.map(function(r){ return r.name; }) : [];
+    return names.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
   }
   // One-time, READ-triggered migration for a project created before this
   // cutover: real Level folders (each shaped like a room -- saves/pdfs/
@@ -1802,6 +2125,21 @@
   // pre-cutover Level folder, so it must never be mistaken for one during
   // migration (it has no saves/pdfs/backup children, and would otherwise
   // show up here as a bogus "Level" named "base-plan").
+  // (v23 sweep -- "unreadable is not empty") Three changes to the ORDER of
+  // this, none to what it writes:
+  //   - "already migrated?" is decided by whether Floor Plans holds any
+  //     .json file at all (listLevelFileHandles), never by whether those
+  //     files happened to parse -- so a project whose level files are all
+  //     mid-sync for a moment is never mistaken for an unmigrated one and
+  //     re-written from its frozen legacy folders;
+  //   - every legacy source is read FIRST (strict, in parallel) and the new
+  //     files are written only once EVERY read has succeeded -- a failure
+  //     part-way used to leave some levels written and others not, after
+  //     which the non-empty Floor Plans folder meant the rest were never
+  //     migrated at all; and the old per-level "write a bare file instead"
+  //     fallback is gone, since a bare file for a level whose legacy save
+  //     merely couldn't be read yet IS the data loss;
+  //   - memoised per project per session once known to be migrated.
   function legacyLevelFolderNames(projectHandle){
     return listSubdirNames(projectHandle).then(function(names){
       return names.filter(function(n){ return n !== "itp" && n !== "itp-install" && n !== "itp-manufacture" && n !== "itp-delivery" && n !== "base-plan" && n !== projectSavesDirName() && n !== "PDF Files" && n !== "Backups"; });
@@ -1817,93 +2155,87 @@
   // way the pre-v8 folder migration below works. Only the latest
   // base-plan version is carried forward (older versions were never
   // exposed to a person browsing the folder anyway). Never touches or
-  // deletes levels.json/base-plan/ itself.
+  // deletes levels.json/base-plan/ itself. Strict reads throughout (v23):
+  // a levels.json or manifest that exists but can't be read rejects and
+  // writes nothing, rather than writing a level with no plan.
   function migrateV8LevelsIfAny(projectHandle){
-    return projectHandle.getFileHandle("levels.json", { create: false }).then(function(fh){
-      return fh.getFile();
-    }).then(function(file){
-      return file.text();
-    }).then(function(text){
-      try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
-    }, function(){ return []; }).then(function(v8Levels){
+    return readJsonArrayFileStrict(projectHandle, "levels.json", "levels.json").then(function(v8Levels){
       if (!v8Levels.length) return [];
-      return v8Levels.reduce(function(chain, v8Level){
-        return chain.then(function(acc){
-          return projectHandle.getDirectoryHandle("base-plan", { create: false }).then(function(baseH){
-            return baseH.getDirectoryHandle(v8Level.name, { create: false });
-          }).then(function(lvlDirH){
-            return lvlDirH.getFileHandle("manifest.json", { create: false });
-          }).then(function(fh){
-            return fh.getFile();
-          }).then(function(file){
-            return file.text();
-          }).then(function(text){
-            try{
-              var manifest = JSON.parse(text);
-              var versions = (manifest && Array.isArray(manifest.versions)) ? manifest.versions : [];
-              return versions.length ? versions[versions.length - 1] : null;
-            }catch(e){ return null; }
-          }, function(){ return null; }).then(function(latest){
-            var data = {
+      return Promise.all(v8Levels.map(function(v8Level){
+        return projectHandle.getDirectoryHandle("base-plan", { create: false }).then(function(baseH){
+          return baseH.getDirectoryHandle(v8Level.name, { create: false });
+        }).then(function(lvlDirH){
+          return readTextFileStrict(lvlDirH, "manifest.json", "base-plan manifest for " + v8Level.name, function(text){
+            var manifest = JSON.parse(text);
+            var versions = (manifest && Array.isArray(manifest.versions)) ? manifest.versions : [];
+            return versions.length ? versions[versions.length - 1] : null;
+          }).then(function(res){ return res.found ? res.value : null; });
+        }, function(err){
+          if (isNotFoundErr(err)) return null; // no base-plan folder for this level -- a v8 level that never had a plan imported
+          return Promise.reject(readFailedErr("base-plan folder for " + v8Level.name, err));
+        }).then(function(latest){
+          return {
+            name: v8Level.name,
+            data: {
               imageDataURL: latest ? latest.imageDataURL : null,
               imageTiles: latest ? latest.imageTiles : null,
               imageW: latest ? latest.imageW : 0,
               imageH: latest ? latest.imageH : 0,
               rooms: Array.isArray(v8Level.rooms) ? v8Level.rooms : [],
               markers: Array.isArray(v8Level.markers) ? v8Level.markers : []
-            };
-            return writeLevelFile(projectHandle, activeProjectName, v8Level.name, data).then(function(){
-              acc.push(data);
-              return acc;
-            });
-          });
+            }
+          };
         });
-      }, Promise.resolve([]));
+      })).then(function(prepared){
+        // Every source read cleanly -- only now write anything.
+        return prepared.reduce(function(chain, p){
+          return chain.then(function(acc){
+            return writeLevelFile(projectHandle, activeProjectName, p.name, p.data).then(function(){ acc.push(p.data); return acc; });
+          });
+        }, Promise.resolve([]));
+      });
     });
   }
   function migrateLegacyLevelsIfNeeded(projectHandle){
-    return listLevelFiles(projectHandle).then(function(existingLevels){
-      if (existingLevels.length) return existingLevels;
+    var memoKey = (projectHandle && projectHandle.name || "") + "\u0000levels";
+    if (migratedThisSession[memoKey]) return Promise.resolve([]);
+    return listLevelFileHandles(projectHandle).then(function(existingHandles){
+      if (existingHandles.length){ migratedThisSession[memoKey] = true; return null; }
       return migrateV8LevelsIfAny(projectHandle);
-    }).then(function(existingLevels){
-      if (existingLevels.length) return existingLevels;
+    }).then(function(migrated){
+      if (migrated === null) return [];
+      if (migrated.length){ migratedThisSession[memoKey] = true; return migrated; }
       return legacyLevelFolderNames(projectHandle).then(function(levelNames){
-        if (!levelNames.length) return [];
-        return levelNames.reduce(function(chain, levelName){
-          return chain.then(function(acc){
-            return projectHandle.getDirectoryHandle(levelName).then(function(levelDirH){
-              return listSubdirNames(levelDirH).then(function(childNames){
-                var roomNames = childNames.filter(function(n){ return n !== "saves" && n !== "pdfs" && n !== "backup"; });
-                return readSavedPlanRaw(levelDirH, levelName).then(function(saved){
-                  var markers = (saved && Array.isArray(saved.objects)) ? saved.objects.filter(function(o){ return o && o.type === "roomlink"; }) : [];
-                  var data = {
+        if (!levelNames.length){ migratedThisSession[memoKey] = true; return []; }
+        // Read every legacy level first (in parallel) ...
+        return Promise.all(levelNames.map(function(levelName){
+          return projectHandle.getDirectoryHandle(levelName).then(function(levelDirH){
+            return listSubdirNames(levelDirH).then(function(childNames){
+              var roomNames = childNames.filter(function(n){ return n !== "saves" && n !== "pdfs" && n !== "backup"; });
+              return readSavedPlanRaw(levelDirH, levelName).then(function(saved){
+                var markers = (saved && Array.isArray(saved.objects)) ? saved.objects.filter(function(o){ return o && o.type === "roomlink"; }) : [];
+                return {
+                  name: levelName,
+                  data: {
                     imageDataURL: saved ? saved.imageDataURL : null,
                     imageTiles: saved ? saved.imageTiles : null,
                     imageW: saved ? saved.imageW : 0,
                     imageH: saved ? saved.imageH : 0,
                     rooms: roomNames.map(function(r){ return { name: r }; }),
                     markers: markers
-                  };
-                  return writeLevelFile(projectHandle, activeProjectName, levelName, data).then(function(){
-                    acc.push(data);
-                    return acc;
-                  });
-                });
-              });
-            }).catch(function(err){
-              // One bad level shouldn't lose every other level in this
-              // project's migration -- write it as a bare, room/marker-less
-              // file (still openable, still browsable) rather than failing
-              // the whole migration.
-              console.error("Migrating level to Floor Plans failed, writing a bare file:", levelName, err);
-              var bare = { imageDataURL: null, imageTiles: null, imageW: 0, imageH: 0, rooms: [], markers: [] };
-              return writeLevelFile(projectHandle, activeProjectName, levelName, bare).then(function(){
-                acc.push(bare);
-                return acc;
+                  }
+                };
               });
             });
           });
-        }, Promise.resolve([]));
+        })).then(function(prepared){
+          // ... and only once every one of them read cleanly, write them all.
+          return prepared.reduce(function(chain, p){
+            return chain.then(function(acc){
+              return writeLevelFile(projectHandle, activeProjectName, p.name, p.data).then(function(){ acc.push(p.data); return acc; });
+            });
+          }, Promise.resolve([]));
+        }).then(function(written){ migratedThisSession[memoKey] = true; return written; });
       });
     });
   }
@@ -1922,24 +2254,26 @@
   // Same filename/shape/parsing as source.html's own readProjectMeta so
   // this app never disagrees with Site Measure about what's in this file.
   function projectMetaFilename(){ return "project-meta.json"; }
+  // null ONLY when the file genuinely isn't there (a project with no info
+  // yet). (v23 sweep -- "unreadable is not empty") A file that exists but
+  // can't be read rejects read_failed: the Project info dialog is
+  // prefilled from this and its Save rewrites the whole file, so a
+  // transient failure used to open the dialog BLANK and let Save write
+  // blanks over the real Job #/name/builder/address/PM. The level list's
+  // own display of it now says "couldn't read" instead of "no metadata".
   function readProjectMeta(dirHandle){
     if (!dirHandle) return Promise.resolve(null);
-    return dirHandle.getFileHandle(projectMetaFilename()).then(function(fh){
-      return fh.getFile();
-    }).then(function(file){
-      return file.text();
-    }).then(function(text){
-      try{
-        var parsed = JSON.parse(text);
-        return {
-          no: String(parsed.no || ""),
-          name: String(parsed.name || ""),
-          contractor: String(parsed.contractor || ""),
-          siteAddress: String(parsed.siteAddress || ""),
-          projectManager: String(parsed.projectManager || "")
-        };
-      }catch(e){ return null; }
-    }, function(){ return null; }); // no file yet -- not an error
+    return readTextFileStrict(dirHandle, projectMetaFilename(), "project-meta.json", function(text){
+      var parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object") throw new Error("not a JSON object");
+      return {
+        no: String(parsed.no || ""),
+        name: String(parsed.name || ""),
+        contractor: String(parsed.contractor || ""),
+        siteAddress: String(parsed.siteAddress || ""),
+        projectManager: String(parsed.projectManager || "")
+      };
+    }).then(function(res){ return res.found ? res.value : null; });
   }
 
   // Extended schema (v2): keeps Site Measure's own three keys (no/name/
@@ -2139,6 +2473,7 @@
         finalName = base + " " + n; n++;
       }
       return projectsRootHandle.getDirectoryHandle(finalName, { create: true }).then(function(dirH){
+        resetProjectScopedState();
         activeProjectHandle = dirH;
         activeProjectName = finalName;
         return finalName;
@@ -2160,6 +2495,9 @@
       showToast("Couldn't create that project.");
     });
   });
+  // (v23 sweep) The prefill read is strict: a project-meta.json that
+  // exists but can't be read refuses to open the dialog at all, rather than
+  // opening it blank and letting Save write blanks over the real info.
   function editCurrentProjectInfo(){
     readProjectMeta(activeProjectHandle).then(function(current){
       return showProjectInfoDialog(current);
@@ -2171,7 +2509,8 @@
       });
     }).catch(function(err){
       console.error("Saving project info failed:", err);
-      showToast("Couldn't save project info.");
+      if (isReadFailed(err)) readFailedToast("project-meta.json");
+      else showToast("Couldn't save project info.");
     });
   }
   editProjectInfoBtn.addEventListener("click", editCurrentProjectInfo);
@@ -2260,8 +2599,13 @@
     cropImg.src = "";
     var resolve = cropResolve; cropResolve = null;
     var src = cropSrc; cropSrc = null;
-    if (resolve) resolve(result || { dataUrl: src.dataUrl, w: src.w, h: src.h });
+    if (resolve) resolve(result || (src ? { dataUrl: src.dataUrl, w: src.w, h: src.h } : { cancelled: true }));
   }
+  // (v23 sweep) The crop dialog had no way out except importing the photo
+  // ("Use whole photo" or "Crop") -- so the phone's Back button, which
+  // closes any open dialog first, would have imported it. A plain Cancel
+  // now abandons the import with nothing written.
+  function cancelCropDialog(){ closeCropDialog({ cancelled: true }); }
   function applyCrop(){
     var dw = cropImg.offsetWidth, dh = cropImg.offsetHeight;
     if (!dw || !dh || !cropSrc){ closeCropDialog(); return; }
@@ -2284,6 +2628,7 @@
     full.src = cropSrc.dataUrl;
   }
   cropSkipBtn.addEventListener("click", function(){ closeCropDialog(); });
+  document.getElementById("cropCancelBtn").addEventListener("click", cancelCropDialog);
   cropApplyBtn.addEventListener("click", applyCrop);
   var MIN_CROP_PX = 24;
   function startCropDrag(e, mode, corner){
@@ -2559,6 +2904,7 @@
     return readImageFile(file).then(function(res){
       return showCropDialog(res.dataUrl, res.w, res.h);
     }).then(function(cropped){
+      if (cropped && cropped.cancelled) return Promise.reject({ code: "pdf_import_cancelled" }); // same "cancelled -> silent" path as the PDF page picker
       return { imageDataURL: cropped.dataUrl, imageTiles: null, imageW: cropped.w, imageH: cropped.h };
     });
   }
@@ -2570,12 +2916,19 @@
   var levelImportPlanBtn = document.getElementById("levelImportPlanBtn");
   var levelPlanFileInput = document.getElementById("levelPlanFileInput");
   var levelPlanPreview = document.getElementById("levelPlanPreview");
+  // (v23 sweep) A level file that can't be read right now no longer
+  // reads as "no plan yet" (which skipped the Replace confirm) -- it says
+  // so and does nothing.
   levelImportPlanBtn.addEventListener("click", function(){
     readLevelFile(activeProjectHandle, activeProjectName, activeLevelName).then(function(level){
       if (!level || !level.imageDataURL && !level.imageTiles){ levelPlanFileInput.click(); return; }
       showConfirmDialog("Replace this level's floor plan? This won't affect any rooms.").then(function(ok){
         if (ok) levelPlanFileInput.click();
       });
+    }).catch(function(err){
+      console.error("Reading level before import failed:", err);
+      if (isReadFailed(err)) readFailedToast("this level's file");
+      else showToast("Couldn't open this level's file.");
     });
   });
   levelPlanFileInput.addEventListener("change", function(){
@@ -2599,6 +2952,11 @@
     }).catch(function(err){
       if (err && err.code === "pdf_import_cancelled") return;
       console.error("Floorplan import failed:", err);
+      // (v23 sweep) The read-modify-write above re-reads the level file
+      // strictly: if it can't be read, the imported plan is NOT written
+      // (writing it onto `{rooms:[], markers:[]}` used to wipe every room,
+      // marker and Site Measure drawing on the level).
+      if (isReadFailed(err)){ readFailedToast("this level's file"); return; }
       showToast(err && err.code ? (isPdfFile(file) ? pdfImportErrorToast(err) : imageReadErrorToast(err)) : "Couldn't import that floor plan.");
     });
   });
@@ -2622,15 +2980,17 @@
      simplest place a whole-project Joinery Register (a later build-
      sequence step) can read from in one call. */
   function joineryItemsFilename(){ return "joinery-items.json"; }
+  // [] ONLY when the file genuinely doesn't exist yet (a project with no
+  // items). (v23 sweep -- "unreadable is not empty") This app is the SOLE
+  // writer of joinery-items.json and both of its writers (addJoineryItem,
+  // applyJoineryItemEdit) are read-modify-WRITE of the whole array -- so a
+  // file that exists but can't be read for a moment used to come back as
+  // [] and "Add joinery item" then wrote a file holding ONLY the new item,
+  // every other record in the project gone. Now that case rejects
+  // read_failed (after one retry) and neither writer touches the file.
   function readJoineryItems(projectHandle){
     if (!projectHandle) return Promise.resolve([]);
-    return projectHandle.getFileHandle(joineryItemsFilename(), { create: false }).then(function(fh){
-      return fh.getFile();
-    }).then(function(file){
-      return file.text();
-    }).then(function(text){
-      try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
-    }, function(){ return []; }); // no file yet -- not an error
+    return readJsonArrayFileStrict(projectHandle, joineryItemsFilename(), "joinery-items.json");
   }
   function writeJoineryItems(projectHandle, items){
     return projectHandle.getFileHandle(joineryItemsFilename(), { create: true }).then(function(fh){
@@ -2639,6 +2999,8 @@
       return w.write(JSON.stringify(items)).then(function(){ return w.close(); });
     });
   }
+  // Re-reads strictly (readJoineryItems rejects read_failed for a file
+  // that exists but can't be read) -- never appends onto an empty guess.
   function addJoineryItem(projectHandle, item){
     return readJoineryItems(projectHandle).then(function(items){
       items.push(item);
@@ -2820,10 +3182,9 @@
      files than any other in the family -- is very often the first one to
      touch a given project after this update. */
   function joineryStatusEventsBranchName(){ return "Joinery Status"; }
+  // Memoised per project (v23 sweep, getCachedDir) -- see projectDir.
   function getJoineryStatusEventsRootDir(projectHandle, create){
-    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: !!create }).then(function(psH){
-      return psH.getDirectoryHandle(joineryStatusEventsBranchName(), { create: !!create });
-    });
+    return projectDir(projectHandle, [projectSavesDirName(), joineryStatusEventsBranchName()], !!create);
   }
   function getJoineryStatusItemDir(projectHandle, key, create){
     return getJoineryStatusEventsRootDir(projectHandle, create).then(function(rootH){
@@ -2842,10 +3203,84 @@
     var slug = sanitizeUserName(user) || "Unnamed";
     return slug + " - " + stamp + " - " + kind + ".json";
   }
+  // Pure-display read, deliberately soft (v23 sweep audit): one event file
+  // that's mid-sync reads as null and is left out of THIS fold -- the
+  // Register/item page then show that item one stage behind for a moment
+  // and catch up on the next open. Nothing is ever written from a folded
+  // status or schedule here (this app never writes joinery-status.json,
+  // joinery-schedule.json or their events), so a missing event can't be
+  // copied forward into anything, and the folded-event cache below never
+  // remembers a fold that had to skip a file.
   function readJsonFileHandle(fh){
     return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
       try{ var parsed = JSON.parse(text); return (parsed && typeof parsed === "object") ? parsed : null; }catch(e){ return null; }
     }, function(){ return null; });
+  }
+  function listJsonFileHandlesIn(dirH){
+    if (!dirH || typeof dirH.values !== "function") return Promise.resolve([]);
+    var handles = [];
+    var iter = dirH.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return handles;
+        if (res.value && res.value.kind === "file" && /\.json$/i.test(res.value.name)) handles.push(res.value);
+        return step();
+      });
+    }
+    return step();
+  }
+  function listEventItemDirs(rootH){
+    if (!rootH || typeof rootH.values !== "function") return Promise.resolve([]);
+    var dirs = [];
+    var iter = rootH.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return dirs;
+        if (res.value && res.value.kind === "directory") dirs.push(res.value);
+        return step();
+      });
+    }
+    return step();
+  }
+  /* Folded-event cache (v23 sweep -- speed, same shape as UTZLINE Scheduler
+     v19's readFoldedEventBranch). Every event file in "Joinery Status" /
+     "Joinery Schedule" is IMMUTABLE by design (one file per action, named
+     "<user> - <yyyy-mm-dd hh-mm-ss-mmm> - <kind>.json", never rewritten --
+     see this app's own v19/v20 notes), so the exact SET of filenames in an
+     item's folder fully determines its fold. The listing hands those names
+     back for free; what cost a call each was a named getDirectoryHandle()
+     per item plus a getFile() per event file, on every item, on every
+     Register open -- hundreds of calls per project, hundreds of ms each on
+     Andrew's tablet. Now each item's folder is read straight from the
+     handle the listing returns (no named lookup), in parallel, and its last
+     fold is remembered in this app's own IndexedDB against that filename
+     set and reused verbatim while the set is unchanged; only an item with a
+     new event file is actually read. Only a fold in which EVERY file read
+     cleanly is remembered -- a fold that had to skip a mid-sync file is
+     recomputed next time ("unreadable is not empty" carries through to the
+     cache). */
+  function readFoldedEventBranch(projectHandle, rootH, branch, foldFn){
+    var cacheKey = "eventFolds\u0000" + (projectsRootName || "") + "\u0000" + ((projectHandle && projectHandle.name) || "") + "\u0000" + branch;
+    return Promise.all([listEventItemDirs(rootH), idbGet(cacheKey).catch(function(){ return null; })]).then(function(r){
+      var dirs = r[0], cached = (r[1] && typeof r[1] === "object") ? r[1] : {};
+      var next = {};
+      return Promise.all(dirs.map(function(dirH){
+        return listJsonFileHandlesIn(dirH).then(function(handles){
+          var sig = handles.map(function(h){ return h.name; }).sort().join("\u0000");
+          var hit = cached[dirH.name];
+          if (hit && hit.sig === sig){ next[dirH.name] = hit; return hit.rec; }
+          return Promise.all(handles.map(readJsonFileHandle)).then(function(events){
+            var allRead = events.every(function(e){ return e && typeof e === "object"; });
+            var rec = foldFn(events.filter(function(e){ return e && typeof e === "object"; }));
+            if (allRead) next[dirH.name] = { sig: sig, rec: rec };
+            return rec;
+          });
+        }, function(){ return null; });
+      })).then(function(list){
+        idbSet(cacheKey, next).catch(function(){});
+        return list.filter(Boolean);
+      });
+    });
   }
   function listJoineryStatusEventsForItem(projectHandle, key){
     return getJoineryStatusItemDir(projectHandle, key, false).then(function(dirH){
@@ -2888,21 +3323,34 @@
     if (latestJobNote){ rec.jobNote = true; rec.jobNoteAt = latestJobNote.at; rec.jobNoteBy = latestJobNote.by || ""; }
     return rec;
   }
+  // [] only when the legacy file genuinely isn't there; read_failed for one
+  // that exists but won't read -- see migrateLegacyJoineryStatusIfNeeded.
   function readLegacyJoineryStatusFile(projectHandle){
-    return projectHandle.getFileHandle("joinery-status.json", { create: false }).then(function(fh){
-      return fh.getFile();
-    }).then(function(file){
-      return file.text();
-    }).then(function(text){
-      try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
-    }, function(){ return []; });
+    return readJsonArrayFileStrict(projectHandle, "joinery-status.json", "joinery-status.json");
   }
+  /* (v23 sweep -- "unreadable is not empty", same fix as UTZLINE Scheduler
+     v19.) The original order was: create the events folder, THEN read the
+     legacy file, THEN write one event per history entry -- with the legacy
+     read collapsing every failure to []. On a Dropbox-synced Android folder
+     that meant: legacy file mid-sync -> reads as nothing -> an EMPTY events
+     folder is created -> from that moment every app in the family sees the
+     events folder exists and never reads the legacy file again -> every
+     item's status history gone from every app's point of view, with the
+     legacy file still sitting there untouched. Now the legacy file is read
+     FIRST (strict: [] only for genuinely absent, one retry then read_failed
+     otherwise) and the events folder is only created once that read has
+     succeeded; a failed read rejects and creates NOTHING, so the next open
+     simply tries again. Also memoised per project per session. */
   function migrateLegacyJoineryStatusIfNeeded(projectHandle){
+    var memoKey = (projectHandle && projectHandle.name || "") + "\u0000status";
+    if (migratedThisSession[memoKey]) return Promise.resolve(false);
     return getJoineryStatusEventsRootDir(projectHandle, false).then(function(){
+      migratedThisSession[memoKey] = true;
       return false;
-    }, function(){
-      return getJoineryStatusEventsRootDir(projectHandle, true).then(function(){
-        return readLegacyJoineryStatusFile(projectHandle);
+    }, function(err){
+      if (!isNotFoundErr(err)) return Promise.reject(readFailedErr("Joinery Status folder", err)); // can't tell -> don't migrate
+      return readLegacyJoineryStatusFile(projectHandle).then(function(list){
+        return getJoineryStatusEventsRootDir(projectHandle, true).then(function(){ return list; });
       }).then(function(list){
         var writes = [];
         list.forEach(function(rec){
@@ -2937,29 +3385,31 @@
           }
         });
         return Promise.all(writes);
-      }).then(function(){ return true; }).catch(function(){ return false; });
+      }).then(function(){ migratedThisSession[memoKey] = true; return true; }).catch(function(err){
+        // A legacy file that exists but couldn't be read is the one failure
+        // that must NOT be swallowed -- nothing was created, the caller
+        // surfaces it, and the next open tries again.
+        if (isReadFailed(err)) return Promise.reject(err);
+        return false;
+      });
     });
   }
+  // Rejects read_failed only when the legacy file (or the events folder's
+  // own existence check) can't be read -- the Register then says so rather
+  // than showing every item as "Created". Per-item event folders are read
+  // straight from the handles the listing returns, in parallel, through
+  // the folded-event cache.
   function readJoineryStatuses(projectHandle){
     if (!projectHandle) return Promise.resolve([]);
     return migrateLegacyJoineryStatusIfNeeded(projectHandle).then(function(){
-      return getJoineryStatusEventsRootDir(projectHandle, false).then(function(rootH){
-        var keys = [];
-        var iter = rootH.values();
-        function step(){
-          return iter.next().then(function(res){
-            if (res.done) return keys;
-            if (res.value && res.value.kind === "directory") keys.push(res.value.name);
-            return step();
-          });
-        }
-        return step();
-      }, function(){ return null; });
-    }).then(function(keys){
-      if (keys === null) return readLegacyJoineryStatusFile(projectHandle);
-      return Promise.all(keys.map(function(key){
-        return listJoineryStatusEventsForItem(projectHandle, key).then(foldJoineryStatusEvents);
-      })).then(function(list){ return list.filter(Boolean); });
+      return getJoineryStatusEventsRootDir(projectHandle, false).then(null, function(err){
+        if (isNotFoundErr(err)) return null;
+        forgetProjectDir(projectHandle, [projectSavesDirName()]);
+        return Promise.reject(readFailedErr("Joinery Status folder", err));
+      });
+    }).then(function(rootH){
+      if (rootH === null) return readLegacyJoineryStatusFile(projectHandle);
+      return readFoldedEventBranch(projectHandle, rootH, joineryStatusEventsBranchName(), foldJoineryStatusEvents);
     });
   }
   function findJoineryStatus(list, level, room, joineryId){
@@ -3013,9 +3463,7 @@
   function joineryScheduleFilename(){ return "joinery-schedule.json"; }
   function joineryScheduleEventsBranchName(){ return "Joinery Schedule"; }
   function getJoineryScheduleEventsRootDir(projectHandle, create){
-    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: !!create }).then(function(psH){
-      return psH.getDirectoryHandle(joineryScheduleEventsBranchName(), { create: !!create });
-    });
+    return projectDir(projectHandle, [projectSavesDirName(), joineryScheduleEventsBranchName()], !!create);
   }
   function getJoineryScheduleItemDir(projectHandle, key, create){
     return getJoineryScheduleEventsRootDir(projectHandle, create).then(function(rootH){
@@ -3055,21 +3503,22 @@
       setBy: latest.by || ""
     };
   }
+  // Strict (v23 sweep) -- same reasoning as readLegacyJoineryStatusFile.
   function readLegacyJoinerySchedule(projectHandle){
-    return projectHandle.getFileHandle(joineryScheduleFilename(), { create: false }).then(function(fh){
-      return fh.getFile();
-    }).then(function(file){
-      return file.text();
-    }).then(function(text){
-      try{ var arr = JSON.parse(text); return Array.isArray(arr) ? arr : []; }catch(e){ return []; }
-    }, function(){ return []; });
+    return readJsonArrayFileStrict(projectHandle, joineryScheduleFilename(), joineryScheduleFilename());
   }
+  // Same read-legacy-FIRST order and per-session memo as
+  // migrateLegacyJoineryStatusIfNeeded above (v23 sweep).
   function migrateLegacyJoineryScheduleIfNeeded(projectHandle){
+    var memoKey = (projectHandle && projectHandle.name || "") + "\u0000schedule";
+    if (migratedThisSession[memoKey]) return Promise.resolve(false);
     return getJoineryScheduleEventsRootDir(projectHandle, false).then(function(){
+      migratedThisSession[memoKey] = true;
       return false;
-    }, function(){
-      return getJoineryScheduleEventsRootDir(projectHandle, true).then(function(){
-        return readLegacyJoinerySchedule(projectHandle);
+    }, function(err){
+      if (!isNotFoundErr(err)) return Promise.reject(readFailedErr("Joinery Schedule folder", err));
+      return readLegacyJoinerySchedule(projectHandle).then(function(list){
+        return getJoineryScheduleEventsRootDir(projectHandle, true).then(function(){ return list; });
       }).then(function(list){
         var writes = [];
         list.forEach(function(rec){
@@ -3093,29 +3542,23 @@
           }).catch(function(){}));
         });
         return Promise.all(writes);
-      }).then(function(){ return true; }).catch(function(){ return false; });
+      }).then(function(){ migratedThisSession[memoKey] = true; return true; }).catch(function(err){
+        if (isReadFailed(err)) return Promise.reject(err); // legacy file exists but couldn't be read: nothing created, surface it
+        return false;
+      });
     });
   }
   function readJoinerySchedule(projectHandle){
     if (!projectHandle) return Promise.resolve([]);
     return migrateLegacyJoineryScheduleIfNeeded(projectHandle).then(function(){
-      return getJoineryScheduleEventsRootDir(projectHandle, false).then(function(rootH){
-        var keys = [];
-        var iter = rootH.values();
-        function step(){
-          return iter.next().then(function(res){
-            if (res.done) return keys;
-            if (res.value && res.value.kind === "directory") keys.push(res.value.name);
-            return step();
-          });
-        }
-        return step();
-      }, function(){ return null; });
-    }).then(function(keys){
-      if (keys === null) return readLegacyJoinerySchedule(projectHandle);
-      return Promise.all(keys.map(function(key){
-        return listJoineryScheduleEventsForItem(projectHandle, key).then(foldJoinerySchedule);
-      })).then(function(list){ return list.filter(Boolean); });
+      return getJoineryScheduleEventsRootDir(projectHandle, false).then(null, function(err){
+        if (isNotFoundErr(err)) return null;
+        forgetProjectDir(projectHandle, [projectSavesDirName()]);
+        return Promise.reject(readFailedErr("Joinery Schedule folder", err));
+      });
+    }).then(function(rootH){
+      if (rootH === null) return readLegacyJoinerySchedule(projectHandle);
+      return readFoldedEventBranch(projectHandle, rootH, joineryScheduleEventsBranchName(), foldJoinerySchedule);
     });
   }
   function findScheduleRecord(list, level, room, joineryId){
@@ -3250,10 +3693,12 @@
   }
 
   /* ---- Job notes (mirrors source.html's own getJobNotesDirForItem/listJobNotes) ---- */
+  // Linked-document readers below are pure-display reads (v23 audit) --
+  // they may fail soft to an empty list, since nothing is ever written
+  // from them; their branch folders now resolve through the per-session
+  // directory-handle cache (projectDir) instead of a fresh walk per card.
   function getJobNotesDirForItem(projectHandle, key){
-    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
-      return psH.getDirectoryHandle("Job Notes", { create: false });
-    }).then(function(jnH){
+    return projectDir(projectHandle, [projectSavesDirName(), "Job Notes"], false).then(function(jnH){
       return jnH.getDirectoryHandle(key, { create: false });
     });
   }
@@ -3286,9 +3731,7 @@
      listShopDrawingRevisions/listShopDrawings) -- one entry per independent
      drawing, each with its own revisions (oldest first). */
   function getShopDrawingsDirForItem(projectHandle, key){
-    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
-      return psH.getDirectoryHandle("Shop Drawings", { create: false });
-    }).then(function(sdH){
+    return projectDir(projectHandle, [projectSavesDirName(), "Shop Drawings"], false).then(function(sdH){
       return sdH.getDirectoryHandle(key, { create: false });
     });
   }
@@ -3343,9 +3786,7 @@
      Save across every user who's ever measured it), unlike Site Measure's
      own per-user layer picker -- see readLatestJoineryOverlayForItem. */
   function getSiteMeasuresDirForItem(projectHandle, key){
-    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
-      return psH.getDirectoryHandle("Site Measures", { create: false });
-    }).then(function(smH){
+    return projectDir(projectHandle, [projectSavesDirName(), "Site Measures"], false).then(function(smH){
       return smH.getDirectoryHandle(key, { create: false });
     });
   }
@@ -3427,11 +3868,7 @@
   // instead of duplicating it. Resolves to null (not a rejection) for "no
   // checklist started yet" -- the normal, common case for most items.
   function readItpChecklistRaw(projectHandle, appBranch, item){
-    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: false }).then(function(psH){
-      return psH.getDirectoryHandle("UTZLINE ITP", { create: false });
-    }).then(function(branchH){
-      return branchH.getDirectoryHandle(appBranch, { create: false });
-    }).then(function(dirH){
+    return projectDir(projectHandle, [projectSavesDirName(), "UTZLINE ITP", appBranch], false).then(function(dirH){
       return dirH.getFileHandle(itpChecklistFileNameForItem(item), { create: false });
     }).then(function(fh){
       return fh.getFile();
@@ -3483,11 +3920,7 @@
     });
   }
   function listItpPdfsForItem(projectHandle, appBranch, item){
-    return projectHandle.getDirectoryHandle("PDF Files", { create: false }).then(function(pfH){
-      return pfH.getDirectoryHandle("UTZLINE ITP", { create: false });
-    }).then(function(branchH){
-      return branchH.getDirectoryHandle(appBranch, { create: false });
-    }).then(function(dirH){
+    return projectDir(projectHandle, ["PDF Files", "UTZLINE ITP", appBranch], false).then(function(dirH){
       var prefix = itpPdfBaseNameForItem(item) + "_";
       return listFilesInDir(dirH, function(name){ return name.indexOf(prefix) === 0 && /\.pdf$/i.test(name); });
     }, function(){ return []; });
@@ -3508,11 +3941,7 @@
   // rework PDF to show" apart from "couldn't read it" the same way every
   // other reader here does.
   function readReworkPdfForItem(projectHandle, item){
-    return projectHandle.getDirectoryHandle("PDF Files", { create: false }).then(function(pfH){
-      return pfH.getDirectoryHandle("UTZLINE ITP", { create: false });
-    }).then(function(branchH){
-      return branchH.getDirectoryHandle("Install ITP Rework", { create: false });
-    }).then(function(dirH){
+    return projectDir(projectHandle, ["PDF Files", "UTZLINE ITP", "Install ITP Rework"], false).then(function(dirH){
       var fileName = itpPdfBaseNameForItem(item) + ".pdf";
       return dirH.getFileHandle(fileName, { create: false }).then(function(fh){
         return { fileName: fileName, handle: fh };
@@ -3529,21 +3958,23 @@
      writes) so migrateLegacyLevelsIfNeeded (above) can pull both out of it
      once, into the new files. There is no write side any more -- nothing
      writes this old per-folder shape going forward. */
+  // (v23 sweep -- "unreadable is not empty") null ONLY for a legacy level
+  // that genuinely has no saves/ folder or save file; a save file that
+  // exists but can't be read or parsed rejects read_failed, so the
+  // migration above writes nothing this time round instead of a plan-less
+  // level file it would never look behind again.
   function readSavedPlanRaw(dirHandle, name){
     if (!dirHandle) return Promise.resolve(null);
     return dirHandle.getDirectoryHandle("saves", { create: false }).then(function(savesH){
-      return savesH.getFileHandle(projectSaveFilename(name));
-    }).then(function(fh){
-      return fh.getFile();
-    }).then(function(file){
-      return file.text();
-    }).then(function(text){
-      try{
+      return readTextFileStrict(savesH, projectSaveFilename(name), "legacy save for " + name, function(text){
         var saved = JSON.parse(text);
-        if (!saved || !(saved.utzlineProject || saved.redlineProject)) return null;
+        if (!saved || !(saved.utzlineProject || saved.redlineProject)) throw new Error("not a UTZLINE save file");
         return saved;
-      }catch(e){ return null; }
-    }, function(){ return null; });
+      }).then(function(res){ return res.found ? res.value : null; });
+    }, function(err){
+      if (isNotFoundErr(err)) return null;
+      return Promise.reject(readFailedErr("legacy saves folder for " + name, err));
+    });
   }
   // Site Measure's own uid()/makeRoomLink() (source.html) -- same object
   // shape, so a marker placed here is indistinguishable, once opened in
@@ -3585,7 +4016,17 @@
   var planSaved = null; // the full parsed save file currently loaded into the canvas
 
   function planApplyTransform(){
+    planTransformRaf = 0;
     planCanvasWorld.setAttribute("transform", "translate(" + planView.tx + " " + planView.ty + ") scale(" + planView.scale + ")");
+  }
+  // (v23 sweep) pointermove fires far more often than the screen repaints
+  // (several times per frame on a fast touch panel); each one used to
+  // rewrite the SVG transform -- and re-lay-out a plan made of several MB
+  // of tiles -- immediately. Pan/pinch now update planView at once (so the
+  // maths stays exact) but coalesce the DOM write to one per frame.
+  var planTransformRaf = 0;
+  function planScheduleTransform(){
+    if (!planTransformRaf) planTransformRaf = requestAnimationFrame(planApplyTransform);
   }
   function planFitToView(){
     var w = planCanvasStage.clientWidth, h = planCanvasStage.clientHeight;
@@ -3608,7 +4049,7 @@
     planView.scale = clamp(newScale, 0.05, 20);
     planView.tx = sx - world.x * planView.scale;
     planView.ty = sy - world.y * planView.scale;
-    planApplyTransform();
+    planScheduleTransform();
   }
   function planRenderTiles(){
     while (planCanvasTilesG.firstChild) planCanvasTilesG.removeChild(planCanvasTilesG.firstChild);
@@ -3689,7 +4130,7 @@
     if (ids.length === 1){
       if (Math.abs(e.clientX - planDownPoint.x) > 4 || Math.abs(e.clientY - planDownPoint.y) > 4) planDragMoved = true;
       planView.tx += dx; planView.ty += dy;
-      planApplyTransform();
+      planScheduleTransform();
     } else if (ids.length === 2){
       var pts = ids.map(function(id){ return planPointers[id]; });
       var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
@@ -3713,6 +4154,11 @@
   }
   planCanvasSvg.addEventListener("pointerup", planPointerEnd);
   planCanvasSvg.addEventListener("pointercancel", function(e){ delete planPointers[e.pointerId]; planPinchLastDist = null; });
+  // (v23 sweep -- Android robustness) A long press on the plan used to pop
+  // Chrome's image/"save image" menu or start a text selection over the
+  // marker labels; the plan canvas swallows the context menu (it has no
+  // menu of its own), and the stage is user-select:none in CSS.
+  planCanvasStage.addEventListener("contextmenu", function(e){ e.preventDefault(); });
   planCanvasSvg.addEventListener("wheel", function(e){
     e.preventDefault();
     var factor = Math.pow(1.0015, -e.deltaY);
@@ -3720,6 +4166,7 @@
   }, { passive: false });
 
   function onPlanTap(worldX, worldY){
+    if (!planSaved) return; // this level's plan hasn't read yet -- nothing to add onto
     var hit = planMarkerAt(worldX, worldY);
     if (hit){
       var hitLevel = activeLevelName, hitRoom = hit.roomName || "", hitCode = hit.joineryCode || "";
@@ -3729,6 +4176,12 @@
         })[0];
         if (match){ openJoineryItemPage(match, "planCanvas"); }
         else { showToast((hitRoom || "") + (hitCode ? " · " + hitCode : "") + " — no matching item record found."); }
+      }).catch(function(err){
+        // (v23 sweep) Was an unhandled rejection; and an unreadable
+        // register must not claim "no matching item record found".
+        console.error("Reading joinery items for a marker tap failed:", err);
+        if (isReadFailed(err)) showToast("Couldn't read joinery-items.json (still syncing?) — try again in a moment.");
+        else showToast("Couldn't open that item.");
       });
       return;
     }
@@ -3754,6 +4207,7 @@
   function openAddJoineryItemDialog(worldX, worldY){
     addItemPendingWorldPoint = { x: worldX, y: worldY };
     listExistingRoomsInLevel(activeProjectHandle, activeProjectName, activeLevelName).then(function(existing){
+      if (!addItemPendingWorldPoint) return; // dismissed (Back) before the read finished
       addItemRoomSelect.innerHTML = "";
       existing.forEach(function(name){
         var opt = document.createElement("option");
@@ -3770,6 +4224,14 @@
       addItemWorkOrderInput.value = "";
       updateAddItemNewRoomVisibility();
       addItemBackdrop.hidden = false;
+    }).catch(function(err){
+      // (v23 sweep) Was an unhandled rejection. An unreadable level file
+      // must not open the dialog with an empty room list (the item would
+      // then be written onto a fresh, room-less level).
+      addItemPendingWorldPoint = null;
+      console.error("Reading rooms for Add joinery item failed:", err);
+      if (isReadFailed(err)) readFailedToast("this level's file");
+      else showToast("Couldn't open the Add joinery item dialog.");
     });
   }
   function closeAddItemDialog(){ addItemBackdrop.hidden = true; addItemPendingWorldPoint = null; }
@@ -3799,9 +4261,20 @@
     // save file. migrateLegacyLevelsIfNeeded is safe to call every time
     // (no-op once a project's already migrated), so this doesn't need its
     // own separate "is this project migrated yet" check.
+    // (v23 sweep) Both files this writes are re-read STRICTLY first --
+    // the level file and joinery-items.json are read together, before
+    // either is written, so an unreadable one stops the whole add with
+    // nothing written (previously an unreadable level file read as "new
+    // level" and was rewritten holding only this marker, and an unreadable
+    // joinery-items.json was rewritten holding only this item).
+    addItemSaveBtn.disabled = true;
     migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){
-      return readLevelFile(activeProjectHandle, activeProjectName, activeLevelName);
-    }).then(function(level){
+      return Promise.all([
+        readLevelFile(activeProjectHandle, activeProjectName, activeLevelName),
+        readJoineryItems(activeProjectHandle)
+      ]);
+    }).then(function(both){
+      var level = both[0], currentItems = both[1];
       var entry = level || { name: activeLevelName, imageDataURL: null, imageTiles: null, imageW: 0, imageH: 0, rooms: [], markers: [] };
       var existingLower = entry.rooms.map(function(r){ return r.name.toLowerCase(); });
       var finalRoomName;
@@ -3851,23 +4324,30 @@
       var marker = makeRoomLinkObject(worldPt.x, worldPt.y, finalRoomName, finalCode);
       entry.markers = entry.markers || [];
       entry.markers.push(marker);
-      planSaved.objects = planSaved.objects || [];
-      planSaved.objects.push(marker);
 
       return writeLevelFile(activeProjectHandle, activeProjectName, activeLevelName, entry).then(function(){
         return addJoineryItem(activeProjectHandle, {
           joineryId: finalCode, description: description, level: activeLevelName, room: finalRoomName, status: "created", workOrderNo: workOrderNo
         });
       }).then(function(){
-        planRenderMarkers();
+        // Only now that both writes landed does the on-screen plan gain the
+        // marker (it used to be pushed before the write, so a failed save
+        // still showed a marker that existed nowhere on disk).
+        if (planSaved){
+          planSaved.objects = planSaved.objects || [];
+          planSaved.objects.push(marker);
+          planRenderMarkers();
+        }
         closeAddItemDialog();
+        registerAllItems = []; // the Register's in-memory copy is now stale -- re-read on its next open
         showToast("Added " + finalRoomName + (finalCode ? " · " + finalCode : "") + ".");
       });
     }).catch(function(err){
       if (err && err.code === "handled") return;
       console.error("Add joinery item failed:", err);
-      showToast("Couldn't add that — try again.");
-    });
+      if (isReadFailed(err)) readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : "this level's file");
+      else showToast("Couldn't add that — try again.");
+    }).then(function(){ addItemSaveBtn.disabled = false; });
   });
 
   // Which screen "back" returns to from the plan canvas -- normally
@@ -3877,6 +4357,12 @@
   var planCanvasReturnScreen = "rooms";
   function openPlanCanvasForLevel(centerOnMarker){
     planCanvasTitle.textContent = activeProjectName + " — " + activeLevelName;
+    // Clear the previous level's plan straight away, so a slow read never
+    // shows (or lets someone tap-to-add onto) the LAST level's plan under
+    // this level's title. planSaved stays null until this level has read.
+    planSaved = null;
+    planRenderTiles();
+    planRenderMarkers();
     showScreen("planCanvas");
     // planSaved keeps EXACTLY the shape the rendering/hit-testing code
     // below already expects (imageDataURL/imageTiles/imageW/imageH +
@@ -3937,16 +4423,30 @@
           }
         }
       });
+    }, function(err){
+      // (v23 sweep) An unreadable level file no longer opens an empty plan
+      // that tap-to-add would then write a fresh, marker-less level from --
+      // back out and say so.
+      if (isReadFailed(err)){
+        readFailedToast("this level's file");
+        closePlanCanvas();
+        return;
+      }
+      return Promise.reject(err);
     });
   }
   openPlanCanvasBtn.addEventListener("click", function(){
     planCanvasReturnScreen = "rooms";
-    openPlanCanvasForLevel();
+    openPlanCanvasForLevel().catch(function(err){
+      console.error("Opening plan failed:", err);
+      showToast("Couldn't open this level's plan.");
+    });
   });
-  backFromPlanCanvasBtn.addEventListener("click", function(){
+  function closePlanCanvas(){
     showScreen(planCanvasReturnScreen);
     planCanvasReturnScreen = "rooms";
-  });
+  }
+  backFromPlanCanvasBtn.addEventListener("click", closePlanCanvas);
 
   /* ============================== Joinery Register ==============================
      A flat, filterable/sortable table over every joinery item record in
@@ -3975,6 +4475,12 @@
   var backFromRegisterBtn = document.getElementById("backFromRegisterBtn");
   var statusHistoryPop = document.getElementById("statusHistoryPop");
 
+  var registerHideDelivered = document.getElementById("registerHideDelivered");
+  var registerHideInstalled = document.getElementById("registerHideInstalled");
+  var registerCountNote = document.getElementById("registerCountNote");
+  var registerRefreshNote = document.getElementById("registerRefreshNote");
+  var registerRenderedFor = null; // the project name registerAllItems belongs to
+  var registerLoadSeq = 0;
   var registerAllItems = [];
   var registerStatusList = []; // the raw joinery-status.json array, read alongside joinery-items.json
   var registerScheduleList = []; // the raw joinery-schedule.json array (Scheduler's file, read-only here), read alongside the other two
@@ -3992,7 +4498,39 @@
   function registerItemDelayInfo(item){
     return computeDelayInfo(registerItemScheduleRecord(item), registerItemStatusKey(item), todayDateStr());
   }
+  /* ---- "Hide delivered" / "Hide installed" tick boxes (v23, 2026-09-26
+     addendum) -- Andrew, verbatim, mid-sweep: "add in tick boxes for
+     filtering out installed and delivered items. Also machining filter out
+     machined with a tickbox" (the machined one belongs to UTZLINE Machine
+     Schedule, not here). Ticked = rows whose CURRENT folded status is
+     exactly that stage are left out ("installed" outranks "delivered" in
+     the pipeline, so each box hides only its own stage; both ticked hides
+     both). Default unticked; each box is remembered per device in
+     localStorage under its own key (utzline-projects:register:hideDelivered
+     / ...:hideInstalled) so the choice sticks between visits -- best-effort,
+     a blocked or cleared storage just means unticked. Pure in-memory
+     filtering on the rows already loaded -- never a re-read -- with the
+     level/status dropdowns and the search box applying on top, and the
+     "Showing N of M items" line following what's actually visible. Same
+     helper shape as UTZLINE Scheduler v19's. (The Rework Register lists
+     rework ENTRIES, not items with a pipeline status, so it has no such
+     boxes.) */
+  function hideStatusCheckbox(el, storageKey){
+    try{ el.checked = localStorage.getItem(storageKey) === "1"; }catch(e){ el.checked = false; }
+    el.addEventListener("change", function(){
+      try{ localStorage.setItem(storageKey, el.checked ? "1" : "0"); }catch(e){}
+    });
+    return el;
+  }
+  function hiddenByStatusTicks(statusKey){
+    if (registerHideDelivered.checked && statusKey === "delivered") return true;
+    if (registerHideInstalled.checked && statusKey === "installed") return true;
+    return false;
+  }
+  hideStatusCheckbox(registerHideDelivered, "utzline-projects:register:hideDelivered");
+  hideStatusCheckbox(registerHideInstalled, "utzline-projects:register:hideInstalled");
   function registerMatchesFilters(item){
+    if (hiddenByStatusTicks(registerItemStatusKey(item))) return false;
     if (registerLevelFilter.value && item.level !== registerLevelFilter.value) return false;
     if (registerStatusFilter.value !== "" && registerStatusFilter.selectedIndex >= 0 && registerItemStatusKey(item) !== registerStatusFilter.value) return false;
     var q = registerSearchInput.value.trim().toLowerCase();
@@ -4027,7 +4565,8 @@
     if (isNaN(d.getTime())) return iso || "";
     return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   }
-  function hideStatusHistoryPop(){ statusHistoryPop.hidden = true; }
+  var statusPopTapAnchor = null; // the cell whose CLICK opened the popover, if a click did
+  function hideStatusHistoryPop(){ statusHistoryPop.hidden = true; statusPopTapAnchor = null; }
   // Elapsed time between two history entries (added 2026-09-23, Andrew:
   // "these status windows to show days between each process") -- newerIso
   // is always the same moment or later than olderIso, since hist is always
@@ -4077,7 +4616,12 @@
   document.addEventListener("click", function(e){
     if (!statusHistoryPop.hidden && !e.target.closest(".status-cell")) hideStatusHistoryPop();
   });
+  var lastTouchPointerAt = 0;
+  document.addEventListener("pointerdown", function(e){
+    if (e.pointerType === "touch" || e.pointerType === "pen") lastTouchPointerAt = Date.now();
+  }, true);
   function renderRegisterTable(){
+    hideStatusHistoryPop(); // the cell it was anchored to is about to be rebuilt
     var filtered = registerAllItems.filter(registerMatchesFilters);
     filtered.sort(registerCompare);
     registerTableBody.innerHTML = "";
@@ -4102,17 +4646,32 @@
         openJoineryItemPage(item, "register");
       });
       var statusCell = tr.querySelector(".status-cell");
-      statusCell.addEventListener("mouseenter", function(){ showStatusHistoryPop(statusCell, item); });
-      statusCell.addEventListener("mouseleave", hideStatusHistoryPop);
+      statusCell.addEventListener("mouseenter", function(){
+        // (v23 sweep) On a touch screen a tap fires a compatibility
+        // mouseenter and THEN a click -- the mouseenter opened the popup
+        // and the click, seeing it open, closed it again, so on Andrew's
+        // tablet a tap on a status cell just flickered. Hover is for a
+        // real mouse only; a tap is handled by the click below.
+        if (Date.now() - lastTouchPointerAt < 1000) return;
+        showStatusHistoryPop(statusCell, item);
+      });
+      statusCell.addEventListener("mouseleave", function(){ if (statusPopTapAnchor !== statusCell) hideStatusHistoryPop(); });
       statusCell.addEventListener("click", function(e){
         e.stopPropagation();
-        if (statusHistoryPop.hidden) showStatusHistoryPop(statusCell, item); else hideStatusHistoryPop();
+        // (v23 sweep) A click toggles only a popover that a previous click
+        // on THIS cell opened -- a mouse click used to land on a popover
+        // its own hover had just opened, and close it.
+        if (!statusHistoryPop.hidden && statusPopTapAnchor === statusCell){ hideStatusHistoryPop(); return; }
+        showStatusHistoryPop(statusCell, item);
+        statusPopTapAnchor = statusCell;
       });
       registerTableBody.appendChild(tr);
     });
     registerTable.hidden = registerAllItems.length === 0;
     registerEmptyProject.hidden = registerAllItems.length !== 0;
     registerEmpty.hidden = !(registerAllItems.length > 0 && filtered.length === 0);
+    var total = registerAllItems.length, shown = filtered.length;
+    registerCountNote.textContent = total === 0 ? "" : (shown === total ? (total + (total === 1 ? " item" : " items")) : ("Showing " + shown + " of " + total + " items"));
     Array.prototype.forEach.call(registerTable.querySelectorAll("th"), function(th){
       th.classList.remove("sorted", "desc");
       if (th.getAttribute("data-col") === registerSort.col){
@@ -4129,52 +4688,104 @@
       renderRegisterTable();
     });
   });
+  // (v23 sweep) A search box re-rendered the whole table (and re-bound
+  // every row's listeners) on every keystroke. Coalesced to one render
+  // shortly after typing pauses.
+  function debounce(fn, ms){
+    var t = 0;
+    return function(){ clearTimeout(t); t = setTimeout(fn, ms); };
+  }
   registerLevelFilter.addEventListener("change", renderRegisterTable);
   registerStatusFilter.addEventListener("change", renderRegisterTable);
-  registerSearchInput.addEventListener("input", renderRegisterTable);
+  registerHideDelivered.addEventListener("change", renderRegisterTable);
+  registerHideInstalled.addEventListener("change", renderRegisterTable);
+  registerSearchInput.addEventListener("input", debounce(renderRegisterTable, 100));
 
+  function applyRegisterData(items, levelNames, statusList, scheduleList){
+    registerAllItems = items || [];
+    registerStatusList = statusList || [];
+    registerScheduleList = scheduleList || [];
+    levelNames = levelNames || [];
+    // Distinct status KEYS actually present (in pipeline order, "Created"
+    // first), not raw joinery-items.json values -- V1 only ever wrote
+    // "created" there; the real, evolving status lives in
+    // joinery-status.json now.
+    var presentKeys = [""];
+    registerAllItems.forEach(function(item){
+      var k = registerItemStatusKey(item);
+      if (presentKeys.indexOf(k) === -1) presentKeys.push(k);
+    });
+    presentKeys.sort(function(a, b){ return joineryStatusRank(a) - joineryStatusRank(b); });
+    var prevLevel = registerLevelFilter.value, prevStatus = registerStatusFilter.value;
+    registerLevelFilter.innerHTML = "<option value=\"\">All levels</option>";
+    levelNames.forEach(function(name){
+      var opt = document.createElement("option");
+      opt.value = name; opt.textContent = name;
+      registerLevelFilter.appendChild(opt);
+    });
+    registerStatusFilter.innerHTML = "<option value=\"\">All statuses</option>";
+    presentKeys.forEach(function(k){
+      var opt = document.createElement("option");
+      opt.value = k; opt.textContent = joineryStatusLabel(k);
+      registerStatusFilter.appendChild(opt);
+    });
+    if (levelNames.indexOf(prevLevel) !== -1) registerLevelFilter.value = prevLevel;
+    if (presentKeys.indexOf(prevStatus) !== -1) registerStatusFilter.value = prevStatus;
+    renderRegisterTable();
+  }
+  // (v23 sweep -- speed / instant paint) The Register is the app's main
+  // working screen. It now paints AT ONCE from this project's last-known
+  // snapshot (items + folded statuses + schedules + level names, kept in
+  // this app's own IndexedDB) -- or, coming Back to it, from what it
+  // already holds -- with a "refreshing…" note, then reads the four
+  // sources in parallel behind it (joinery-items.json strictly, the
+  // statuses/schedules through the folded-event cache, the levels through
+  // the stat cache) and repaints + re-saves. A snapshot is display-only:
+  // nothing is ever written from it (the Edit dialog re-reads
+  // joinery-items.json strictly before writing). A stale response (left
+  // and came back before the read finished) is dropped via registerLoadSeq.
   function openJoineryRegister(){
-    registerProjectLabel.textContent = activeProjectName + " — Joinery Register";
+    var seq = ++registerLoadSeq;
+    var projName = activeProjectName, projHandle = activeProjectHandle;
+    registerProjectLabel.textContent = projName + " — Joinery Register";
+    var painted = registerRenderedFor === projName && registerAllItems.length > 0;
+    if (painted) renderRegisterTable();
+    else {
+      registerAllItems = []; registerStatusList = []; registerScheduleList = [];
+      registerTableBody.innerHTML = "";
+      registerEmptyProject.hidden = true; registerEmpty.hidden = true;
+      registerCountNote.textContent = "Loading…";
+    }
+    registerRefreshNote.hidden = !painted;
     showScreen("register");
-    return Promise.all([
-      readJoineryItems(activeProjectHandle),
-      listExistingLevels(activeProjectHandle),
-      readJoineryStatuses(activeProjectHandle),
-      readJoinerySchedule(activeProjectHandle)
-    ]).then(function(results){
-      registerAllItems = results[0] || [];
-      var levelNames = results[1] || [];
-      registerStatusList = results[2] || [];
-      registerScheduleList = results[3] || [];
-      // Distinct status KEYS actually present (in pipeline order, "Created"
-      // first), not raw joinery-items.json values -- V1 only ever wrote
-      // "created" there; the real, evolving status lives in
-      // joinery-status.json now.
-      var presentKeys = [""];
-      registerAllItems.forEach(function(item){
-        var k = registerItemStatusKey(item);
-        if (presentKeys.indexOf(k) === -1) presentKeys.push(k);
-      });
-      presentKeys.sort(function(a, b){ return joineryStatusRank(a) - joineryStatusRank(b); });
-      var prevLevel = registerLevelFilter.value, prevStatus = registerStatusFilter.value;
-      registerLevelFilter.innerHTML = "<option value=\"\">All levels</option>";
-      levelNames.forEach(function(name){
-        var opt = document.createElement("option");
-        opt.value = name; opt.textContent = name;
-        registerLevelFilter.appendChild(opt);
-      });
-      registerStatusFilter.innerHTML = "<option value=\"\">All statuses</option>";
-      presentKeys.forEach(function(k){
-        var opt = document.createElement("option");
-        opt.value = k; opt.textContent = joineryStatusLabel(k);
-        registerStatusFilter.appendChild(opt);
-      });
-      if (levelNames.indexOf(prevLevel) !== -1) registerLevelFilter.value = prevLevel;
-      if (presentKeys.indexOf(prevStatus) !== -1) registerStatusFilter.value = prevStatus;
-      renderRegisterTable();
+    var snapP = painted ? Promise.resolve() : snapGet("register", projName).then(function(snap){
+      if (seq !== registerLoadSeq || !snap || !Array.isArray(snap.items)) return;
+      applyRegisterData(snap.items, snap.levels, snap.statuses, snap.schedules);
+      registerRenderedFor = projName;
+      registerRefreshNote.hidden = false;
+    });
+    return snapP.then(function(){
+      return Promise.all([
+        readJoineryItems(projHandle),
+        listExistingLevels(projHandle),
+        readJoineryStatuses(projHandle),
+        readJoinerySchedule(projHandle)
+      ]);
+    }).then(function(results){
+      if (seq !== registerLoadSeq || activeProjectName !== projName) return;
+      applyRegisterData(results[0], results[1], results[2], results[3]);
+      registerRenderedFor = projName;
+      registerRefreshNote.hidden = true;
+      snapSet("register", projName, { items: registerAllItems, levels: results[1] || [], statuses: registerStatusList, schedules: registerScheduleList });
     }).catch(function(err){
+      if (seq !== registerLoadSeq) return;
       console.error("Opening Joinery Register failed:", err);
-      showToast("Couldn't open the Joinery Register.");
+      registerRefreshNote.hidden = true;
+      if (!registerAllItems.length) registerCountNote.textContent = "";
+      // "Unreadable is not empty": never fall back to "No joinery items
+      // yet" for a register that exists but couldn't be read.
+      if (isReadFailed(err)) showToast("Couldn't read this project's register (a file may still be syncing)" + (registerAllItems.length ? " — showing last-known rows." : ".") + " Try again in a moment.", 4500);
+      else showToast("Couldn't open the Joinery Register.");
     });
   }
   openRegisterBtn.addEventListener("click", openJoineryRegister);
@@ -4304,7 +4915,7 @@
   });
   reworkRegisterLevelFilter.addEventListener("change", renderReworkRegisterTable);
   reworkRegisterReceivedFilter.addEventListener("change", renderReworkRegisterTable);
-  reworkRegisterSearchInput.addEventListener("input", renderReworkRegisterTable);
+  reworkRegisterSearchInput.addEventListener("input", debounce(renderReworkRegisterTable, 100)); // v23 sweep: coalesced, see the Register's own search
 
   function openReworkRegister(){
     reworkRegisterProjectLabel.textContent = activeProjectName + " — Rework Register";
@@ -4335,7 +4946,9 @@
       });
     }).catch(function(err){
       console.error("Opening Rework Register failed:", err);
-      showToast("Couldn't open the Rework Register.");
+      reworkRegisterCountLabel.textContent = "";
+      if (isReadFailed(err)) showToast("Couldn't read joinery-items.json (still syncing?) — try again in a moment.", 4500);
+      else showToast("Couldn't open the Rework Register.");
     });
   }
   openReworkRegisterBtn.addEventListener("click", openReworkRegister);
@@ -4940,7 +5553,10 @@
       });
     }).catch(function(err){
       console.error("Saving joinery item edit failed:", err);
-      showToast("Couldn't save those changes.");
+      // (v23 sweep) The save re-reads joinery-items.json strictly; an
+      // unreadable file (or registry) means NOTHING was written.
+      if (isReadFailed(err)) readFailedToast(/users/.test(err.message) ? "utzline-users.csv" : "joinery-items.json");
+      else showToast("Couldn't save those changes.");
     });
   });
 
@@ -4958,10 +5574,15 @@
     // delivery lines above are still correct rather than silently showing
     // "Created"/"No schedule set" for an item that's actually further
     // along or already scheduled.
-    Promise.all([
+    // (v23 sweep -- speed) Opened from a Register that has just read both
+    // lists live (not a snapshot paint), reuse them -- re-reading every
+    // item's status and schedule folders for the one item being opened was
+    // the single most expensive thing a tap on a Register row did.
+    var liveRegister = joineryItemReturnScreen === "register" && registerRenderedFor === activeProjectName && registerRefreshNote.hidden;
+    (liveRegister ? Promise.resolve([registerStatusList, registerScheduleList]) : Promise.all([
       readJoineryStatuses(activeProjectHandle),
       readJoinerySchedule(activeProjectHandle)
-    ]).then(function(results){
+    ])).then(function(results){
       if (activeJoineryItem !== item) return;
       var list = results[0], scheduleList = results[1];
       registerStatusList = list;
@@ -4974,10 +5595,20 @@
       var delay = computeDelayInfo(scheduleRec, freshStatusKey, todayDateStr());
       var deliveryCell = document.getElementById("jiDeliveryCell");
       if (deliveryCell) deliveryCell.innerHTML = deliveryLineHtml(scheduleRec, delay);
-    }).catch(function(err){ console.error("Reading joinery status/schedule failed:", err); });
+    }).catch(function(err){
+      console.error("Reading joinery status/schedule failed:", err);
+      if (activeJoineryItem !== item) return;
+      var deliveryCell = document.getElementById("jiDeliveryCell");
+      if (deliveryCell && /Loading/.test(deliveryCell.textContent)) deliveryCell.innerHTML = "<span class=\"muted-cell\">Couldn't read the schedule — try again</span>";
+    });
     renderJoineryItemLinkedSections(item);
   }
-  backFromJoineryItemBtn.addEventListener("click", function(){ showScreen(joineryItemReturnScreen); });
+  backFromJoineryItemBtn.addEventListener("click", function(){
+    showScreen(joineryItemReturnScreen);
+    // An edit on the item page mutated the shared in-memory item -- make the
+    // Register's rows (and its tick-box filtering) reflect it, in memory.
+    if (joineryItemReturnScreen === "register") renderRegisterTable();
+  });
   viewOnPlanBtn.addEventListener("click", function(){
     if (!activeJoineryItem) return;
     var item = activeJoineryItem;
@@ -5019,8 +5650,97 @@
   };
   function showScreen(name){
     Object.keys(screens).forEach(function(k){ screens[k].hidden = (k !== name); });
-    if (name !== "register") hideStatusHistoryPop();
+    hideStatusHistoryPop(); // anchored to a cell on the screen being left (or about to be rebuilt)
+    navRecord(name); // device Back button (v23 sweep) -- see navRecord
   }
+
+  /* ---- Device / browser Back button (v23, 2026-09-25/26 family-wide
+     sweep) ----
+     Same design as Install ITP v35 / Site Measure v46 / UTZLINE Scheduler
+     v19 (Andrew: "can we make it so the phone back button goes back
+     through the app, not close the app"). Every screen change leaves one
+     entry in the browser's own history: the setup / reconnect / project
+     list screens REPLACE (they're the base -- Back from there leaves the
+     app, as it always did), everything deeper PUSHES (a project's levels,
+     a level's rooms, a room, the plan canvas, the Joinery Register, the
+     Rework Register, a Joinery Item page). A popstate (the phone's Back
+     button, or the browser's) first closes whatever dialog or popover is
+     open -- through its own Cancel/Close control, so any promise it holds
+     settles exactly as a tap on that button would -- and otherwise steps
+     back exactly one screen through the app's own existing navigation
+     (the same thing each screen's own "← Back" button does). Every step
+     back SHOWS its target screen synchronously (that screen's DOM still
+     holds what it showed a moment ago, or its snapshot) and refreshes it
+     behind, so one press is always exactly one screen. This app has no
+     unsaved-changes confirm, but the generic "still on the same screen
+     afterwards -> put the entry back so the next press asks again" guard
+     is kept anyway. `history` is never shadowed in this file's outer
+     scope, but window.history is spelled out here to make that impossible
+     to break later. */
+  var currentScreenName = null, navPopInProgress = false;
+  var NAV_BASE = { setup: 1, reconnect: 1, projects: 1 };
+  function navRecord(name){
+    if (!name || name === currentScreenName){ navPopInProgress = false; return; }
+    try{
+      if (navPopInProgress || NAV_BASE[name] || !currentScreenName) window.history.replaceState({ utz: name }, "");
+      else window.history.pushState({ utz: name }, "");
+    }catch(e){}
+    currentScreenName = name;
+    navPopInProgress = false;
+  }
+  function navRestoreEntry(){
+    if (!currentScreenName) return;
+    try{ window.history.pushState({ utz: currentScreenName }, ""); }catch(e){}
+  }
+  // Closes the topmost open dialog/popover, if any -- true when it did (the
+  // Back press is then "spent" on that, not on a screen change). Order is
+  // topmost-first: the numberpad / "show me in" / name prompt can sit on
+  // top of the Edit joinery item dialog.
+  function closeAnyOpenOverlay(){
+    if (!statusHistoryPop.hidden){ hideStatusHistoryPop(); return true; }
+    var pairs = [
+      ["numberpadBackdrop", "numberpadCancel"],
+      ["identityAppChecksBackdrop", "identityAppChecksCancel"],
+      ["promptBackdrop", "promptCancel"],
+      ["confirmBackdrop", "confirmCancelBtn"],
+      ["cropBackdrop", "cropCancelBtn"],
+      ["pdfPickerBackdrop", "pdfPickerCancelBtn"],
+      ["projectInfoBackdrop", "projectInfoSkip"],
+      ["editItemBackdrop", "editItemCancelBtn"],
+      ["addItemBackdrop", "addItemCancelBtn"]
+    ];
+    for (var i = 0; i < pairs.length; i++){
+      var bd = document.getElementById(pairs[i][0]);
+      if (!bd || bd.hidden) continue;
+      var btn = document.getElementById(pairs[i][1]);
+      if (btn) btn.click(); else bd.hidden = true;
+      return true;
+    }
+    return false;
+  }
+  function appBackFromDeviceButton(){
+    var from = currentScreenName;
+    switch (from){
+      case "planCanvas": closePlanCanvas(); break;
+      case "joineryItem": backFromJoineryItemBtn.click(); break;
+      case "register": backFromRegisterBtn.click(); break;
+      case "reworkRegister": backFromReworkRegisterBtn.click(); break;
+      case "roomDetail": backToRoomsBtn.click(); break;
+      case "rooms": backToLevelsBtn.click(); break;
+      case "levels": backToProjectsBtn.click(); break;
+      default: break;
+    }
+    // Still on the same (non-base) screen means the step back didn't
+    // happen -- put the popped entry back so the next press asks again.
+    if (currentScreenName === from && !NAV_BASE[from]) navRestoreEntry();
+    navPopInProgress = false;
+  }
+  window.addEventListener("popstate", function(){
+    if (closeAnyOpenOverlay()){ navRestoreEntry(); return; }
+    if (!currentScreenName || NAV_BASE[currentScreenName]) return; // base screen: the browser is leaving, as before
+    navPopInProgress = true;
+    appBackFromDeviceButton();
+  });
 
   var projectsRootHandle = null, projectsRootName = "";
   var activeProjectHandle = null, activeProjectName = "";
@@ -5060,7 +5780,19 @@
           return;
         }
         projectsRootHandle = handle; projectsRootName = handle.name;
-        return idbSet("projectsRootHandle", handle).then(function(){
+        // (v23 sweep) A different root: no cached handle, migration memo,
+        // or in-memory screen state from the last one applies.
+        invalidateDirHandleCache();
+        resetProjectScopedState();
+        projectListRenderedFor = null;
+        // (v23 sweep) Remembering the folder for next time is a
+        // convenience, not a requirement for this session to work -- a
+        // failed persist used to reject this whole chain and leave the
+        // person on the setup screen with a misleading "couldn't open the
+        // folder picker" error, having picked a perfectly good folder.
+        return idbSet("projectsRootHandle", handle).catch(function(err){
+          console.error("Remembering the Projects folder failed (this session carries on):", err);
+        }).then(function(){
           return populateProjectList();
         });
       });
@@ -5096,37 +5828,98 @@
     projectsRootHandle.requestPermission({ mode: "readwrite" }).then(function(perm){
       if (perm !== "granted") return;
       populateProjectList();
+    }).catch(function(err){
+      // (v23 sweep) Was an unhandled rejection.
+      console.error("Reconnect failed:", err);
+      showToast("Couldn't reconnect — try Choose a different folder.");
     });
   });
+
+  // Everything that belongs to "the project currently open" -- cleared on
+  // switching project or root so nothing from the last one is ever shown
+  // (or edited) under the next one's name.
+  function resetProjectScopedState(){
+    registerAllItems = []; registerStatusList = []; registerScheduleList = [];
+    registerRenderedFor = null;
+    reworkRegisterAllRows = [];
+    activeJoineryItem = null;
+    levelListRenderedFor = null;
+    roomsRenderedFor = null;
+  }
 
   /* ============================== project list ============================== */
   var projectListItems = document.getElementById("projectListItems");
   var projectListEmpty = document.getElementById("projectListEmpty");
+  var projectListRefreshNote = document.getElementById("projectListRefreshNote");
+  var projectListRenderedFor = null; // the root name the list on screen belongs to
+  var projectListLoadSeq = 0;
 
+  function renderProjectListNames(names){
+    projectListItems.innerHTML = "";
+    projectListEmpty.hidden = names.length > 0;
+    names.forEach(function(name){
+      var row = document.createElement("button");
+      row.className = "list-item";
+      row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
+      row.addEventListener("click", function(){ openProject(name); });
+      projectListItems.appendChild(row);
+    });
+  }
+  // (v23 sweep -- speed / instant paint) Shows the project list AT ONCE --
+  // with whatever it already shows for this root (Back from a project), or
+  // this root's last-known snapshot -- then lists the root folder behind it
+  // and repaints. The first-ever visit still waits on the folder. The
+  // company logo read now happens once per root per session (it used to be
+  // re-read, and its object URL re-created, on every Back to this screen).
   function populateProjectList(){
+    var seq = ++projectListLoadSeq;
+    var rootName = projectsRootName;
     populateIdentitySelector(); // needs projectsRootHandle to read utzline-users.csv -- best-effort, never blocks
-    return listExistingProjects(projectsRootHandle).then(function(names){
-      projectListItems.innerHTML = "";
-      projectListEmpty.hidden = names.length > 0;
-      names.forEach(function(name){
-        var row = document.createElement("button");
-        row.className = "list-item";
-        row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
-        row.addEventListener("click", function(){ openProject(name); });
-        projectListItems.appendChild(row);
-      });
-      projectsFolderLabel.textContent = "Projects";
-      document.title = "UTZLINE Projects";
+    projectsFolderLabel.textContent = "Projects";
+    document.title = "UTZLINE Projects";
+    var painted = projectListRenderedFor === rootName;
+    var paintP;
+    if (painted){
       showScreen("projects");
-      return refreshCompanyLogoPreview();
+      projectListRefreshNote.hidden = false;
+      paintP = Promise.resolve();
+    } else {
+      paintP = snapGet("projects", null).then(function(snap){
+        if (seq !== projectListLoadSeq || !snap || !Array.isArray(snap.names)) return;
+        renderProjectListNames(snap.names);
+        projectListRenderedFor = rootName;
+        projectListRefreshNote.hidden = false;
+        showScreen("projects");
+      });
+    }
+    if (companyLogoLoadedFor !== rootName){
+      companyLogoLoadedFor = rootName;
+      refreshCompanyLogoPreview().catch(function(){});
+    }
+    return paintP.then(function(){
+      return listExistingProjects(projectsRootHandle);
+    }).then(function(names){
+      if (seq !== projectListLoadSeq) return;
+      renderProjectListNames(names);
+      projectListRenderedFor = rootName;
+      projectListRefreshNote.hidden = true;
+      snapSet("projects", null, { names: names });
+      // Only take the person back to the list if they're still somewhere
+      // this list belongs (the base screens) -- never yank them out of a
+      // project they tapped into while this was refreshing.
+      if (!currentScreenName || NAV_BASE[currentScreenName]) showScreen("projects");
     }).catch(function(err){
+      if (seq !== projectListLoadSeq) return;
       console.error("Listing projects failed:", err);
+      projectListRefreshNote.hidden = true;
       showToast("Couldn't list projects in this folder.");
     });
   }
+  var companyLogoLoadedFor = null;
 
   function openProject(name){
     return projectsRootHandle.getDirectoryHandle(name, { create: false }).then(function(dirH){
+      if (activeProjectName !== name) resetProjectScopedState();
       activeProjectHandle = dirH;
       activeProjectName = name;
       return populateLevelList();
@@ -5140,36 +5933,94 @@
   var levelsProjectLabel = document.getElementById("levelsProjectLabel");
   var levelListItems = document.getElementById("levelListItems");
   var levelListEmpty = document.getElementById("levelListEmpty");
+  var levelListRefreshNote = document.getElementById("levelListRefreshNote");
   var projectMetaCard = document.getElementById("projectMetaCard");
   var projectMetaGrid = document.getElementById("projectMetaGrid");
   var projectMetaEmptyCard = document.getElementById("projectMetaEmptyCard");
+  var projectMetaEmptyText = document.getElementById("projectMetaEmptyText");
   var backToProjectsBtn = document.getElementById("backToProjectsBtn");
+  var levelListRenderedFor = null; // the project name the level list on screen belongs to
+  var levelListLoadSeq = 0;
 
-  function populateLevelList(){
-    levelsProjectLabel.textContent = activeProjectName;
-    return readProjectMeta(activeProjectHandle).then(function(meta){
-      renderProjectMetaPreview(meta);
-      return listExistingLevels(activeProjectHandle);
-    }).then(function(names){
-      levelListItems.innerHTML = "";
-      levelListEmpty.hidden = names.length > 0;
-      names.forEach(function(name){
-        var row = document.createElement("button");
-        row.className = "list-item";
-        row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
-        row.addEventListener("click", function(){ openLevel(name); });
-        levelListItems.appendChild(row);
-      });
-      showScreen("levels");
-    }).catch(function(err){
-      console.error("Listing levels failed:", err);
-      showToast("Couldn't list levels for “" + activeProjectName + "”.");
+  function renderLevelListNames(names){
+    levelListItems.innerHTML = "";
+    levelListEmpty.hidden = names.length > 0;
+    names.forEach(function(name){
+      var row = document.createElement("button");
+      row.className = "list-item";
+      row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
+      row.addEventListener("click", function(){ openLevel(name); });
+      levelListItems.appendChild(row);
     });
+  }
+  // (v23 sweep -- speed / instant paint + "unreadable is not empty")
+  //   - Shows the screen AT ONCE: with what it already shows for this
+  //     project (Back from a level/register), or this project's last-known
+  //     snapshot (levels + project info), or -- first visit -- an empty
+  //     "Loading…" state; then reads behind and repaints.
+  //   - project-meta.json and the level listing are read in PARALLEL (they
+  //     used to be one after the other), and the listing itself is now
+  //     stat-cached (listLevelNames) instead of parsing every multi-MB
+  //     level file just for its name.
+  //   - A project-meta.json that exists but can't be read no longer shows
+  //     "This project has no metadata yet." (a label that lied) -- it says
+  //     it couldn't be read, and "Add project info" stays safe because the
+  //     dialog's own prefill read is strict too.
+  function populateLevelList(){
+    var seq = ++levelListLoadSeq;
+    var projName = activeProjectName, projHandle = activeProjectHandle;
+    levelsProjectLabel.textContent = projName;
+    if (levelListRenderedFor === projName){
+      showScreen("levels");
+      levelListRefreshNote.hidden = false;
+    } else {
+      renderLevelListNames([]);
+      levelListEmpty.hidden = true;
+      projectMetaCard.hidden = true;
+      projectMetaEmptyCard.hidden = true;
+      levelListRefreshNote.hidden = false;
+      showScreen("levels");
+      snapGet("levels", projName).then(function(snap){
+        if (seq !== levelListLoadSeq || !snap || !Array.isArray(snap.levels)) return;
+        renderLevelListNames(snap.levels);
+        renderProjectMetaPreview(snap.meta || null);
+      });
+    }
+    var metaFailed = false;
+    return Promise.all([
+      readProjectMeta(projHandle).catch(function(err){
+        if (!isReadFailed(err)) return Promise.reject(err);
+        metaFailed = true;
+        return null;
+      }),
+      listExistingLevels(projHandle)
+    ]).then(function(res){
+      if (seq !== levelListLoadSeq || activeProjectName !== projName) return;
+      var meta = res[0], names = res[1];
+      if (metaFailed) renderProjectMetaUnreadable();
+      else renderProjectMetaPreview(meta);
+      renderLevelListNames(names);
+      levelListRenderedFor = projName;
+      levelListRefreshNote.hidden = true;
+      snapSet("levels", projName, { levels: names, meta: metaFailed ? null : meta });
+    }).catch(function(err){
+      if (seq !== levelListLoadSeq) return;
+      console.error("Listing levels failed:", err);
+      levelListRefreshNote.hidden = true;
+      if (isReadFailed(err)) showToast("Couldn't read this project's level files (still syncing?) — showing last-known levels. Try again in a moment.", 4500);
+      else showToast("Couldn't list levels for “" + projName + "”.");
+    });
+  }
+  function renderProjectMetaUnreadable(){
+    projectMetaCard.hidden = true;
+    projectMetaEmptyCard.hidden = false;
+    projectMetaEmptyText.textContent = "Couldn't read this project's info (project-meta.json may still be syncing) — try again in a moment.";
   }
   function renderProjectMetaPreview(meta){
     if (!meta || (!meta.no && !meta.name && !meta.contractor && !meta.siteAddress && !meta.projectManager)){
       projectMetaCard.hidden = true;
       projectMetaEmptyCard.hidden = false;
+      projectMetaEmptyText.textContent = "This project has no metadata yet.";
       return;
     }
     projectMetaEmptyCard.hidden = true;
@@ -5198,6 +6049,7 @@
   var roomListEmpty = document.getElementById("roomListEmpty");
   var levelPlanStatus = document.getElementById("levelPlanStatus");
   var backToLevelsBtn = document.getElementById("backToLevelsBtn");
+  var roomsRenderedFor = null; // "<project>\u0000<level>" the rooms screen currently shows
 
   // {create:false} for an ordinary browse-to-an-existing-level click;
   // {create:true} only from createNewLevel() just below, right after it's
@@ -5207,6 +6059,11 @@
   // migrateLegacyLevelsIfNeeded both loads that data and, for a project
   // that predates this cutover, builds it from the old real folders the
   // first time it's needed.
+  // (v23 sweep) The level file is read ONCE per open now (it used to be
+  // read -- a multi-MB parse -- a second time just for its room names), and
+  // a file that exists but can't be read says so instead of "Couldn't
+  // open" / being treated as a new level. `create` only ever writes a
+  // fresh file when the strict read said the file genuinely isn't there.
   function openLevel(name, opts){
     var create = !!(opts && opts.create);
     activeLevelName = name;
@@ -5217,32 +6074,38 @@
       if (level) return level;
       if (!create) throw new Error("Level not found: " + name);
       var fresh = { name: name, imageDataURL: null, imageTiles: null, imageW: 0, imageH: 0, rooms: [], markers: [] };
-      return writeLevelFile(activeProjectHandle, activeProjectName, name, fresh).then(function(){ return fresh; });
+      return writeLevelFile(activeProjectHandle, activeProjectName, name, fresh).then(function(){
+        levelListRenderedFor = null; // the level list on screen is now one short
+        return fresh;
+      });
     }).then(function(plan){
+      if (activeLevelName !== name) return; // another level was opened meanwhile
       var hasPlan = !!(plan && (plan.imageDataURL || plan.imageTiles));
       renderPlanStatus(levelPlanStatus, hasPlan, "This level");
       // Placing a joinery marker needs an actual plan underneath it to tap
       // on -- so this button only appears once a floorplan import has
       // landed for this level.
       openPlanCanvasBtn.hidden = !hasPlan;
-      if (!hasPlan){ renderPlanPreview(levelPlanPreview, null, null, 0, 0); return; }
-      renderPlanPreview(levelPlanPreview, plan.imageDataURL, plan.imageTiles, plan.imageW, plan.imageH);
-    }).then(function(){
-      return listExistingRoomsInLevel(activeProjectHandle, activeProjectName, name);
-    }).then(function(names){
+      if (!hasPlan) renderPlanPreview(levelPlanPreview, null, null, 0, 0);
+      else renderPlanPreview(levelPlanPreview, plan.imageDataURL, plan.imageTiles, plan.imageW, plan.imageH);
+      var names = roomNamesOf(plan);
       roomListItems.innerHTML = "";
       roomListEmpty.hidden = names.length > 0;
-      names.forEach(function(name){
+      names.forEach(function(roomName){
         var row = document.createElement("button");
         row.className = "list-item";
-        row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
-        row.addEventListener("click", function(){ openRoom(name); });
+        row.innerHTML = "<span>" + escapeHtml(roomName) + "</span><span class=\"chev\">&rsaquo;</span>";
+        row.addEventListener("click", function(){ openRoom(roomName); });
         roomListItems.appendChild(row);
       });
-      showScreen("rooms");
+      roomsRenderedFor = activeProjectName + "\u0000" + name;
+      // Never yank the person off somewhere else they've gone meanwhile.
+      if (currentScreenName === "levels" || currentScreenName === "rooms" || currentScreenName === "roomDetail") showScreen("rooms");
     }).catch(function(err){
       console.error("Opening level failed:", err);
-      showToast("Couldn't open “" + name + "”.");
+      if (isReadFailed(err)) readFailedToast("“" + name + "”'s level file");
+      else if (err && err.code === "blank_over_real_level") showToast("“" + name + "” already has a floor plan on disk — nothing was changed.");
+      else showToast("Couldn't open “" + name + "”.");
     });
   }
   function renderPlanStatus(el, hasPlan, subject){
@@ -5254,10 +6117,13 @@
   // "New Level" mirrors Site Measure's own createNewLevel -- a name that
   // collides with an existing level of THIS project gets a numbered suffix,
   // same dedupe loop as createNewProject above.
+  // (v23 sweep) Dedupes against the STRICT listing: while any level file
+  // is unreadable, a name colliding with it would otherwise be handed out
+  // as free and openLevel({create:true}) would find... the unreadable one.
   var newLevelBtn = document.getElementById("newLevelBtn");
   function createNewLevel(rawName){
     var name = sanitizeFileBase(rawName);
-    return listExistingLevels(activeProjectHandle).then(function(existing){
+    return listExistingLevelsStrict(activeProjectHandle).then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
       var finalName = name, n = 2;
       while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
@@ -5272,7 +6138,8 @@
       return createNewLevel(value);
     }).catch(function(err){
       console.error("Create level failed:", err);
-      showToast("Couldn't create that level.");
+      if (isReadFailed(err)) readFailedToast("this project's level files");
+      else showToast("Couldn't create that level.");
     });
   });
 
@@ -5284,26 +6151,40 @@
   // their own (they share their level's one shared photo) -- so opening
   // one is just recording its name/breadcrumb and, for a genuinely new
   // room, adding it to the level's own Project Saves/Floor Plans/ file.
+  // (v23 sweep) Browsing to an EXISTING room no longer reads the level
+  // file at all (it only ever needed it to decide whether to write, and a
+  // plain browse never writes). A NEW room re-reads the level strictly --
+  // an unreadable level file used to read as `{rooms:[], markers:[]}` and
+  // be rewritten holding only the new room.
   function openRoom(name, opts){
     var create = !!(opts && opts.create);
     activeRoomName = name;
     roomDetailLabel.textContent = activeProjectName + " — " + activeLevelName + " — " + name;
+    if (!create){ showScreen("roomDetail"); return Promise.resolve(); }
     return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){
       return readLevelFile(activeProjectHandle, activeProjectName, activeLevelName);
     }).then(function(level){
       var entry = level || { name: activeLevelName, imageDataURL: null, imageTiles: null, imageW: 0, imageH: 0, rooms: [], markers: [] };
       var already = entry.rooms.some(function(r){ return r.name.toLowerCase() === name.toLowerCase(); });
-      if (already || !create) return;
+      if (already) return;
       entry.rooms.push({ name: name });
+      // The rooms list on screen is one short now -- Back shows it at once
+      // and openLevel's refresh behind it adds this room.
       return writeLevelFile(activeProjectHandle, activeProjectName, activeLevelName, entry);
     }).then(function(){
       showScreen("roomDetail");
     }).catch(function(err){
       console.error("Opening room failed:", err);
-      showToast("Couldn't open “" + name + "”.");
+      if (isReadFailed(err)) readFailedToast("this level's file");
+      else showToast("Couldn't open “" + name + "”.");
     });
   }
-  backToRoomsBtn.addEventListener("click", function(){ openLevel(activeLevelName); });
+  // Back to the rooms list: shown at once (it still holds this level), then
+  // refreshed behind -- see the Back-button comment above.
+  backToRoomsBtn.addEventListener("click", function(){
+    if (roomsRenderedFor === activeProjectName + "\u0000" + activeLevelName) showScreen("rooms");
+    openLevel(activeLevelName);
+  });
 
   // "New Room" mirrors "New Level" -- a name that collides with an
   // existing room of THIS level gets a numbered suffix.
@@ -5325,7 +6206,8 @@
       return createNewRoom(value);
     }).catch(function(err){
       console.error("Create room failed:", err);
-      showToast("Couldn't create that room.");
+      if (isReadFailed(err)) readFailedToast("this level's file");
+      else showToast("Couldn't create that room.");
     });
   });
 
@@ -5383,7 +6265,7 @@
     readSavedPlanRaw: readSavedPlanRaw,
     readLevelFile: readLevelFile,
     writeLevelFile: writeLevelFile,
-    listLevelFiles: listLevelFiles,
+    listLevelFiles: listLevelFileHandles,
     migrateLegacyLevelsIfNeeded: migrateLegacyLevelsIfNeeded,
     listExistingLevels: listExistingLevels,
     listExistingRoomsInLevel: listExistingRoomsInLevel,
@@ -5399,7 +6281,15 @@
     writeUsersCsv: writeUsersCsv,
     findUserRowCI: findUserRowCI,
     setDeviceUserName: setDeviceUserName,
-    getDeviceUserName: function(){ return deviceUserName; }
+    getDeviceUserName: function(){ return deviceUserName; },
+    // v23 sweep hooks (run_projects_sweep_*.js)
+    ready: function(){ return true; },
+    snapGet: snapGet,
+    readProjectMeta: readProjectMeta,
+    listLevelNames: listLevelNames,
+    addJoineryItem: addJoineryItem,
+    getCurrentScreen: function(){ return currentScreenName; },
+    getActive: function(){ return { project: activeProjectName, level: activeLevelName, room: activeRoomName }; }
   };
 
   boot();

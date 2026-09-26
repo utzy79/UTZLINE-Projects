@@ -444,8 +444,22 @@
 // Register's hover popup, since this lives on a dedicated page rather than
 // a table cell); an item with no editHistory yet shows a plain "No edits
 // yet" line, same empty-state convention as every other card here.)
+//
+// (README v23 / cache v31, 2026-09-26: family-wide scheduling sweep --
+// Andrew, verbatim: "ok, now a full sweep of all the scheduling software",
+// plus, mid-sweep, "add in tick boxes for filtering out installed and
+// delivered items." index.html only: one IndexedDB connection per database;
+// the phone Back button walks back through the app (dialogs close first);
+// "unreadable is not empty" on every read-modify-write path (level files,
+// joinery-items.json, utzline-users.csv, project-meta.json, the legacy
+// status/schedule migrations); instant paint from device-local snapshots
+// for the project list, levels and Joinery Register; directory-handle,
+// level-name stat and folded-event caches; Hide delivered / Hide installed
+// tick boxes on the Joinery Register. See README.md's v23 entry. The
+// "(vN, ...)" comment counter above stopped being kept after README v18,
+// so this entry is labelled by README/cache number only.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v30";
+var CACHE_NAME = "utzline-projects-cache-v31";
 
 var PRECACHE_URLS = [
   "./",
