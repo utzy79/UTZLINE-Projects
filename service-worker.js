@@ -481,8 +481,16 @@
 // item dialogs (traceable via editHistory[]), shown on the item page, as a
 // new sortable Register column, and as a per-project total. See README.md's
 // v25 entry for the full writeup.)
+//
+// (README v26 / cache v34, 2026-09-26 -- bug fix: Andrew, "when you put in
+// dollar value in the edit card and press save, it says nothing to save and
+// doesnt put in the dollar value." index.html only: editItemSaveBtn's
+// success handler was missing `item.dollarValue = result.item.dollarValue;`
+// from the fields it copies back onto the in-memory item after a save (the
+// write to disk itself was always correct) -- see README.md's v26 entry for
+// the full root-cause writeup.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v33";
+var CACHE_NAME = "utzline-projects-cache-v34";
 
 var PRECACHE_URLS = [
   "./",

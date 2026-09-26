@@ -5886,8 +5886,20 @@
           // Mutate the SAME in-memory item object (not a new reference) --
           // this object is shared with registerAllItems/reworkRegisterAllRows
           // etc., same convention the old backfill/toggle code followed.
+          // BUG FIX (2026-09-26, Andrew: "when you put in dollar value in the
+          // edit card and press save, it says nothing to save and doesnt put
+          // in the dollar value") -- dollarValue was missing from this list.
+          // The write to joinery-items.json itself was always correct
+          // (applyJoineryItemEdit re-reads and rewrites the real file fine),
+          // but the in-memory item never picked up the new value, so the
+          // meta-grid/Register kept showing "--" right after a successful
+          // save. Re-opening Edit and saving the SAME value again then hit
+          // applyJoineryItemEdit's own fresh-disk diff, which correctly saw
+          // no actual change and said so -- reading, from the value never
+          // appearing, as if saving silently failed both times.
           item.description = result.item.description;
           item.workOrderNo = result.item.workOrderNo;
+          item.dollarValue = result.item.dollarValue;
           item.hasSolidSurface = result.item.hasSolidSurface;
           item.editHistory = result.item.editHistory;
           showToast("Joinery item updated.");
