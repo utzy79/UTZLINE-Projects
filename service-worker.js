@@ -458,8 +458,17 @@
 // tick boxes on the Joinery Register. See README.md's v23 entry. The
 // "(vN, ...)" comment counter above stopped being kept after README v18,
 // so this entry is labelled by README/cache number only.)
+//
+// (README v24 / cache v32, 2026-09-26: read-only side of the new, brand-new
+// family-wide event-sourced "Solid Surface Completion" file (owned/written
+// ONLY by the sibling UTZLINE Solid Surface Schedule app, built in parallel
+// this same round -- see BIG_ROUND_SCHEMA.md sec 1). index.html only: a new
+// "Solid Surface completion" card on the Joinery Item page (gated on
+// hasSolidSurface), new "SS Completed"/"SS Delivered" Joinery Register
+// columns; plus the family-wide cosmetic status-icon swap (in_manufacture
+// 🏭->🔨, machined ⚙️->🪚). See README.md's v24 entry.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v31";
+var CACHE_NAME = "utzline-projects-cache-v32";
 
 var PRECACHE_URLS = [
   "./",

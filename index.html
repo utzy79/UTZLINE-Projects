@@ -406,7 +406,7 @@
      glyph next to the Joinery ID in the Register so it reads at a glance,
      distinct from the pipeline status icons (which live in the Status
      column, not here) -- a diamond, since none of the status icons
-     (📏🏭⚙️📦🚚🏆) use one. ---- */
+     (📏🔨🪚📦🚚🏆) use one. ---- */
   .ss-badge{ font-size: 11px; color: var(--accent); margin-left: 4px; }
   /* ---- Joinery Item page: Has Solid Surface toggle row -- used only
        inside the Edit joinery item dialog now (2026-09-24), not as a
@@ -715,6 +715,8 @@
             <th data-col="workOrderNo">Work order #</th>
             <th data-col="status">Status</th>
             <th data-col="delivery">Delivery</th>
+            <th data-col="ssCompleted">SS Completed</th>
+            <th data-col="ssDelivered">SS Delivered</th>
           </tr>
         </thead>
         <tbody id="registerTableBody"></tbody>
@@ -831,6 +833,22 @@
     <div class="card">
       <h2 class="section-title">Site Measure overlays</h2>
       <div id="itemOverlaysList"></div>
+    </div>
+    <!-- ---- Solid Surface completion (2026-09-26) -- BIG_ROUND_SCHEMA.md
+         sec 1's new event-sourced "Solid Surface Completion" file, owned
+         and written ONLY by the sibling UTZLINE Solid Surface Schedule app
+         (its own "Completed"/"Delivered" PIN-locked buttons, same setup as
+         Machine Schedule's carcase-cut tracking). Read-only here, same
+         card pattern as every other linked-document card on this page --
+         see readSolidSurfaceCompletionRecordForItem's own comment for the
+         strict per-item read this card uses. Only shown for items flagged
+         hasSolidSurface (this app's own field, the hand-off point to that
+         sibling app) -- an item that will never go through that schedule
+         has nothing useful to say here, so the card is hidden entirely
+         rather than showing "Not yet marked" on every ordinary item. -->
+    <div class="card" id="itemSolidSurfaceCompletionCard" hidden>
+      <h2 class="section-title">Solid Surface completion</h2>
+      <div id="itemSolidSurfaceCompletionList"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Shop drawings</h2>
@@ -3153,8 +3171,8 @@
       case "installed": return "🏆";
       case "delivered": return "🚚";
       case "manufactured": return "📦";
-      case "machined": return "⚙️";
-      case "in_manufacture": return "🏭";
+      case "machined": return "🪚";
+      case "in_manufacture": return "🔨";
       case "measured": return "📏";
       default: return "";
     }
@@ -3215,6 +3233,23 @@
     return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
       try{ var parsed = JSON.parse(text); return (parsed && typeof parsed === "object") ? parsed : null; }catch(e){ return null; }
     }, function(){ return null; });
+  }
+  // STRICT variant (2026-09-26, Solid Surface Completion reader -- schema
+  // sec 1) -- same shape as Solid Surface Schedule's own readJsonFileHandleStrict:
+  // every event file must parse to a real object or this rejects
+  // read_failed (one retry first), unlike readJsonFileHandle above which
+  // quietly folds a bad file out. Used only where a fold must be complete
+  // to be trusted -- see readSolidSurfaceCompletionRecordForItem below.
+  function readJsonFileHandleStrict(fh){
+    function attempt(){
+      return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
+        var parsed;
+        try{ parsed = JSON.parse(text); }catch(e){ return Promise.reject(readFailedErr(fh.name, e)); }
+        if (!parsed || typeof parsed !== "object") return Promise.reject(readFailedErr(fh.name, new Error("not a JSON object")));
+        return parsed;
+      }, function(err){ return Promise.reject(isReadFailed(err) ? err : readFailedErr(fh.name, err)); });
+    }
+    return attempt().catch(function(){ return pause(READ_RETRY_MS).then(attempt); });
   }
   function listJsonFileHandlesIn(dirH){
     if (!dirH || typeof dirH.values !== "function") return Promise.resolve([]);
@@ -3949,6 +3984,115 @@
     }, function(){ return null; }).catch(function(){ return null; });
   }
 
+  /* ============================== Solid Surface Completion (READ-ONLY, 2026-09-26) ==============================
+     Brand-new family-wide event-sourced file (BIG_ROUND_SCHEMA.md sec 1),
+     owned/written ONLY by UTZLINE Solid Surface Schedule, built in parallel
+     with this round: two independent, per-item, PIN-locked-after-first-set
+     boolean flags, "Completed" and "Delivered" (Andrew, verbatim: "solid
+     surface schedule to have completed and delivered buttons... same setup
+     as the carcase cut on the machine schedule, once selected they become
+     pin locked") -- entirely separate from this app's own
+     joinery-status.json pipeline (no Delivery ITP sign-off involved, and
+     the existing "Actual delivery" Register column is untouched, still
+     driven only by joinery-status.json). This app is strictly READ-ONLY
+     here, exactly like every other cross-app branch on the Joinery Item
+     page: never writes an event, never creates the folder, never folds an
+     assumption back into anything of its own. No legacy file to migrate --
+     this is a brand-new branch with nothing pre-existing to fold in.
+     Folder: "Project Saves/Solid Surface Completion/<key>/", key =
+     joineryItemKey(item) -- this app's own name for the identical
+     joineryItemPageKey(level, room, joineryId) every sibling event branch
+     in this family already uses for this exact item. */
+  function solidSurfaceCompletionBranchName(){ return "Solid Surface Completion"; }
+  function getSolidSurfaceCompletionEventsRootDir(projectHandle, create){
+    return projectDir(projectHandle, [projectSavesDirName(), solidSurfaceCompletionBranchName()], !!create);
+  }
+  // Mirrors Machine Schedule's own foldMachiningFlags exactly (schema sec 1
+  // gives this verbatim), substituting cutType -> flag and the two values
+  // ["completed","delivered"] for ["carcase","colourBoard","solidSurface"].
+  // A folded record carries a {state:"done", at, by} object under either
+  // or both of rec.completed/rec.delivered once currently marked done; a
+  // flag never marked (or whose only events are pending) simply has no key
+  // for it at all -- there's no literal {state:"pending"} object, "pending"
+  // IS the key being absent.
+  function foldSolidSurfaceCompletion(events){
+    if (!events || !events.length) return null;
+    var any = events[0];
+    var rec = { level: any.level || "", room: any.room || "", joineryId: any.joineryId || "" };
+    var hasAnyNonPending = false;
+    ["completed", "delivered"].forEach(function(flag){
+      var evs = events.filter(function(e){ return e.flag === flag; });
+      if (!evs.length) return;
+      var latest = null;
+      evs.forEach(function(e){ if (!latest || (e.at || "") > (latest.at || "")) latest = e; });
+      if (latest.state && latest.state !== "pending"){
+        rec[flag] = { state: latest.state, at: latest.at, by: latest.by || "" };
+        hasAnyNonPending = true;
+      }
+    });
+    return hasAnyNonPending ? rec : null;
+  }
+  // STRICT single-item read (schema sec 1's own reader spec, mirroring
+  // Solid Surface Schedule's own readMainScheduleRecordForItem): every
+  // event file in this item's own folder must read cleanly (one retry
+  // each) or this rejects read_failed; a NotFound events root or item
+  // folder means genuinely never marked for this item (null), not a read
+  // failure. This is the exact function named in the schema doc, and the
+  // ONLY reader this app uses for the Joinery Item page's own new "Solid
+  // Surface completion" card -- a soft/partial answer there would just be
+  // wrong, not merely late, the same reasoning that keeps the main-schedule
+  // prefill in Solid Surface Schedule strict. (The Register's own bulk
+  // display, over every item in the project at once, uses the separate
+  // soft/cached readSolidSurfaceCompletions below instead -- see its own
+  // comment for why that's the right split.)
+  function readSolidSurfaceCompletionRecordForItem(projectHandle, level, room, joineryId){
+    var key = joineryItemKey({ level: level, room: room, joineryId: joineryId });
+    return getSolidSurfaceCompletionEventsRootDir(projectHandle, false).then(null, function(err){
+      if (isNotFoundErr(err)) return null;
+      return Promise.reject(readFailedErr("Solid Surface Completion folder", err));
+    }).then(function(rootH){
+      if (rootH === null) return null; // branch doesn't exist in this project at all yet
+      return rootH.getDirectoryHandle(key, { create: false }).then(function(dirH){
+        return listJsonFileHandlesIn(dirH).then(function(handles){
+          return Promise.all(handles.map(readJsonFileHandleStrict));
+        }).then(foldSolidSurfaceCompletion);
+      }, function(err){
+        if (isNotFoundErr(err)) return null;
+        return Promise.reject(readFailedErr("Solid Surface Completion folder for " + key, err));
+      });
+    });
+  }
+  // Bulk, SOFT fold across every item in the project, through the same
+  // folded-event cache readJoineryStatuses/readJoinerySchedule already use
+  // above -- for the Joinery Register's new columns, which render every
+  // visible row synchronously from data already loaded once up front,
+  // exactly like the existing Status/Delivery columns do. A mid-sync event
+  // file is left out of just that one item's fold (that item's cell shows
+  // "not yet marked" for a moment and catches up on the next open) rather
+  // than failing the WHOLE Register open over one bad file somewhere in a
+  // large project -- the same soft/cached treatment this app already gives
+  // every other pure-display, project-wide cross-reference. Nothing is
+  // ever written from a folded record either way. This is NOT the function
+  // named in the schema (that's the strict per-item one above, used by the
+  // Joinery Item page's own card) -- documented here so the split is clear.
+  function readSolidSurfaceCompletions(projectHandle){
+    if (!projectHandle) return Promise.resolve([]);
+    return getSolidSurfaceCompletionEventsRootDir(projectHandle, false).then(null, function(err){
+      if (isNotFoundErr(err)) return null;
+      return Promise.reject(readFailedErr("Solid Surface Completion folder", err));
+    }).then(function(rootH){
+      if (rootH === null) return [];
+      return readFoldedEventBranch(projectHandle, rootH, solidSurfaceCompletionBranchName(), foldSolidSurfaceCompletion);
+    });
+  }
+  function findSolidSurfaceCompletion(list, level, room, joineryId){
+    for (var i = 0; i < list.length; i++){
+      var rec = list[i];
+      if (rec && rec.level === level && (rec.room || "") === (room || "") && (rec.joineryId || "") === (joineryId || "")) return rec;
+    }
+    return null;
+  }
+
   /* ============================== legacy plan reading (migration only) ==============================
      As of the 2026-09-22 flat-structure cutover, a Level's roomlink
      markers and floorplan photo both live together in its own Project
@@ -4484,6 +4628,7 @@
   var registerAllItems = [];
   var registerStatusList = []; // the raw joinery-status.json array, read alongside joinery-items.json
   var registerScheduleList = []; // the raw joinery-schedule.json array (Scheduler's file, read-only here), read alongside the other two
+  var registerSolidSurfaceCompletions = []; // Solid Surface Schedule's own Completed/Delivered flags, folded per item (read-only, see readSolidSurfaceCompletions)
   var registerSort = { col: "level", dir: "asc" };
 
   // The item's own effective status KEY (not label) -- "" (Created) when it
@@ -4497,6 +4642,31 @@
   }
   function registerItemDelayInfo(item){
     return computeDelayInfo(registerItemScheduleRecord(item), registerItemStatusKey(item), todayDateStr());
+  }
+  // Solid Surface Schedule's own Completed/Delivered record for this item,
+  // for the Register's own new "SS Completed"/"SS Delivered" columns --
+  // read-only, see readSolidSurfaceCompletions's own comment for why this
+  // is the bulk/soft variant rather than the strict per-item reader the
+  // Joinery Item page's own card uses.
+  function registerItemSolidSurfaceCompletion(item){
+    return findSolidSurfaceCompletion(registerSolidSurfaceCompletions, item.level, item.room, item.joineryId);
+  }
+  function ssCompletionDateOnly(iso){
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso || "";
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+  // Compact cell content for one flag column: "✓ <date>" (title carries who
+  // + the full date/time, for a hover tooltip on desktop) when currently
+  // marked done, "—" when never marked -- matches this app's own existing
+  // "muted-cell —" empty convention used for an unset Delivery cell just
+  // above.
+  function solidSurfaceCompletionCellHtml(item, flag){
+    var rec = registerItemSolidSurfaceCompletion(item);
+    var f = rec && rec[flag];
+    if (!f || f.state !== "done") return "<span class=\"muted-cell\">—</span>";
+    var title = (f.by ? (f.by + " — ") : "") + formatHistoryDate(f.at);
+    return "<span class=\"ss-flag-cell\" title=\"" + escapeHtml(title) + "\">✓ " + escapeHtml(ssCompletionDateOnly(f.at)) + "</span>";
   }
   /* ---- "Hide delivered" / "Hide installed" tick boxes (v23, 2026-09-26
      addendum) -- Andrew, verbatim, mid-sweep: "add in tick boxes for
@@ -4550,6 +4720,12 @@
       // is -- ascending runs from least to most severe (no schedule <
       // on track < manufacture start overdue < delivery overdue).
       cmp = registerItemDelayInfo(a).severity - registerItemDelayInfo(b).severity;
+    } else if (col === "ssCompleted" || col === "ssDelivered"){
+      var flag = col === "ssCompleted" ? "completed" : "delivered";
+      var aRec = registerItemSolidSurfaceCompletion(a), bRec = registerItemSolidSurfaceCompletion(b);
+      var aAt = (aRec && aRec[flag] && aRec[flag].state === "done") ? (aRec[flag].at || "") : "";
+      var bAt = (bRec && bRec[flag] && bRec[flag].state === "done") ? (bRec[flag].at || "") : "";
+      cmp = aAt < bAt ? -1 : (aAt > bAt ? 1 : 0);
     } else {
       var av = String(a[col] || "").toLowerCase(), bv = String(b[col] || "").toLowerCase();
       cmp = av < bv ? -1 : (av > bv ? 1 : 0);
@@ -4640,7 +4816,9 @@
         "<td>" + escapeHtml(item.description) + "</td>" +
         "<td>" + workOrderCellHtml(item) + "</td>" +
         "<td class=\"status-cell\">" + statusLabelHtml(statusKey) + "</td>" +
-        "<td>" + deliveryCellHtml + "</td>";
+        "<td>" + deliveryCellHtml + "</td>" +
+        "<td>" + solidSurfaceCompletionCellHtml(item, "completed") + "</td>" +
+        "<td>" + solidSurfaceCompletionCellHtml(item, "delivered") + "</td>";
       tr.addEventListener("click", function(e){
         if (e.target.closest(".status-cell")) return; // the status cell handles its own tap (history), not row navigation
         openJoineryItemPage(item, "register");
@@ -4701,10 +4879,11 @@
   registerHideInstalled.addEventListener("change", renderRegisterTable);
   registerSearchInput.addEventListener("input", debounce(renderRegisterTable, 100));
 
-  function applyRegisterData(items, levelNames, statusList, scheduleList){
+  function applyRegisterData(items, levelNames, statusList, scheduleList, solidSurfaceCompletions){
     registerAllItems = items || [];
     registerStatusList = statusList || [];
     registerScheduleList = scheduleList || [];
+    registerSolidSurfaceCompletions = solidSurfaceCompletions || [];
     levelNames = levelNames || [];
     // Distinct status KEYS actually present (in pipeline order, "Created"
     // first), not raw joinery-items.json values -- V1 only ever wrote
@@ -4751,7 +4930,7 @@
     var painted = registerRenderedFor === projName && registerAllItems.length > 0;
     if (painted) renderRegisterTable();
     else {
-      registerAllItems = []; registerStatusList = []; registerScheduleList = [];
+      registerAllItems = []; registerStatusList = []; registerScheduleList = []; registerSolidSurfaceCompletions = [];
       registerTableBody.innerHTML = "";
       registerEmptyProject.hidden = true; registerEmpty.hidden = true;
       registerCountNote.textContent = "Loading…";
@@ -4760,7 +4939,7 @@
     showScreen("register");
     var snapP = painted ? Promise.resolve() : snapGet("register", projName).then(function(snap){
       if (seq !== registerLoadSeq || !snap || !Array.isArray(snap.items)) return;
-      applyRegisterData(snap.items, snap.levels, snap.statuses, snap.schedules);
+      applyRegisterData(snap.items, snap.levels, snap.statuses, snap.schedules, snap.solidSurfaceCompletions);
       registerRenderedFor = projName;
       registerRefreshNote.hidden = false;
     });
@@ -4769,14 +4948,15 @@
         readJoineryItems(projHandle),
         listExistingLevels(projHandle),
         readJoineryStatuses(projHandle),
-        readJoinerySchedule(projHandle)
+        readJoinerySchedule(projHandle),
+        readSolidSurfaceCompletions(projHandle)
       ]);
     }).then(function(results){
       if (seq !== registerLoadSeq || activeProjectName !== projName) return;
-      applyRegisterData(results[0], results[1], results[2], results[3]);
+      applyRegisterData(results[0], results[1], results[2], results[3], results[4]);
       registerRenderedFor = projName;
       registerRefreshNote.hidden = true;
-      snapSet("register", projName, { items: registerAllItems, levels: results[1] || [], statuses: registerStatusList, schedules: registerScheduleList });
+      snapSet("register", projName, { items: registerAllItems, levels: results[1] || [], statuses: registerStatusList, schedules: registerScheduleList, solidSurfaceCompletions: registerSolidSurfaceCompletions });
     }).catch(function(err){
       if (seq !== registerLoadSeq) return;
       console.error("Opening Joinery Register failed:", err);
@@ -5147,6 +5327,8 @@
   var viewOnPlanBtn = document.getElementById("viewOnPlanBtn");
   var backFromJoineryItemBtn = document.getElementById("backFromJoineryItemBtn");
   var itemOverlaysList = document.getElementById("itemOverlaysList");
+  var itemSolidSurfaceCompletionCard = document.getElementById("itemSolidSurfaceCompletionCard");
+  var itemSolidSurfaceCompletionList = document.getElementById("itemSolidSurfaceCompletionList");
   var itemShopDrawingsList = document.getElementById("itemShopDrawingsList");
   var itemJobNotesList = document.getElementById("itemJobNotesList");
   var itemItpList = document.getElementById("itemItpList");
@@ -5186,8 +5368,40 @@
     row.appendChild(openBtn);
     return row;
   }
+  // Solid Surface completion card (2026-09-26) -- one line per flag,
+  // reusing the existing .edit-history-change list style (bold label,
+  // plain value) rather than inventing new CSS, same convention the Edit
+  // history card just above already established for this exact shape.
+  function solidSurfaceCompletionFlagLineHtml(rec, flag, label){
+    var f = rec && rec[flag];
+    var valueHtml = (f && f.state === "done")
+      ? escapeHtml(formatHistoryDate(f.at)) + (f.by ? " — " + escapeHtml(f.by) : "")
+      : "Not yet marked";
+    return "<div class=\"edit-history-change\"><b>" + escapeHtml(label) + ":</b> " + valueHtml + "</div>";
+  }
+  function solidSurfaceCompletionCardHtml(rec){
+    return solidSurfaceCompletionFlagLineHtml(rec, "completed", "Completed") +
+      solidSurfaceCompletionFlagLineHtml(rec, "delivered", "Delivered");
+  }
   function renderJoineryItemLinkedSections(item){
     itemOverlaysList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    if (item.hasSolidSurface){
+      itemSolidSurfaceCompletionCard.hidden = false;
+      itemSolidSurfaceCompletionList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+      readSolidSurfaceCompletionRecordForItem(activeProjectHandle, item.level, item.room, item.joineryId).then(function(rec){
+        if (activeJoineryItem !== item) return; // navigated away before this resolved
+        itemSolidSurfaceCompletionList.innerHTML = solidSurfaceCompletionCardHtml(rec);
+      }).catch(function(err){
+        console.error("Reading Solid Surface completion failed:", err);
+        if (activeJoineryItem !== item) return;
+        itemSolidSurfaceCompletionList.innerHTML = isReadFailed(err)
+          ? "<p class=\"sub\" style=\"margin:0;\">Couldn't read Solid Surface completion (still syncing?) — try again in a moment.</p>"
+          : "<p class=\"sub\" style=\"margin:0;\">Couldn't load Solid Surface completion.</p>";
+      });
+    } else {
+      itemSolidSurfaceCompletionCard.hidden = true;
+      itemSolidSurfaceCompletionList.innerHTML = "";
+    }
     itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
