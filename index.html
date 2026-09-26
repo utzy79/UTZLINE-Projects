@@ -400,13 +400,21 @@
   .status-label{ display: inline-flex; align-items: center; gap: 6px; }
   .status-label .status-icon{ font-size: 13px; }
   .muted-cell{ color: var(--muted2); }
+  /* Joinery Item page meta-grid Status row (2026-09-26) -- Andrew, verbatim:
+     "put the status at the top of this card and increase the font and
+     icon to be the size of the joinery code above" then "make the text
+     and icon 25px". Scoped to this one <dd> (see renderJoineryItemMetaGrid)
+     rather than .meta-grid's own base 14px, which the Register table and
+     the Edit item dialog's read-only grid also share. */
+  .meta-grid dd.status-cell-lg .status-label{ font-size: 25px; gap: 10px; }
+  .meta-grid dd.status-cell-lg .status-icon{ font-size: 25px; }
   /* ---- Has Solid Surface badge (2026-09-23) -- Andrew: "we will also add
      a Solid Surface schedule that is a separate app. so when putting on the
      joinery item we can have a tick box for has Solid Surface." A small
      glyph next to the Joinery ID in the Register so it reads at a glance,
      distinct from the pipeline status icons (which live in the Status
      column, not here) -- a diamond, since none of the status icons
-     (📏🔨🪚📦🚚🏆) use one. ---- */
+     (📏🏭⚙️📦🚚🏆) use one. ---- */
   .ss-badge{ font-size: 11px; color: var(--accent); margin-left: 4px; }
   /* ---- Joinery Item page: Has Solid Surface toggle row -- used only
        inside the Edit joinery item dialog now (2026-09-24), not as a
@@ -476,6 +484,15 @@
   .rework-item-text{ font-size: 13px; margin: 6px 0 0; white-space: pre-wrap; }
   .rework-item-status{ font-size: 12px; margin-top: 6px; color: var(--muted); }
   .rework-item-status.received{ color: var(--accent); }
+  /* Rework Register colour scheme (2026-09-26) -- Andrew, verbatim:
+     "delivered is blue, signed off is green, red is only for outstanding
+     (not yet)." Scoped to this table only (the Joinery Item page's own
+     Rework card above keeps its existing accent-colour treatment) --
+     "this is purely on the rework register." */
+  .rr-status{ font-weight: 600; }
+  .rr-status.outstanding{ color: var(--danger); }
+  .rr-status.delivered{ color: #3987e5; }
+  .rr-signoff-date{ color: #33c46a; font-weight: 600; }
   .rework-item-photos{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   .rework-item-photos img{ width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
   /* Brief highlight when arriving from the Rework Register's "clicking on a
@@ -664,7 +681,19 @@
     <div class="backrow"><button class="btn secondary" id="backToRoomsBtn">&larr; Rooms</button></div>
     <h1 id="roomDetailLabel">Room</h1>
     <div class="card">
-      <p class="sub" style="margin:0;">Rooms share their level's own floor plan -- there's no separate photo for this room. Joinery markers are placed from the level's own plan (open the level, then "Place joinery items"), and every joinery item has its own page (see the Joinery Register, from the level list).</p>
+      <p class="sub" style="margin:0;">Rooms share their level's own floor plan -- there's no separate photo for this room. Joinery markers are placed from the level's own plan (open the level, then "Place joinery items").</p>
+    </div>
+    <!-- Joinery items in this room (2026-09-26) -- Andrew, verbatim: "when
+         clicking on rooms in the projects app, the page it opens is empty,
+         it should show a selectable list of joinery items in the room."
+         Was a dead-end static page (this card was the ENTIRE screen) --
+         see renderRoomDetailItems below. Tapping a row opens the same
+         Joinery Item page every other entry point uses
+         (openJoineryItemPage(item, "roomDetail")), so Back returns here. -->
+    <h2 class="section-title">Joinery items in this room</h2>
+    <div class="card">
+      <div class="list" id="roomDetailItemsList"></div>
+      <div class="empty-note" id="roomDetailItemsEmpty" hidden>No joinery items in this room yet -- add one from the level's own plan ("Place joinery items").</div>
     </div>
   </section>
 
@@ -674,7 +703,7 @@
   <section id="screenRegister" class="screen wide-table">
     <div class="backrow"><button class="btn secondary" id="backFromRegisterBtn">&larr; Levels</button></div>
     <h1 id="registerProjectLabel">Joinery Register</h1>
-    <p class="sub">Every joinery item in this project, in one place.</p>
+    <p class="sub">Every joinery item in this project, in one place.<span id="registerDollarTotalNote"></span></p>
     <div class="card">
       <div class="row">
         <div class="field" style="flex:1 1 160px; margin:0;">
@@ -713,6 +742,7 @@
             <th data-col="joineryId">Joinery ID</th>
             <th data-col="description">Description</th>
             <th data-col="workOrderNo">Work order #</th>
+            <th data-col="dollarValue">Dollar value</th>
             <th data-col="status">Status</th>
             <th data-col="delivery">Delivery</th>
             <th data-col="ssCompleted">SS Completed</th>
@@ -750,11 +780,11 @@
           </select>
         </div>
         <div class="field" style="flex:1 1 160px; margin:0;">
-          <label for="reworkRegisterReceivedFilter">Received</label>
+          <label for="reworkRegisterReceivedFilter">Delivered to site</label>
           <select id="reworkRegisterReceivedFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
             <option value="">All</option>
-            <option value="yes">Received back on site</option>
-            <option value="no">Not yet received</option>
+            <option value="yes">Delivered to site</option>
+            <option value="no">Not yet delivered</option>
           </select>
         </div>
         <div class="field" style="flex:2 1 220px; margin:0;">
@@ -778,7 +808,8 @@
             <th data-col="cabinetNumber">Cabinet #</th>
             <th data-col="text">Detail</th>
             <th data-col="createdAt">Logged</th>
-            <th data-col="received">Received</th>
+            <th data-col="received">Delivered to site</th>
+            <th data-col="closedAt">Signed off date</th>
           </tr>
         </thead>
         <tbody id="reworkRegisterTableBody"></tbody>
@@ -960,6 +991,18 @@
     <div class="field"><label for="addItemJoineryIdInput">Joinery ID</label><input type="text" id="addItemJoineryIdInput"></div>
     <div class="field"><label for="addItemDescriptionInput">Description</label><input type="text" id="addItemDescriptionInput"></div>
     <div class="field"><label for="addItemWorkOrderInput">Work order #</label><input type="text" id="addItemWorkOrderInput"></div>
+    <!-- Dollar value (2026-09-26) -- Andrew, verbatim: "add dollar value to
+         projects, joinery input page." Optional (unlike Work order #, which
+         is a hard requirement) -- a plain numeric text field so it inherits
+         the same .field input[type=text] styling as every other field on
+         this dialog rather than needing its own CSS. Read/parsed via
+         parseDollarValueInput below, which strips $/commas and clamps to a
+         non-negative number, 0 when left blank. See addItemSaveBtn's own
+         click handler and README v25 entry for the full note -- Andrew's
+         own follow-up confirmed this is editable later (Edit joinery item
+         dialog) and will back a future progress-claims app, so it's stored
+         as a plain number (dollarValue) on the item record from the start. -->
+    <div class="field"><label for="addItemDollarValueInput">Dollar value ($)</label><input type="text" inputmode="decimal" id="addItemDollarValueInput" placeholder="0.00"></div>
     <div class="modal-actions">
       <button class="btn secondary" id="addItemCancelBtn">Cancel</button>
       <button class="btn" id="addItemSaveBtn">Add</button>
@@ -995,6 +1038,7 @@
     <dl class="meta-grid readonly-fields" id="editItemFixedGrid"></dl>
     <div class="field"><label for="editItemDescInput">Description</label><input type="text" id="editItemDescInput"></div>
     <div class="field"><label for="editItemWorkOrderInput">Work order #</label><input type="text" id="editItemWorkOrderInput"></div>
+    <div class="field"><label for="editItemDollarValueInput">Dollar value ($)</label><input type="text" inputmode="decimal" id="editItemDollarValueInput" placeholder="0.00"></div>
     <div class="field"><label class="ss-toggle-row"><input type="checkbox" id="editItemHasSolidSurfaceInput"> Goes on the Solid Surface schedule</label></div>
     <div class="field" id="editItemIdentityField">
       <label for="editItemIdentitySelect">Sign in to edit</label>
@@ -3069,6 +3113,7 @@
     var fieldDefs = [
       { key: "description", label: "Description" },
       { key: "workOrderNo", label: "Work order #" },
+      { key: "dollarValue", label: "Dollar value" },
       { key: "hasSolidSurface", label: "Has Solid Surface" }
     ];
     var changes = [];
@@ -3079,6 +3124,13 @@
       var oldRecorded, newRecorded, changed;
       if (f.key === "hasSolidSurface"){
         oldRecorded = !!oldVal; newRecorded = !!newVal;
+        changed = oldRecorded !== newRecorded;
+      } else if (f.key === "dollarValue"){
+        // Numeric comparison (not string) -- 0 / undefined / "" must all
+        // read as the same "no value set" starting point, never a false
+        // "changed from '' to 0" history entry the first time this field
+        // is touched on an item created before it existed.
+        oldRecorded = Number(oldVal) || 0; newRecorded = Number(newVal) || 0;
         changed = oldRecorded !== newRecorded;
       } else {
         oldRecorded = oldVal == null ? "" : String(oldVal);
@@ -3115,6 +3167,15 @@
   // dialog now, never an inline per-cell action.
   function workOrderCellHtml(item){
     return item.workOrderNo ? escapeHtml(item.workOrderNo) : "<span class=\"muted-cell\">—</span>";
+  }
+  // Dollar value (2026-09-26) -- see the Add/Edit joinery item dialogs'
+  // own comments for the full note. Formatted with thousands separators;
+  // an item with no value set (0, or created before this field existed)
+  // reads as the same muted em-dash every other unset field on this page
+  // uses, rather than a bare "$0".
+  function dollarValueCellHtml(item){
+    var v = Number(item.dollarValue) || 0;
+    return v ? ("$" + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : "<span class=\"muted-cell\">—</span>";
   }
 
   /* ============================== Shared joinery-status pipeline (2026-09-23) ==============================
@@ -3171,8 +3232,8 @@
       case "installed": return "🏆";
       case "delivered": return "🚚";
       case "manufactured": return "📦";
-      case "machined": return "🪚";
-      case "in_manufacture": return "🔨";
+      case "machined": return "⚙️";
+      case "in_manufacture": return "🏭";
       case "measured": return "📏";
       default: return "";
     }
@@ -4340,7 +4401,23 @@
   var addItemJoineryIdInput = document.getElementById("addItemJoineryIdInput");
   var addItemDescriptionInput = document.getElementById("addItemDescriptionInput");
   var addItemWorkOrderInput = document.getElementById("addItemWorkOrderInput");
+  var addItemDollarValueInput = document.getElementById("addItemDollarValueInput");
   var addItemSaveBtn = document.getElementById("addItemSaveBtn");
+  // Shared by both the Add and Edit joinery item dialogs (2026-09-26).
+  // Strips a leading "$" and any thousands commas/whitespace, then parses
+  // as a float; blank, unparsable, or negative all read as 0 rather than
+  // blocking Save -- this field is optional, unlike Work order #.
+  function parseDollarValueInput(raw){
+    var cleaned = String(raw == null ? "" : raw).replace(/[$,\s]/g, "");
+    if (!cleaned) return 0;
+    var n = parseFloat(cleaned);
+    if (!isFinite(n) || n < 0) return 0;
+    return Math.round(n * 100) / 100;
+  }
+  function formatDollarValueInput(n){
+    var v = Number(n) || 0;
+    return v ? String(v) : "";
+  }
   var addItemCancelBtn = document.getElementById("addItemCancelBtn");
   var ADD_ITEM_NEW_ROOM_VALUE = "__new__";
   var addItemPendingWorldPoint = null;
@@ -4366,6 +4443,7 @@
       addItemJoineryIdInput.value = "";
       addItemDescriptionInput.value = "";
       addItemWorkOrderInput.value = "";
+      addItemDollarValueInput.value = "";
       updateAddItemNewRoomVisibility();
       addItemBackdrop.hidden = false;
     }).catch(function(err){
@@ -4388,6 +4466,7 @@
     var joineryIdRaw = addItemJoineryIdInput.value.trim();
     var description = addItemDescriptionInput.value.trim();
     var workOrderNo = addItemWorkOrderInput.value.trim();
+    var dollarValue = parseDollarValueInput(addItemDollarValueInput.value);
     // Andrew (2026-09-23): "Every single joinery item gets its own work
     // order #also. That we put in manually when as part of the initial add
     // joinery step" -- required going forward for every NEW item; an item
@@ -4471,7 +4550,7 @@
 
       return writeLevelFile(activeProjectHandle, activeProjectName, activeLevelName, entry).then(function(){
         return addJoineryItem(activeProjectHandle, {
-          joineryId: finalCode, description: description, level: activeLevelName, room: finalRoomName, status: "created", workOrderNo: workOrderNo
+          joineryId: finalCode, description: description, level: activeLevelName, room: finalRoomName, status: "created", workOrderNo: workOrderNo, dollarValue: dollarValue
         });
       }).then(function(){
         // Only now that both writes landed does the on-screen plan gain the
@@ -4622,6 +4701,7 @@
   var registerHideDelivered = document.getElementById("registerHideDelivered");
   var registerHideInstalled = document.getElementById("registerHideInstalled");
   var registerCountNote = document.getElementById("registerCountNote");
+  var registerDollarTotalNote = document.getElementById("registerDollarTotalNote");
   var registerRefreshNote = document.getElementById("registerRefreshNote");
   var registerRenderedFor = null; // the project name registerAllItems belongs to
   var registerLoadSeq = 0;
@@ -4720,6 +4800,8 @@
       // is -- ascending runs from least to most severe (no schedule <
       // on track < manufacture start overdue < delivery overdue).
       cmp = registerItemDelayInfo(a).severity - registerItemDelayInfo(b).severity;
+    } else if (col === "dollarValue"){
+      cmp = (Number(a.dollarValue) || 0) - (Number(b.dollarValue) || 0);
     } else if (col === "ssCompleted" || col === "ssDelivered"){
       var flag = col === "ssCompleted" ? "completed" : "delivered";
       var aRec = registerItemSolidSurfaceCompletion(a), bRec = registerItemSolidSurfaceCompletion(b);
@@ -4815,6 +4897,7 @@
         "<td>" + escapeHtml(item.joineryId) + (item.hasSolidSurface ? " <span class=\"ss-badge\" title=\"Has Solid Surface\">◆</span>" : "") + "</td>" +
         "<td>" + escapeHtml(item.description) + "</td>" +
         "<td>" + workOrderCellHtml(item) + "</td>" +
+        "<td>" + dollarValueCellHtml(item) + "</td>" +
         "<td class=\"status-cell\">" + statusLabelHtml(statusKey) + "</td>" +
         "<td>" + deliveryCellHtml + "</td>" +
         "<td>" + solidSurfaceCompletionCellHtml(item, "completed") + "</td>" +
@@ -4850,6 +4933,17 @@
     registerEmpty.hidden = !(registerAllItems.length > 0 && filtered.length === 0);
     var total = registerAllItems.length, shown = filtered.length;
     registerCountNote.textContent = total === 0 ? "" : (shown === total ? (total + (total === 1 ? " item" : " items")) : ("Showing " + shown + " of " + total + " items"));
+    // Per-project dollar total (2026-09-26) -- Andrew's own follow-up on
+    // adding a dollar value field: "we will use this later to build a
+    // progress claims app." Sums every item's dollarValue in the WHOLE
+    // project (not just the currently-filtered rows -- "per-project
+    // total" reads as a fixed project figure, not something that should
+    // shrink/grow as someone flips through level or status filters).
+    // Blank rather than "$0" for a project with no dollar values entered
+    // yet, same muted-em-dash convention as every other unset-value cell
+    // on this page.
+    var dollarTotal = registerAllItems.reduce(function(sum, it){ return sum + (Number(it.dollarValue) || 0); }, 0);
+    registerDollarTotalNote.textContent = dollarTotal ? (" Total dollar value: $" + dollarTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ".") : "";
     Array.prototype.forEach.call(registerTable.querySelectorAll("th"), function(th){
       th.classList.remove("sorted", "desc");
       if (th.getAttribute("data-col") === registerSort.col){
@@ -5025,6 +5119,8 @@
       cmp = new Date(a.entry.createdAt || 0).getTime() - new Date(b.entry.createdAt || 0).getTime();
     } else if (col === "received"){
       cmp = (a.entry.received ? 1 : 0) - (b.entry.received ? 1 : 0);
+    } else if (col === "closedAt"){
+      cmp = new Date(a.entry.closedAt || 0).getTime() - new Date(b.entry.closedAt || 0).getTime();
     } else if (col === "level" || col === "room" || col === "joineryId"){
       var av = String(a.item[col] || "").toLowerCase(), bv = String(b.item[col] || "").toLowerCase();
       cmp = av < bv ? -1 : (av > bv ? 1 : 0);
@@ -5049,9 +5145,21 @@
     reworkRegisterTableBody.innerHTML = "";
     filtered.forEach(function(row){
       var item = row.item, entry = row.entry;
+      // Colour scheme (2026-09-26) -- Andrew, verbatim: "delivered is blue,
+      // signed off is green, red is only for outstanding (not yet)."
+      // "Delivered to site" renames the old "Received" milestone (same
+      // underlying entry.received/receivedDate field -- the photo+pin-drop
+      // requirement and the Delivery-ITP-only capture flow are Delivery
+      // ITP's own build, still queued; this app only ever displays the
+      // result). "Signed off date" is entry.closedAt (Install ITP's own
+      // existing "Save & close out" milestone, Andrew's own name for it
+      // here on the Register) -- green once set, plain em-dash otherwise.
       var receivedHtml = entry.received
-        ? "<span class=\"rework-item-status received\" style=\"display:inline-block;\">Received" + (entry.receivedDate ? " (" + escapeHtml(entry.receivedDate) + ")" : "") + "</span>"
-        : "<span class=\"muted-cell\">Not yet</span>";
+        ? "<span class=\"rr-status delivered\">Delivered to site" + (entry.receivedDate ? " (" + escapeHtml(entry.receivedDate) + ")" : "") + "</span>"
+        : "<span class=\"rr-status outstanding\">Not yet delivered</span>";
+      var signoffHtml = entry.closedAt
+        ? "<span class=\"rr-signoff-date\">" + escapeHtml(formatHistoryDate(entry.closedAt)) + "</span>"
+        : "<span class=\"muted-cell\">—</span>";
       var tr = document.createElement("tr");
       tr.innerHTML =
         "<td>" + escapeHtml(item.level) + "</td>" +
@@ -5060,7 +5168,8 @@
         "<td>" + escapeHtml(entry.cabinetNumber || "—") + "</td>" +
         "<td>" + escapeHtml(reworkRegisterRowDetailText(entry)) + "</td>" +
         "<td>" + escapeHtml(formatHistoryDate(entry.createdAt)) + "</td>" +
-        "<td>" + receivedHtml + "</td>";
+        "<td>" + receivedHtml + "</td>" +
+        "<td>" + signoffHtml + "</td>";
       tr.addEventListener("click", function(){
         // "Clicking on a rework takes you to that rework" -- there's no
         // separate rework-detail screen in this app (Projects is read-only
@@ -5201,13 +5310,14 @@
     y += 14;
 
     var cols = [
-      { key: "level", label: "LEVEL", frac: 0.09 },
-      { key: "room", label: "ROOM", frac: 0.11 },
-      { key: "joineryId", label: "JOINERY ID", frac: 0.11 },
-      { key: "cabinetNumber", label: "CABINET #", frac: 0.1 },
-      { key: "text", label: "DETAIL", frac: 0.32 },
-      { key: "createdAt", label: "LOGGED", frac: 0.13 },
-      { key: "received", label: "RECEIVED", frac: 0.14 }
+      { key: "level", label: "LEVEL", frac: 0.08 },
+      { key: "room", label: "ROOM", frac: 0.1 },
+      { key: "joineryId", label: "JOINERY ID", frac: 0.1 },
+      { key: "cabinetNumber", label: "CABINET #", frac: 0.09 },
+      { key: "text", label: "DETAIL", frac: 0.27 },
+      { key: "createdAt", label: "LOGGED", frac: 0.12 },
+      { key: "received", label: "DELIVERED TO SITE", frac: 0.13 },
+      { key: "closedAt", label: "SIGNED OFF DATE", frac: 0.11 }
     ];
     cols.forEach(function(c){ c.w = c.frac * contentW; });
     var headerH = 16;
@@ -5229,7 +5339,8 @@
         cabinetNumber: entry.cabinetNumber || "—",
         text: entry.text || "—",
         createdAt: formatHistoryDate(entry.createdAt),
-        received: entry.received ? ("Received" + (entry.receivedDate ? (" (" + entry.receivedDate + ")") : "")) : "Not yet received"
+        received: entry.received ? ("Delivered to site" + (entry.receivedDate ? (" (" + entry.receivedDate + ")") : "")) : "Not yet delivered",
+        closedAt: entry.closedAt ? formatHistoryDate(entry.closedAt) : "—"
       };
       var wrapped = {}, maxLines = 1;
       cols.forEach(function(c){
@@ -5246,9 +5357,15 @@
       }
       var rx = margin;
       cols.forEach(function(c){
-        doc.setFont("helvetica", (c.key === "received" && entry.received) ? "bold" : "normal").setFontSize(8);
+        // Colour scheme (2026-09-26) -- "delivered is blue, signed off is
+        // green, red is only for outstanding (not yet)", matching the
+        // on-screen .rr-status/.rr-signoff-date rules above.
+        var isBold = (c.key === "received" && entry.received) || (c.key === "closedAt" && entry.closedAt);
+        doc.setFont("helvetica", isBold ? "bold" : "normal").setFontSize(8);
         if (c.key === "received"){
-          if (entry.received) doc.setTextColor(31, 138, 76); else doc.setTextColor(140, 140, 140);
+          if (entry.received) doc.setTextColor(57, 135, 229); else doc.setTextColor(255, 59, 59);
+        } else if (c.key === "closedAt"){
+          if (entry.closedAt) doc.setTextColor(51, 196, 106); else doc.setTextColor(20);
         } else {
           doc.setTextColor(20);
         }
@@ -5654,12 +5771,22 @@
   // plain read-only text here -- the only way to change either (or
   // Description) is the "Edit item" button's own PIN-gated dialog below.
   function renderJoineryItemMetaGrid(item, statusKey){
+    // Row order (2026-09-26) -- Andrew, verbatim: "on the joinery page,
+    // (photo) put the status at the top of this card and increase the
+    // font and icon to be the size of the joinery code above" then,
+    // same day: "make the text and icon 25px" (a concrete size,
+    // superseding the earlier "match the h1" idea). Status now leads the
+    // grid (was 5th of 7 rows) and its <dd> carries the dedicated
+    // .status-cell-lg class (25px text+icon, see CSS) rather than
+    // changing .meta-grid's own base 14px size, which the Register table
+    // and this same dialog's read-only grid also depend on.
     joineryItemMetaGrid.innerHTML =
+      "<dt>Status</dt><dd id=\"jiStatusCell\" class=\"status-cell-lg\">" + statusLabelHtml(statusKey || "") + "</dd>" +
       "<dt>Description</dt><dd>" + escapeHtml(item.description || "(none)") + "</dd>" +
       "<dt>Work order #</dt><dd id=\"jiWorkOrderCell\">" + workOrderCellHtml(item) + "</dd>" +
+      "<dt>Dollar value</dt><dd id=\"jiDollarValueCell\">" + dollarValueCellHtml(item) + "</dd>" +
       "<dt>Level</dt><dd>" + escapeHtml(item.level) + "</dd>" +
       "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
-      "<dt>Status</dt><dd id=\"jiStatusCell\">" + statusLabelHtml(statusKey || "") + "</dd>" +
       "<dt>Required delivery</dt><dd id=\"jiDeliveryCell\">Loading…</dd>" +
       "<dt>Has Solid Surface</dt><dd>" + (item.hasSolidSurface ? "Yes" : "No") + "</dd>";
   }
@@ -5681,6 +5808,7 @@
   var editItemFixedGrid = document.getElementById("editItemFixedGrid");
   var editItemDescInput = document.getElementById("editItemDescInput");
   var editItemWorkOrderInput = document.getElementById("editItemWorkOrderInput");
+  var editItemDollarValueInput = document.getElementById("editItemDollarValueInput");
   var editItemHasSolidSurfaceInput = document.getElementById("editItemHasSolidSurfaceInput");
   var editItemCancelBtn = document.getElementById("editItemCancelBtn");
   var editItemSaveBtn = document.getElementById("editItemSaveBtn");
@@ -5692,6 +5820,7 @@
       "<dt>Joinery ID</dt><dd>" + escapeHtml(item.joineryId || "(no ID)") + "</dd>";
     editItemDescInput.value = item.description || "";
     editItemWorkOrderInput.value = item.workOrderNo || "";
+    editItemDollarValueInput.value = formatDollarValueInput(item.dollarValue);
     editItemHasSolidSurfaceInput.checked = !!item.hasSolidSurface;
     populateIdentitySelectorEl(editItemIdentitySelect);
     editItemBackdrop.hidden = false;
@@ -5721,6 +5850,7 @@
     var edits = {
       description: newDesc,
       workOrderNo: editItemWorkOrderInput.value.trim(),
+      dollarValue: parseDollarValueInput(editItemDollarValueInput.value),
       hasSolidSurface: !!editItemHasSolidSurfaceInput.checked
     };
     // 2) Skip the PIN step entirely for a no-op save -- nothing to confirm,
@@ -5822,6 +5952,11 @@
     // An edit on the item page mutated the shared in-memory item -- make the
     // Register's rows (and its tick-box filtering) reflect it, in memory.
     if (joineryItemReturnScreen === "register") renderRegisterTable();
+    // Room detail's own list (2026-09-26) has no in-memory cache to patch
+    // in place -- a plain re-read is cheap (one room's worth of items) and
+    // picks up an edited description/ID the same way returning to the
+    // Register does.
+    if (joineryItemReturnScreen === "roomDetail") renderRoomDetailItems(activeProjectHandle, activeLevelName, activeRoomName);
   });
   viewOnPlanBtn.addEventListener("click", function(){
     if (!activeJoineryItem) return;
@@ -6370,11 +6505,52 @@
   // plain browse never writes). A NEW room re-reads the level strictly --
   // an unreadable level file used to read as `{rooms:[], markers:[]}` and
   // be rewritten holding only the new room.
+  var roomDetailItemsList = document.getElementById("roomDetailItemsList");
+  var roomDetailItemsEmpty = document.getElementById("roomDetailItemsEmpty");
+  // (2026-09-26) Filters this project's own joinery-items.json down to
+  // the room just opened (level+room match, same identity every other
+  // screen in this app uses) and renders it as a selectable list -- a
+  // fresh strict read every time, independent of the Joinery Register's
+  // own cache (registerAllItems), since Levels -> Rooms -> a room can be
+  // reached without the Register ever having been opened this session.
+  function renderRoomDetailItems(projectHandle, levelName, roomName){
+    roomDetailItemsList.innerHTML = "";
+    roomDetailItemsEmpty.hidden = true;
+    return readJoineryItems(projectHandle).then(function(items){
+      // Stale nav guard -- don't paint a room's list over a different
+      // room/level the person has already moved on to.
+      if (activeLevelName !== levelName || activeRoomName !== roomName) return;
+      var matches = (items || []).filter(function(it){
+        return it && it.level === levelName && (it.room || "") === roomName;
+      });
+      roomDetailItemsList.innerHTML = "";
+      matches.forEach(function(item){
+        var row = document.createElement("button");
+        row.className = "list-item";
+        row.innerHTML =
+          "<span>" + escapeHtml(item.joineryId || "(no ID)") +
+          (item.description ? " — " + escapeHtml(item.description) : "") +
+          "</span><span class=\"chev\">&rsaquo;</span>";
+        row.addEventListener("click", function(){ openJoineryItemPage(item, "roomDetail"); });
+        roomDetailItemsList.appendChild(row);
+      });
+      roomDetailItemsEmpty.hidden = matches.length !== 0;
+    }).catch(function(err){
+      if (activeLevelName !== levelName || activeRoomName !== roomName) return;
+      console.error("Reading this room's joinery items failed:", err);
+      roomDetailItemsEmpty.hidden = false;
+      roomDetailItemsEmpty.textContent = isReadFailed(err) ? "Couldn't read this project's joinery items (a file may still be syncing) — try again in a moment." : "Couldn't read this room's joinery items.";
+    });
+  }
   function openRoom(name, opts){
     var create = !!(opts && opts.create);
     activeRoomName = name;
     roomDetailLabel.textContent = activeProjectName + " — " + activeLevelName + " — " + name;
-    if (!create){ showScreen("roomDetail"); return Promise.resolve(); }
+    if (!create){
+      showScreen("roomDetail");
+      renderRoomDetailItems(activeProjectHandle, activeLevelName, name);
+      return Promise.resolve();
+    }
     return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){
       return readLevelFile(activeProjectHandle, activeProjectName, activeLevelName);
     }).then(function(level){
@@ -6387,6 +6563,7 @@
       return writeLevelFile(activeProjectHandle, activeProjectName, activeLevelName, entry);
     }).then(function(){
       showScreen("roomDetail");
+      renderRoomDetailItems(activeProjectHandle, activeLevelName, name);
     }).catch(function(err){
       console.error("Opening room failed:", err);
       if (isReadFailed(err)) readFailedToast("this level's file");

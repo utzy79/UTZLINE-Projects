@@ -467,8 +467,22 @@
 // hasSolidSurface), new "SS Completed"/"SS Delivered" Joinery Register
 // columns; plus the family-wide cosmetic status-icon swap (in_manufacture
 // 🏭->🔨, machined ⚙️->🪚). See README.md's v24 entry.)
+//
+// (README v25 / cache v33, 2026-09-26: Andrew's own queued NEXT_RUN_NOTES.md
+// items scoped to this app specifically ("ok now make all the adjustment to
+// projects"). index.html only: icon revert (machined back to ⚙️,
+// in_manufacture back to 🏭 -- undoes this same day's v24 swap for this
+// app); Rework Register "Received"->"Delivered to site" rename + a new
+// "Signed off date" column (entry.closedAt) + red/blue/green colour scheme,
+// on-screen and in the Print/Share PDF export; the Room detail page now
+// shows a real, selectable list of that room's joinery items instead of a
+// dead-end static page; the Joinery Item page's meta-grid Status row moved
+// to the top at 25px; a new "Dollar value" field on the Add/Edit joinery
+// item dialogs (traceable via editHistory[]), shown on the item page, as a
+// new sortable Register column, and as a per-project total. See README.md's
+// v25 entry for the full writeup.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v32";
+var CACHE_NAME = "utzline-projects-cache-v33";
 
 var PRECACHE_URLS = [
   "./",
