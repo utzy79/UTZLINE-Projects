@@ -489,8 +489,23 @@
 // from the fields it copies back onto the in-memory item after a save (the
 // write to disk itself was always correct) -- see README.md's v26 entry for
 // the full root-cause writeup.)
+//
+// (README v27 / cache v35, 2026-09-27 -- first cross-app step of the new
+// standalone UTZLINE Sub Orders app, built earlier the same day: Andrew,
+// verbatim, "now i want to be able to see these orders in the joinery
+// summary pages categorised and openable, do one app first." index.html
+// only: new read-only "Sub orders" card on the Joinery Item page, reading
+// Sub Orders' own Project Saves/UTZLINE Sub Orders/Orders/<Level> - <Room>
+// - <JoineryId>.json (never written here, exactly like every other
+// cross-app card on this page) -- grouped by type in the same fixed
+// steel/upholstery/timber/aluminium order and colours Sub Orders itself
+// uses ("categorised"), each with an Open button resolving straight out of
+// Sub Orders' own Files/ folder via the existing docRow/openLinkedFileHandle
+// pattern ("openable"). Per the standing per-app process note, this is the
+// first of the family's other apps to get this; Site Measure/Viewer/ITP are
+// still queued, one app at a time, on their own future updates.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v34";
+var CACHE_NAME = "utzline-projects-cache-v35";
 
 var PRECACHE_URLS = [
   "./",

@@ -503,6 +503,33 @@
     100%{ background: transparent; box-shadow: 0 0 0 2px transparent; }
   }
 
+  /* ---- Joinery item page: read-only Sub Orders summary (2026-09-27) --
+       "categorised" = grouped under a group-heading per type; colours
+       and fixed steel/upholstery/timber/aluminium order are the exact
+       same ones validated (dataviz skill's own validate_palette.js) and
+       shipped in the standalone UTZLINE Sub Orders app itself, kept
+       identical here for visual consistency across the two apps. Never
+       colour-only -- every chip always carries its text label too. */
+  .so-type-heading{
+    font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted);
+    margin: 14px 0 6px; font-weight: 600;
+  }
+  .so-type-heading:first-child{ margin-top: 0; }
+  .so-type-chip{ display: inline-flex; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+  .so-type-chip.so-type-steel{ background: #3987e5; color: #fff; }
+  .so-type-chip.so-type-upholstery{ background: #d95926; color: #fff; }
+  .so-type-chip.so-type-timber{ background: #199e70; color: #fff; }
+  .so-type-chip.so-type-aluminium{ background: #c98500; color: #241205; }
+  .so-order-item{ padding: 10px 0; border-top: 1px solid var(--border); }
+  .so-order-item:first-child{ border-top: none; }
+  .so-order-item-head{ display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+  .so-order-item-date{ font-size: 12px; color: var(--muted); font-weight: 600; }
+  .so-order-item-meta{ font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .so-order-item-notes{ font-size: 13px; margin: 6px 0 0; white-space: pre-wrap; }
+  .so-order-item-status{ font-size: 12px; margin-top: 6px; color: var(--muted); }
+  .so-order-item-status.received{ color: var(--accent); }
+  .so-order-item-actions{ margin-top: 8px; }
+
   /* ---- Joinery item page: delivery-location pin thumbnail (2026-09-23) --
        mirrors UTZLINE Delivery ITP's own checklist-screen thumbnail. ---- */
   .delivery-loc-row{ display: flex; align-items: center; gap: 12px; }
@@ -905,6 +932,26 @@
       <h2 class="section-title">Rework</h2>
       <div id="itemReworkPdfRow"></div>
       <div id="itemReworkList"></div>
+    </div>
+    <!-- Read-only Sub Orders summary (2026-09-27) -- Andrew, verbatim, the
+         first cross-app step of the standalone Sub Orders app he had
+         built earlier the same day: "now i want to be able to see these
+         orders in the joinery summary pages categorised and openable, do
+         one app first." Reads UTZLINE Sub Orders' own
+         "Project Saves/UTZLINE Sub Orders/Orders/<Level> - <Room> -
+         <JoineryId>.json" (read-only -- this app never writes order data,
+         only Sub Orders does), grouped by type (steel/upholstery/timber/
+         aluminium, the same fixed order and colours Sub Orders itself
+         uses) so "categorised" means grouped by type, not just listed;
+         "openable" is the same docRow-style Open button every other
+         linked-file card on this page already has, resolving the file
+         straight out of Sub Orders' own Files/ folder. Per the standing
+         per-app process note, this is the first of the family's other
+         apps to get this -- Site Measure/Viewer/ITP are still queued,
+         one app at a time, on their own future updates. -->
+    <div class="card">
+      <h2 class="section-title">Sub orders</h2>
+      <div id="itemSubOrdersList"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Delivery location</h2>
@@ -4015,6 +4062,65 @@
       return (data && Array.isArray(data.reworks)) ? data.reworks : [];
     });
   }
+  // Read-only Sub Orders summary (2026-09-27) -- see this card's own
+  // top-of-HTML comment. UTZLINE Sub Orders is the ONLY app that ever
+  // writes here; this app only ever reads, exactly like every other
+  // cross-app branch on this page. Filename convention (flat "<Level> -
+  // <Room> - <JoineryId>.json") copied verbatim from Sub Orders' own
+  // orderFileNameFor -- it's a brand-new folder with no legacy
+  // predecessor, so there's no flat-vs-legacy branching to worry about
+  // here either. Resolves to [] (not a rejection) for "no orders
+  // attached to this item yet", the normal, common case.
+  // Date-only formatter (no time-of-day) for Sub Orders' own plain
+  // "YYYY-MM-DD" date fields (requiredByDate/receivedDate) -- distinct
+  // from formatHistoryDate above, which always shows a time and would
+  // otherwise render a date-only string as midnight.
+  function formatDateOnly(iso){
+    if (!iso) return "";
+    try{
+      var parts = String(iso).slice(0, 10).split("-");
+      var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    }catch(e){ return iso; }
+  }
+  function subOrdersFileNameFor(level, room, joineryId){
+    return sanitizeFileBase(level) + " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(joineryId) + ".json";
+  }
+  function subOrderWithHandle(o, handle){
+    return {
+      id: o.id, type: o.type, requiredByDate: o.requiredByDate, supplier: o.supplier,
+      poNumber: o.poNumber, notes: o.notes, fileName: o.fileName, received: o.received,
+      receivedDate: o.receivedDate, attachedAt: o.attachedAt, handle: handle
+    };
+  }
+  function readSubOrdersForItem(projectHandle, item){
+    return projectDir(projectHandle, [projectSavesDirName(), "UTZLINE Sub Orders", "Orders"], false).then(function(dirH){
+      return dirH.getFileHandle(subOrdersFileNameFor(item.level, item.room, item.joineryId), { create: false }).then(function(fh){
+        return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
+          var arr = JSON.parse(text);
+          return Array.isArray(arr) ? arr : [];
+        });
+      }, function(){ return []; });
+    }, function(){ return []; }).then(function(orders){
+      if (!orders.length) return orders;
+      // "Openable" -- resolve each order's own file handle from Sub
+      // Orders' own Files/ folder, same docRow-style Open button every
+      // other linked-document card on this page already has. A missing
+      // file (handle: null) just hides that one row's Open button rather
+      // than failing the whole card.
+      return projectDir(projectHandle, [projectSavesDirName(), "UTZLINE Sub Orders", "Files"], false).then(function(filesDirH){
+        return Promise.all(orders.map(function(o){
+          if (!o.storedName) return subOrderWithHandle(o, null);
+          return filesDirH.getFileHandle(o.storedName, { create: false }).then(function(fh){
+            return subOrderWithHandle(o, fh);
+          }, function(){ return subOrderWithHandle(o, null); });
+        }));
+      }, function(){
+        return orders.map(function(o){ return subOrderWithHandle(o, null); });
+      });
+    }).catch(function(){ return []; });
+  }
   function listItpPdfsForItem(projectHandle, appBranch, item){
     return projectDir(projectHandle, ["PDF Files", "UTZLINE ITP", appBranch], false).then(function(dirH){
       var prefix = itpPdfBaseNameForItem(item) + "_";
@@ -5451,6 +5557,7 @@
   var itemItpList = document.getElementById("itemItpList");
   var itemReworkPdfRow = document.getElementById("itemReworkPdfRow");
   var itemReworkList = document.getElementById("itemReworkList");
+  var itemSubOrdersList = document.getElementById("itemSubOrdersList");
   var itemDeliveryLocation = document.getElementById("itemDeliveryLocation");
   var activeJoineryItem = null;
   var joineryItemReturnScreen = "levels";
@@ -5689,6 +5796,63 @@
     }).catch(function(err){
       console.error("Reading rework tracker failed:", err);
       itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load rework tracking.</p>";
+    });
+
+    // Read-only Sub Orders summary (2026-09-27) -- see this card's own
+    // top-of-HTML comment / readSubOrdersForItem's own comment.
+    // "Categorised" = grouped under a group-heading per type, fixed
+    // steel/upholstery/timber/aluminium order (Sub Orders' own order),
+    // never colour-only. "Openable" = the same docRow-style Open button
+    // every other linked-document card on this page already uses.
+    itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    readSubOrdersForItem(activeProjectHandle, item).then(function(orders){
+      if (activeJoineryItem !== item) return;
+      if (!orders.length){
+        itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No sub orders attached to this item.</p>";
+        return;
+      }
+      itemSubOrdersList.innerHTML = "";
+      var typeOrder = ["steel", "upholstery", "timber", "aluminium"];
+      var typeLabels = { steel: "Steel", upholstery: "Upholstery", timber: "Timber", aluminium: "Aluminium" };
+      var byType = {};
+      orders.forEach(function(o){
+        var t = o.type || "other";
+        if (!byType[t]) byType[t] = [];
+        byType[t].push(o);
+      });
+      var groupKeys = typeOrder.filter(function(t){ return byType[t]; })
+        .concat(Object.keys(byType).filter(function(t){ return typeOrder.indexOf(t) === -1; }).sort());
+      groupKeys.forEach(function(t){
+        var heading = document.createElement("div");
+        heading.className = "so-type-heading";
+        heading.textContent = (typeLabels[t] || t) + " (" + byType[t].length + ")";
+        itemSubOrdersList.appendChild(heading);
+        byType[t].forEach(function(o){
+          var row = document.createElement("div");
+          row.className = "so-order-item";
+          var meta = [];
+          if (o.supplier) meta.push(escapeHtml(o.supplier));
+          if (o.poNumber) meta.push("PO " + escapeHtml(o.poNumber));
+          var statusText = o.received
+            ? "Received" + (o.receivedDate ? " " + escapeHtml(formatDateOnly(o.receivedDate)) : "")
+            : "Not yet received";
+          row.innerHTML =
+            "<div class=\"so-order-item-head\"><span class=\"so-type-chip so-type-" + escapeHtml(t) + "\">" + escapeHtml(typeLabels[t] || t) + "</span><span class=\"so-order-item-date\">Required by " + escapeHtml(formatDateOnly(o.requiredByDate)) + "</span></div>" +
+            (meta.length ? "<div class=\"so-order-item-meta\">" + meta.join(" · ") + "</div>" : "") +
+            (o.notes ? "<p class=\"so-order-item-notes\">" + escapeHtml(o.notes) + "</p>" : "") +
+            "<div class=\"so-order-item-status" + (o.received ? " received" : "") + "\">" + statusText + "</div>";
+          if (o.handle){
+            var actions = document.createElement("div");
+            actions.className = "so-order-item-actions";
+            actions.appendChild(docRow(escapeHtml(o.fileName || "order file"), "", o.handle));
+            row.appendChild(actions);
+          }
+          itemSubOrdersList.appendChild(row);
+        });
+      });
+    }).catch(function(err){
+      console.error("Reading Sub Orders summary failed:", err);
+      itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load sub orders.</p>";
     });
 
     // "Pin drop location button that takes you to it on the map / snapshot
