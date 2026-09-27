@@ -516,8 +516,28 @@
 // across, so it was being silently dropped before it ever reached the
 // rendering code above. Still read-only; still only these four base types
 // get their own validated hue.)
+//
+// (README v29 / cache v37, 2026-09-27 -- mark sub orders as received:
+// Andrew, verbatim, "ok now we need all joinery summary pages to show the
+// associated orders. with the option to mark them as recieved." index.html
+// only: each row of the Joinery Item page's Sub orders card gets a Received
+// tick box + date, the same interaction as Sub Orders' own View Orders list
+// (tick fills today's date if empty and saves at once; untick clears both
+// fields and saves; changing the date while ticked re-saves), and the tick
+// box's label is the row's one status line, repainted in place after each
+// save. The card's first write: new setSubOrderReceived re-reads Sub
+// Orders' Orders/<Level> - <Room> - <JoineryId>.json fresh and strictly
+// ("unreadable is not empty": NotFound = unattached meanwhile, nothing
+// written; anything else retries once, then "couldn't read (still
+// syncing?) -- nothing was changed"), replaces the one entry with a shallow
+// copy of the RAW on-disk entry (never an allowlist -- the Sub Orders v5
+// typeLabel bug class), and writes the whole array back in Sub Orders' own
+// JSON.stringify(data, null, 2) shape. Only received/receivedDate change;
+// Inbox/ and Files/ are never written. Deliberately not PIN-gated (an
+// operational receive action, not an edit of the item's register data) --
+// see the card's own top-of-HTML comment and README.md's v29 entry.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v36";
+var CACHE_NAME = "utzline-projects-cache-v37";
 
 var PRECACHE_URLS = [
   "./",

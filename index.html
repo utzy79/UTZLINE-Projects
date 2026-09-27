@@ -503,7 +503,7 @@
     100%{ background: transparent; box-shadow: 0 0 0 2px transparent; }
   }
 
-  /* ---- Joinery item page: read-only Sub Orders summary (2026-09-27) --
+  /* ---- Joinery item page: Sub Orders summary (2026-09-27; received tick box v29) --
        "categorised" = grouped under a group-heading per type; colours
        and fixed steel/upholstery/timber/aluminium order are the exact
        same ones validated (dataviz skill's own validate_palette.js) and
@@ -532,6 +532,18 @@
   .so-order-item-notes{ font-size: 13px; margin: 6px 0 0; white-space: pre-wrap; }
   .so-order-item-status{ font-size: 12px; margin-top: 6px; color: var(--muted); }
   .so-order-item-status.received{ color: var(--accent); }
+  /* v29 (2026-09-27): the status line now holds the Received tick box
+     (its own label IS the status text) + the received date -- same
+     interaction as Sub Orders' own .order-received-row. The label
+     inherits the status colour so "Received <date>" keeps its accent. */
+  .so-order-item-status{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .so-order-item-status .tick-label{ font-size: 12.5px; color: inherit; }
+  .so-received-date{
+    background: #140d0d; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 4px 8px; font-size: 12.5px; color-scheme: dark;
+  }
+  .so-received-date:focus{ outline: none; border-color: var(--accent); }
+  .so-received-date[hidden]{ display: none; }
   .so-order-item-actions{ margin-top: 8px; }
 
   /* ---- Joinery item page: delivery-location pin thumbnail (2026-09-23) --
@@ -937,22 +949,49 @@
       <div id="itemReworkPdfRow"></div>
       <div id="itemReworkList"></div>
     </div>
-    <!-- Read-only Sub Orders summary (2026-09-27) -- Andrew, verbatim, the
+    <!-- Sub Orders summary (2026-09-27) -- Andrew, verbatim, the
          first cross-app step of the standalone Sub Orders app he had
          built earlier the same day: "now i want to be able to see these
          orders in the joinery summary pages categorised and openable, do
          one app first." Reads UTZLINE Sub Orders' own
          "Project Saves/UTZLINE Sub Orders/Orders/<Level> - <Room> -
-         <JoineryId>.json" (read-only -- this app never writes order data,
-         only Sub Orders does), grouped by type (steel/upholstery/timber/
-         aluminium, the same fixed order and colours Sub Orders itself
+         <JoineryId>.json" (Sub Orders owns this data -- see the v29 note
+         below for the one field pair this app now writes back), grouped
+         by type (steel/upholstery/timber/aluminium, the same fixed order
+         and colours Sub Orders itself
          uses) so "categorised" means grouped by type, not just listed;
          "openable" is the same docRow-style Open button every other
          linked-file card on this page already has, resolving the file
          straight out of Sub Orders' own Files/ folder. Per the standing
          per-app process note, this is the first of the family's other
          apps to get this -- Site Measure/Viewer/ITP are still queued,
-         one app at a time, on their own future updates. -->
+         one app at a time, on their own future updates.
+
+         v29 (2026-09-27, same day) -- mark as received. Andrew, verbatim:
+         "ok now we need all joinery summary pages to show the associated
+         orders. with the option to mark them as recieved." Each order row
+         now has a Received tick box + date, the same interaction as Sub
+         Orders' own View Orders list: unticked hides the date; ticking
+         fills in today's date if it's empty, shows it and saves at once;
+         unticking clears received/receivedDate and saves; changing the
+         date while ticked saves the new date. The tick box's own label
+         IS the row's status line ("Received <date>" / "Not yet
+         received"), repainted in place from what was actually written,
+         so there's never a static indicator next to a control that could
+         disagree with it. This is the only thing this app writes into Sub
+         Orders' data: received/receivedDate on one entry of one Orders/
+         file, via setSubOrderReceived (fresh strict re-read, shallow copy
+         of the raw on-disk entry, whole array written back in Sub Orders'
+         own JSON shape -- see its comment). Inbox/ and Files/ are never
+         written; Files/ is only read, for the Open button. Merely viewing
+         the card still writes nothing.
+         NOT PIN-gated, by decision: the v18 PIN gate protects edits to the
+         item's own register data (description, work order, dollar value,
+         Solid Surface flag -- traced in editHistory[]). Marking an order
+         received is an operational receive action, like ticking off a
+         delivery, on data Sub Orders owns; Sub Orders itself, both ITPs,
+         Site Measure/Viewer and Scheduler all allow it ungated, and this
+         app has no view-only mode that would hide it from anyone. -->
     <div class="card">
       <h2 class="section-title">Sub orders</h2>
       <div id="itemSubOrdersList"></div>
@@ -4066,15 +4105,22 @@
       return (data && Array.isArray(data.reworks)) ? data.reworks : [];
     });
   }
-  // Read-only Sub Orders summary (2026-09-27) -- see this card's own
-  // top-of-HTML comment. UTZLINE Sub Orders is the ONLY app that ever
-  // writes here; this app only ever reads, exactly like every other
-  // cross-app branch on this page. Filename convention (flat "<Level> -
-  // <Room> - <JoineryId>.json") copied verbatim from Sub Orders' own
-  // orderFileNameFor -- it's a brand-new folder with no legacy
-  // predecessor, so there's no flat-vs-legacy branching to worry about
-  // here either. Resolves to [] (not a rejection) for "no orders
-  // attached to this item yet", the normal, common case.
+  // Sub Orders summary (2026-09-27; mark-as-received added v29, same day)
+  // -- see this card's own top-of-HTML comment. UTZLINE Sub Orders owns
+  // this data: it is the only app that attaches, unattaches or edits an
+  // order. The ONE thing this app writes back (v29) is an order's
+  // received/receivedDate pair, via setSubOrderReceived below -- nothing
+  // else in the file, and never Sub Orders' Inbox/ or Files/ (Files/ is
+  // only ever read, for the Open button's handle). readSubOrdersForItem
+  // itself is a pure-display read and stays deliberately soft (any
+  // failure -> [] -> the plain empty state); the received write does NOT
+  // trust it and re-reads the file strictly on its own. Filename
+  // convention (flat "<Level> - <Room> - <JoineryId>.json") copied
+  // verbatim from Sub Orders' own orderFileNameFor -- it's a brand-new
+  // folder with no legacy predecessor, so there's no flat-vs-legacy
+  // branching to worry about here either. Resolves to [] (not a
+  // rejection) for "no orders attached to this item yet", the normal,
+  // common case.
   // Date-only formatter (no time-of-day) for Sub Orders' own plain
   // "YYYY-MM-DD" date fields (requiredByDate/receivedDate) -- distinct
   // from formatHistoryDate above, which always shows a time and would
@@ -4088,13 +4134,29 @@
       return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
     }catch(e){ return iso; }
   }
+  // (v29 review fix) Name parts follow Sub Orders' OWN sanitizeFileBase
+  // exactly: same cleaning and 120-char cap as this app's, but an empty
+  // name falls back to "file" there, not "plan" -- so an item with a blank
+  // room would otherwise look for an Orders file Sub Orders never wrote
+  // (latent since v27; found by Scheduler v27's own review of the same code).
+  function subOrdersNamePart(name){
+    var cleaned = String(name || "")
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
+      .trim()
+      .replace(/^[._]+|[._\s]+$/g, "");
+    return cleaned.slice(0, 120) || "file";
+  }
   function subOrdersFileNameFor(level, room, joineryId){
-    return sanitizeFileBase(level) + " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(joineryId) + ".json";
+    return subOrdersNamePart(level) + " - " + subOrdersNamePart(room) + " - " + subOrdersNamePart(joineryId) + ".json";
   }
   function subOrderWithHandle(o, handle){
     // typeLabel is included here (v28) so a Sub Orders custom order type
     // (v4+) renders under its real name -- leaving it off this allowlist
     // silently drops it in favour of the raw storage key.
+    // DISPLAY ONLY (v29): this allowlisted object (with its non-
+    // serialisable `handle`) must never be written back to disk -- the
+    // received write (setSubOrderReceived) copies from the RAW on-disk
+    // entry it has just re-read instead, so no field is ever dropped.
     return {
       id: o.id, type: o.type, typeLabel: o.typeLabel, requiredByDate: o.requiredByDate, supplier: o.supplier,
       poNumber: o.poNumber, notes: o.notes, fileName: o.fileName, received: o.received,
@@ -4127,6 +4189,85 @@
         return orders.map(function(o){ return subOrderWithHandle(o, null); });
       });
     }).catch(function(){ return []; });
+  }
+  /* ---- Mark a sub order as received (v29, 2026-09-27) ----
+     Andrew, verbatim: "ok now we need all joinery summary pages to show the
+     associated orders. with the option to mark them as recieved." The
+     first (and only) write this app makes into Sub Orders' data, and
+     scoped as tightly as it can be: ONE order's received/receivedDate in
+     ONE Orders/<Level> - <Room> - <JoineryId>.json, nothing else.
+
+     Read-modify-write, "unreadable is not empty" (v23 sweep) throughout:
+       - the Orders folder and the file are re-read FRESH and STRICTLY here
+         (never the card's own soft display read, never in-memory state --
+         Sub Orders itself or another device may have changed the file
+         since this page painted). NotFound = the order has been
+         unattached meanwhile -> sub_order_gone, nothing written. Any other
+         failure -> one retry after READ_RETRY_MS, then read_failed,
+         nothing written (the caller shows readFailedToast).
+       - the entry is found by id and replaced with a SHALLOW COPY of the
+         RAW on-disk entry (Object.assign({}, rawEntry, {...})) -- never
+         an explicit field list, and never subOrderWithHandle's display
+         object (an allowlist carrying a non-serialisable `handle`).
+         Sub Orders' own setOrderReceived was fixed for exactly this
+         today (Sub Orders v5): its allowlist silently dropped typeLabel,
+         and this app's own subOrderWithHandle had the same bug class in
+         v28. A shallow copy carries every field Sub Orders writes,
+         including ones it hasn't invented yet.
+       - an id that's no longer in the file -> sub_order_gone, nothing
+         written; the file handle is re-fetched with create:false, so a
+         file removed between the read and the write is never re-created.
+       - the WHOLE array goes back with the exact JSON.stringify(data,
+         null, 2) shape Sub Orders' own writeJsonFile uses, so a save here
+         and a save there are byte-shaped the same.
+     Resolves the updated raw entry. Not PIN-gated -- see this card's own
+     top-of-HTML comment for why. */
+  function subOrderTodayISO(){
+    var d = new Date();
+    function p2(n){ return n < 10 ? "0" + n : "" + n; }
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+  }
+  function subOrderGoneErr(){ var e = new Error("That order is no longer attached to this item"); e.code = "sub_order_gone"; return e; }
+  function isSubOrderGone(err){ return !!(err && err.code === "sub_order_gone"); }
+  function setSubOrderReceived(projectHandle, item, orderId, received, receivedDate){
+    var segments = [projectSavesDirName(), "UTZLINE Sub Orders", "Orders"];
+    var fileName = subOrdersFileNameFor(item.level, item.room, item.joineryId);
+    // null ONLY for a genuinely missing folder (NotFound anywhere along
+    // the path); anything else retries once, then rejects read_failed.
+    function dirAttempt(){
+      return projectDir(projectHandle, segments, false).then(null, function(err){
+        if (isNotFoundErr(err)) return null;
+        return Promise.reject(readFailedErr("this item's sub orders", err));
+      });
+    }
+    function gone(){
+      // Drop any cached handle for a folder that may have been removed
+      // underneath us, so the next read re-resolves from scratch.
+      forgetProjectDir(projectHandle, [projectSavesDirName(), "UTZLINE Sub Orders"]);
+      return Promise.reject(subOrderGoneErr());
+    }
+    return dirAttempt().catch(function(){ return pause(READ_RETRY_MS).then(dirAttempt); }).then(function(dirH){
+      if (!dirH) return gone();
+      return readJsonArrayFileStrict(dirH, fileName, "this item's sub orders").then(function(rawOrders){
+        var updated = null;
+        var next = rawOrders.map(function(rawEntry){
+          if (!rawEntry || rawEntry.id !== orderId) return rawEntry;
+          updated = Object.assign({}, rawEntry, {
+            received: !!received,
+            receivedDate: received ? (receivedDate || rawEntry.receivedDate || subOrderTodayISO()) : null
+          });
+          return updated;
+        });
+        if (!updated) return gone();
+        return dirH.getFileHandle(fileName, { create: false }).then(function(fh){
+          return fh.createWritable();
+        }, function(err){
+          return isNotFoundErr(err) ? gone() : Promise.reject(err);
+        }).then(function(w){
+          return w.write(JSON.stringify(next, null, 2)).then(function(){ return w.close(); });
+        }).then(function(){ return updated; });
+      });
+    });
   }
   function listItpPdfsForItem(projectHandle, appBranch, item){
     return projectDir(projectHandle, ["PDF Files", "UTZLINE ITP", appBranch], false).then(function(dirH){
@@ -5805,73 +5946,149 @@
       itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load rework tracking.</p>";
     });
 
-    // Read-only Sub Orders summary (2026-09-27) -- see this card's own
-    // top-of-HTML comment / readSubOrdersForItem's own comment.
+    // Sub Orders summary (2026-09-27; mark-as-received added v29, same day)
+    // -- see this card's own top-of-HTML comment / readSubOrdersForItem's
+    // and setSubOrderReceived's own comments.
     // "Categorised" = grouped under a group-heading per type, fixed
     // steel/upholstery/timber/aluminium order (Sub Orders' own order),
     // never colour-only. "Openable" = the same docRow-style Open button
     // every other linked-document card on this page already uses.
-    itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
-    readSubOrdersForItem(activeProjectHandle, item).then(function(orders){
-      if (activeJoineryItem !== item) return;
-      if (!orders.length){
-        itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No sub orders attached to this item.</p>";
-        return;
-      }
-      itemSubOrdersList.innerHTML = "";
-      // "steel"/"upholstery"/"timber"/"aluminium" are Sub Orders' own base,
-      // colour-validated types -- anything else is a custom type added
-      // there (v4, 2026-09-27) and gets the neutral so-type-custom chip
-      // instead of a guessed-at new hue (see that class's CSS comment).
-      var typeOrder = ["steel", "upholstery", "timber", "aluminium"];
-      var typeLabels = { steel: "Steel", upholstery: "Upholstery", timber: "Timber", aluminium: "Aluminium" };
-      function isBaseSoType(t){ return typeOrder.indexOf(t) !== -1; }
-      // Prefer the label Sub Orders snapshotted onto the order itself
-      // (o.typeLabel, v4+) so a custom type's real name shows here without
-      // this app needing its own copy of the custom-types registry; the
-      // hardcoded map is just the fallback for orders written before v4.
-      function soLabelFor(o, t){ return o.typeLabel || typeLabels[t] || t; }
-      var byType = {};
-      orders.forEach(function(o){
-        var t = o.type || "other";
-        if (!byType[t]) byType[t] = [];
-        byType[t].push(o);
-      });
-      var groupKeys = typeOrder.filter(function(t){ return byType[t]; })
-        .concat(Object.keys(byType).filter(function(t){ return typeOrder.indexOf(t) === -1; }).sort());
-      groupKeys.forEach(function(t){
-        var heading = document.createElement("div");
-        heading.className = "so-type-heading";
-        heading.textContent = soLabelFor(byType[t][0], t) + " (" + byType[t].length + ")";
-        itemSubOrdersList.appendChild(heading);
-        byType[t].forEach(function(o){
-          var row = document.createElement("div");
-          row.className = "so-order-item";
-          var meta = [];
-          if (o.supplier) meta.push(escapeHtml(o.supplier));
-          if (o.poNumber) meta.push("PO " + escapeHtml(o.poNumber));
-          var statusText = o.received
-            ? "Received" + (o.receivedDate ? " " + escapeHtml(formatDateOnly(o.receivedDate)) : "")
+    // Wrapped in a function (v29) only so a received write that finds its
+    // order already unattached can repaint the card from disk.
+    function renderSubOrdersCard(){
+      var cardProjectHandle = activeProjectHandle;
+      itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+      readSubOrdersForItem(cardProjectHandle, item).then(function(orders){
+        if (activeJoineryItem !== item) return;
+        if (!orders.length){
+          itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No sub orders attached to this item.</p>";
+          return;
+        }
+        itemSubOrdersList.innerHTML = "";
+        // "steel"/"upholstery"/"timber"/"aluminium" are Sub Orders' own base,
+        // colour-validated types -- anything else is a custom type added
+        // there (v4, 2026-09-27) and gets the neutral so-type-custom chip
+        // instead of a guessed-at new hue (see that class's CSS comment).
+        var typeOrder = ["steel", "upholstery", "timber", "aluminium"];
+        var typeLabels = { steel: "Steel", upholstery: "Upholstery", timber: "Timber", aluminium: "Aluminium" };
+        function isBaseSoType(t){ return typeOrder.indexOf(t) !== -1; }
+        // Prefer the label Sub Orders snapshotted onto the order itself
+        // (o.typeLabel, v4+) so a custom type's real name shows here without
+        // this app needing its own copy of the custom-types registry; the
+        // hardcoded map is just the fallback for orders written before v4.
+        function soLabelFor(o, t){ return o.typeLabel || typeLabels[t] || t; }
+        // The one status line per row (v29) -- it IS the Received tick box's
+        // own label, so the row never shows a static indicator AND a control
+        // that could disagree; it's rewritten in place from what was
+        // actually written to disk after every successful save.
+        function soStatusText(o){
+          return o.received
+            ? "Received" + (o.receivedDate ? " " + formatDateOnly(o.receivedDate) : "")
             : "Not yet received";
-          var chipClass = "so-type-chip " + (isBaseSoType(t) ? "so-type-" + escapeHtml(t) : "so-type-custom");
-          row.innerHTML =
-            "<div class=\"so-order-item-head\"><span class=\"" + chipClass + "\">" + escapeHtml(soLabelFor(o, t)) + "</span><span class=\"so-order-item-date\">Required by " + escapeHtml(formatDateOnly(o.requiredByDate)) + "</span></div>" +
-            (meta.length ? "<div class=\"so-order-item-meta\">" + meta.join(" · ") + "</div>" : "") +
-            (o.notes ? "<p class=\"so-order-item-notes\">" + escapeHtml(o.notes) + "</p>" : "") +
-            "<div class=\"so-order-item-status" + (o.received ? " received" : "") + "\">" + statusText + "</div>";
-          if (o.handle){
-            var actions = document.createElement("div");
-            actions.className = "so-order-item-actions";
-            actions.appendChild(docRow(escapeHtml(o.fileName || "order file"), "", o.handle));
-            row.appendChild(actions);
-          }
-          itemSubOrdersList.appendChild(row);
+        }
+        var byType = {};
+        orders.forEach(function(o){
+          var t = o.type || "other";
+          if (!byType[t]) byType[t] = [];
+          byType[t].push(o);
         });
+        var groupKeys = typeOrder.filter(function(t){ return byType[t]; })
+          .concat(Object.keys(byType).filter(function(t){ return typeOrder.indexOf(t) === -1; }).sort());
+        groupKeys.forEach(function(t){
+          var heading = document.createElement("div");
+          heading.className = "so-type-heading";
+          heading.textContent = soLabelFor(byType[t][0], t) + " (" + byType[t].length + ")";
+          itemSubOrdersList.appendChild(heading);
+          byType[t].forEach(function(o){
+            var row = document.createElement("div");
+            row.className = "so-order-item";
+            row.setAttribute("data-order-id", o.id || "");
+            var meta = [];
+            if (o.supplier) meta.push(escapeHtml(o.supplier));
+            if (o.poNumber) meta.push("PO " + escapeHtml(o.poNumber));
+            var chipClass = "so-type-chip " + (isBaseSoType(t) ? "so-type-" + escapeHtml(t) : "so-type-custom");
+            // Received tick box + date (v29) -- the same interaction as Sub
+            // Orders' own View Orders list (data-role="received-check"/
+            // "received-date"): unticked hides the date; ticking fills
+            // today's date if empty, shows it and writes at once; unticking
+            // clears both fields and writes; changing the date while ticked
+            // re-writes with the new date.
+            row.innerHTML =
+              "<div class=\"so-order-item-head\"><span class=\"" + chipClass + "\">" + escapeHtml(soLabelFor(o, t)) + "</span><span class=\"so-order-item-date\">Required by " + escapeHtml(formatDateOnly(o.requiredByDate)) + "</span></div>" +
+              (meta.length ? "<div class=\"so-order-item-meta\">" + meta.join(" · ") + "</div>" : "") +
+              (o.notes ? "<p class=\"so-order-item-notes\">" + escapeHtml(o.notes) + "</p>" : "") +
+              "<div class=\"so-order-item-status" + (o.received ? " received" : "") + "\">" +
+                "<label class=\"tick-label\"><input type=\"checkbox\" data-role=\"received-check\"" + (o.received ? " checked" : "") + ">" +
+                "<span data-role=\"received-status\">" + escapeHtml(soStatusText(o)) + "</span></label>" +
+                "<input type=\"date\" class=\"so-received-date\" data-role=\"received-date\" aria-label=\"Received date\" value=\"" + escapeHtml(o.receivedDate || "") + "\"" + (o.received ? "" : " hidden") + ">" +
+              "</div>";
+            var statusEl = row.querySelector(".so-order-item-status");
+            var statusTextEl = row.querySelector("[data-role=\"received-status\"]");
+            var receivedCheck = row.querySelector("[data-role=\"received-check\"]");
+            var receivedDateInput = row.querySelector("[data-role=\"received-date\"]");
+            // Paints the row from `o` -- only ever the last state known to be
+            // on disk (initial read, or a write that just succeeded), so a
+            // failed write snaps the controls straight back to the truth.
+            function paintReceived(){
+              receivedCheck.checked = !!o.received;
+              receivedDateInput.value = o.receivedDate || "";
+              receivedDateInput.hidden = !o.received;
+              statusEl.classList.toggle("received", !!o.received);
+              statusTextEl.textContent = soStatusText(o);
+            }
+            function commitReceived(checked, dateVal){
+              receivedCheck.disabled = true;
+              receivedDateInput.disabled = true;
+              return setSubOrderReceived(cardProjectHandle, item, o.id, checked, dateVal).then(function(updated){
+                o.received = updated.received;
+                o.receivedDate = updated.receivedDate;
+                paintReceived();
+                return true;
+              }).catch(function(err){
+                paintReceived();
+                if (isSubOrderGone(err)){
+                  showToast("That order isn't attached to this item any more — nothing was changed.", 4500);
+                  if (activeJoineryItem === item) renderSubOrdersCard();
+                } else if (isReadFailed(err)){
+                  readFailedToast("this item's sub orders");
+                } else {
+                  console.error("Updating sub order received status failed:", err);
+                  showToast("Couldn't update received status — try again.");
+                }
+                return false;
+              }).then(function(ok){
+                receivedCheck.disabled = false;
+                receivedDateInput.disabled = false;
+                return ok;
+              });
+            }
+            receivedCheck.addEventListener("change", function(){
+              var checked = receivedCheck.checked;
+              receivedDateInput.hidden = !checked;
+              if (checked && !receivedDateInput.value) receivedDateInput.value = subOrderTodayISO();
+              commitReceived(checked, checked ? receivedDateInput.value : null).then(function(ok){
+                if (ok) showToast(checked ? "Marked as received." : "Marked as not received.");
+              });
+            });
+            receivedDateInput.addEventListener("change", function(){
+              if (!receivedCheck.checked) return;
+              commitReceived(true, receivedDateInput.value || subOrderTodayISO());
+            });
+            if (o.handle){
+              var actions = document.createElement("div");
+              actions.className = "so-order-item-actions";
+              actions.appendChild(docRow(escapeHtml(o.fileName || "order file"), "", o.handle));
+              row.appendChild(actions);
+            }
+            itemSubOrdersList.appendChild(row);
+          });
+        });
+      }).catch(function(err){
+        console.error("Reading Sub Orders summary failed:", err);
+        itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load sub orders.</p>";
       });
-    }).catch(function(err){
-      console.error("Reading Sub Orders summary failed:", err);
-      itemSubOrdersList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load sub orders.</p>";
-    });
+    }
+    renderSubOrdersCard();
 
     // "Pin drop location button that takes you to it on the map / snapshot
     // taken from the delivery itp" (Andrew, 2026-09-23) -- see
