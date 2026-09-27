@@ -520,6 +520,10 @@
   .so-type-chip.so-type-upholstery{ background: #d95926; color: #fff; }
   .so-type-chip.so-type-timber{ background: #199e70; color: #fff; }
   .so-type-chip.so-type-aluminium{ background: #c98500; color: #241205; }
+  /* A custom order type (added in Sub Orders v4, 2026-09-27) never gets
+     its own hue here either -- see Sub Orders' own .type-custom CSS
+     comment for why. Neutral, label-forward, matching that app exactly. */
+  .so-type-chip.so-type-custom{ background: var(--panel2, #eee); color: var(--text, #222); border: 1px solid var(--border, #ccc); }
   .so-order-item{ padding: 10px 0; border-top: 1px solid var(--border); }
   .so-order-item:first-child{ border-top: none; }
   .so-order-item-head{ display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
@@ -4088,8 +4092,11 @@
     return sanitizeFileBase(level) + " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(joineryId) + ".json";
   }
   function subOrderWithHandle(o, handle){
+    // typeLabel is included here (v28) so a Sub Orders custom order type
+    // (v4+) renders under its real name -- leaving it off this allowlist
+    // silently drops it in favour of the raw storage key.
     return {
-      id: o.id, type: o.type, requiredByDate: o.requiredByDate, supplier: o.supplier,
+      id: o.id, type: o.type, typeLabel: o.typeLabel, requiredByDate: o.requiredByDate, supplier: o.supplier,
       poNumber: o.poNumber, notes: o.notes, fileName: o.fileName, received: o.received,
       receivedDate: o.receivedDate, attachedAt: o.attachedAt, handle: handle
     };
@@ -5812,8 +5819,18 @@
         return;
       }
       itemSubOrdersList.innerHTML = "";
+      // "steel"/"upholstery"/"timber"/"aluminium" are Sub Orders' own base,
+      // colour-validated types -- anything else is a custom type added
+      // there (v4, 2026-09-27) and gets the neutral so-type-custom chip
+      // instead of a guessed-at new hue (see that class's CSS comment).
       var typeOrder = ["steel", "upholstery", "timber", "aluminium"];
       var typeLabels = { steel: "Steel", upholstery: "Upholstery", timber: "Timber", aluminium: "Aluminium" };
+      function isBaseSoType(t){ return typeOrder.indexOf(t) !== -1; }
+      // Prefer the label Sub Orders snapshotted onto the order itself
+      // (o.typeLabel, v4+) so a custom type's real name shows here without
+      // this app needing its own copy of the custom-types registry; the
+      // hardcoded map is just the fallback for orders written before v4.
+      function soLabelFor(o, t){ return o.typeLabel || typeLabels[t] || t; }
       var byType = {};
       orders.forEach(function(o){
         var t = o.type || "other";
@@ -5825,7 +5842,7 @@
       groupKeys.forEach(function(t){
         var heading = document.createElement("div");
         heading.className = "so-type-heading";
-        heading.textContent = (typeLabels[t] || t) + " (" + byType[t].length + ")";
+        heading.textContent = soLabelFor(byType[t][0], t) + " (" + byType[t].length + ")";
         itemSubOrdersList.appendChild(heading);
         byType[t].forEach(function(o){
           var row = document.createElement("div");
@@ -5836,8 +5853,9 @@
           var statusText = o.received
             ? "Received" + (o.receivedDate ? " " + escapeHtml(formatDateOnly(o.receivedDate)) : "")
             : "Not yet received";
+          var chipClass = "so-type-chip " + (isBaseSoType(t) ? "so-type-" + escapeHtml(t) : "so-type-custom");
           row.innerHTML =
-            "<div class=\"so-order-item-head\"><span class=\"so-type-chip so-type-" + escapeHtml(t) + "\">" + escapeHtml(typeLabels[t] || t) + "</span><span class=\"so-order-item-date\">Required by " + escapeHtml(formatDateOnly(o.requiredByDate)) + "</span></div>" +
+            "<div class=\"so-order-item-head\"><span class=\"" + chipClass + "\">" + escapeHtml(soLabelFor(o, t)) + "</span><span class=\"so-order-item-date\">Required by " + escapeHtml(formatDateOnly(o.requiredByDate)) + "</span></div>" +
             (meta.length ? "<div class=\"so-order-item-meta\">" + meta.join(" · ") + "</div>" : "") +
             (o.notes ? "<p class=\"so-order-item-notes\">" + escapeHtml(o.notes) + "</p>" : "") +
             "<div class=\"so-order-item-status" + (o.received ? " received" : "") + "\">" + statusText + "</div>";

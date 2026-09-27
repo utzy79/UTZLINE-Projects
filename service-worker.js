@@ -504,8 +504,20 @@
 // pattern ("openable"). Per the standing per-app process note, this is the
 // first of the family's other apps to get this; Site Measure/Viewer/ITP are
 // still queued, one app at a time, on their own future updates.)
+//
+// (README v28 / cache v36, 2026-09-27 -- follow-up to the Sub orders card
+// above, same day: Sub Orders itself shipped a v4 letting Andrew add custom
+// order-type categories beyond the fixed four. index.html only: the card
+// now prefers each order's own typeLabel (snapshotted by Sub Orders v4+) over
+// the hardcoded steel/upholstery/timber/aluminium label map, and gives any
+// non-base type the neutral so-type-custom chip instead of guessing at a
+// colour class that doesn't exist for it. Also fixes a bug caught in
+// testing: subOrderWithHandle's own field allowlist didn't carry typeLabel
+// across, so it was being silently dropped before it ever reached the
+// rendering code above. Still read-only; still only these four base types
+// get their own validated hue.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v35";
+var CACHE_NAME = "utzline-projects-cache-v36";
 
 var PRECACHE_URLS = [
   "./",
