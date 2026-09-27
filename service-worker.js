@@ -537,7 +537,8 @@
 // operational receive action, not an edit of the item's register data) --
 // see the card's own top-of-HTML comment and README.md's v29 entry.)
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-projects-cache-v37";
+// v30 (2026-09-27): "Schedule Backups" folder hidden from the project list.
+var CACHE_NAME = "utzline-projects-cache-v38";
 
 var PRECACHE_URLS = [
   "./",

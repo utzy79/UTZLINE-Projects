@@ -1935,7 +1935,14 @@
       });
     });
   }
-  function listExistingProjects(rootHandle){ return listSubdirNames(rootHandle); }
+  /* (2026-09-27) "Schedule Backups" -- Scheduler's daily spreadsheet
+     backups, kept directly in the main Projects folder -- isn't a project,
+     so it's left out of the project list (the same one-line rule is in
+     every app in the family). */
+  function isReservedRootFolderName(name){ return String(name || "").trim().toLowerCase() === "schedule backups"; }
+  function listExistingProjects(rootHandle){
+    return listSubdirNames(rootHandle).then(function(names){ return names.filter(function(n){ return !isReservedRootFolderName(n); }); });
+  }
 
   function sanitizeFileBase(name){
     var cleaned = String(name || "")
@@ -2618,10 +2625,12 @@
   }
   function createNewProject(no, name){
     var base = projectFolderBaseName(no, name);
-    return listExistingProjects(projectsRootHandle).then(function(existing){
+    // Every folder counts as taken here (the unfiltered listing), and the
+    // reserved "Schedule Backups" name is never handed out to a project.
+    return listSubdirNames(projectsRootHandle).then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
       var finalName = base, n = 2;
-      while (existingLower.indexOf(finalName.toLowerCase()) !== -1){
+      while (existingLower.indexOf(finalName.toLowerCase()) !== -1 || isReservedRootFolderName(finalName)){
         finalName = base + " " + n; n++;
       }
       return projectsRootHandle.getDirectoryHandle(finalName, { create: true }).then(function(dirH){
@@ -7060,6 +7069,8 @@
   // import path can only be exercised in a normally-networked browser (as
   // Site Measure's own identical code already has been, in production).
   window.__testHooks = {
+    // (2026-09-27) the reserved "Schedule Backups" name is never handed out to a project
+    createNewProjectForTest: function(no, name){ return createNewProject(no, name); },
     renderPdfPageGrid: renderPdfPageGrid,
     renderPdfPageMaybeTiled: renderPdfPageMaybeTiled,
     makeRoomLinkObject: makeRoomLinkObject,
