@@ -370,6 +370,38 @@
   .plan-canvas-topbar span{ font-weight: 600; font-size: 14px; }
   .plan-canvas-stage{ flex: 1 1 auto; position: relative; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .plan-canvas-stage svg{ display: block; width: 100%; height: 100%; cursor: grab; }
+  /* (v31) work order import + pin-drop */
+  .wo-import-modal{ max-width: 980px; }
+  .wo-zones{ display:flex; flex-direction:column; gap:8px; margin: 0 0 12px; }
+  .wo-zone-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size: 14px; }
+  .wo-zone-row select{ background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 14px; min-width: 180px; }
+  .wo-preview{ max-height: 48vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 4px 10px; margin-bottom: 12px; }
+  .wo-group{ padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .wo-group:last-child{ border-bottom: none; }
+  .wo-group-head{ font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .wo-split{ font-weight: 400; color: var(--muted); margin-left: 8px; font-size: 12px; white-space: nowrap; }
+  .wo-row{ display:grid; grid-template-columns: 62px 88px minmax(140px, 1.2fr) minmax(120px, 1.6fr) 150px; gap: 8px; font-size: 12.5px; padding: 3px 0; align-items: baseline; }
+  .wo-row .wo-wo{ font-variant-numeric: tabular-nums; color: var(--muted); }
+  .wo-row .wo-code{ font-weight: 700; }
+  .wo-row .wo-desc{ color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wo-row .wo-action{ font-weight: 600; }
+  .wo-new .wo-action, .wo-count.new{ color: #ff8a65; }
+  .wo-fill .wo-action, .wo-count.fill{ color: #4ade80; }
+  .wo-same .wo-action, .wo-count.same, .wo-skip-zone .wo-action, .wo-dup .wo-action, .wo-count.skip{ color: var(--muted2); }
+  .wo-differs .wo-action, .wo-count.differs{ color: #fbbf24; }
+  .wo-skipped summary{ cursor: pointer; color: var(--muted); font-size: 13px; padding: 8px 0; }
+  @media (max-width: 720px){ .wo-row{ grid-template-columns: 56px 80px 1fr; } .wo-row .wo-desc, .wo-row .wo-where{ grid-column: 1 / -1; } }
+  .plan-unplaced-panel{ position: absolute; top: 10px; right: 10px; width: min(380px, calc(100% - 20px)); max-height: calc(100% - 20px); overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; z-index: 5; user-select: text; -webkit-user-select: text; }
+  .plan-unplaced-panel[hidden]{ display: none; }
+  .plan-unplaced-head{ font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  #planUnplacedSearch{ width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-bottom: 6px; }
+  .unplaced-room{ font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 10px 0 4px; }
+  .unplaced-item{ display:block; width:100%; text-align:left; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin-bottom: 5px; font-size: 13px; cursor: pointer; touch-action: manipulation; }
+  .unplaced-item:hover{ border-color: var(--accent); }
+  .unplaced-wo{ color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .plan-pin-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #2a1414; border-top: 1px solid var(--border); font-size: 14px; }
+  .plan-pin-bar[hidden]{ display: none; }
+  .plan-pin-bar-btns{ display:flex; gap: 8px; }
   .plan-canvas-hint{
     flex: 0 0 auto;
     padding: 8px 14px;
@@ -687,6 +719,9 @@
         <button class="btn" id="newLevelBtn">+ New Level</button>
         <button class="btn secondary" id="openRegisterBtn">Joinery Register</button>
         <button class="btn secondary" id="openReworkRegisterBtn">Rework register</button>
+        <!-- (v31) job system's Work Order List PDF -> joinery items (WO #, joinery code, room), then pin-drop them on a level's plan -->
+        <button class="btn secondary" id="importWorkOrdersBtn">Import work orders (PDF)</button>
+        <input type="file" id="woImportFileInput" accept=".pdf,application/pdf" hidden>
       </div>
     </div>
     <div class="card">
@@ -1007,19 +1042,49 @@
     <div class="plan-canvas-topbar">
       <button class="btn secondary" id="backFromPlanCanvasBtn">&larr; Back</button>
       <span id="planCanvasTitle">Level plan</span>
+      <!-- (v31) imported items not yet on this plan -- pick one, tap the plan, Place here -->
+      <button class="btn" id="planUnplacedBtn" hidden style="margin-left:auto;">Unplaced (0)</button>
     </div>
     <div class="plan-canvas-stage" id="planCanvasStage">
       <svg id="planCanvasSvg" width="100%" height="100%">
         <g id="planCanvasWorld">
           <g id="planCanvasTiles"></g>
           <g id="planCanvasMarkers"></g>
+          <g id="planCanvasDraft"></g>
         </g>
       </svg>
+      <div class="plan-unplaced-panel" id="planUnplacedPanel" hidden>
+        <div class="plan-unplaced-head">Not on the plan yet — tap one, then tap the plan</div>
+        <input type="text" id="planUnplacedSearch" placeholder="Search room, code, WO #…" autocomplete="off">
+        <div id="planUnplacedList"></div>
+      </div>
     </div>
-    <div class="plan-canvas-hint">Tap anywhere on the plan to add a joinery item &middot; drag to pan &middot; pinch or scroll to zoom &middot; tap a marker to see its details</div>
+    <div class="plan-pin-bar" id="planPinBar" hidden>
+      <span id="planPinBarText"></span>
+      <span class="plan-pin-bar-btns">
+        <button class="btn" id="planPinPlaceBtn" hidden>Place here</button>
+        <button class="btn secondary" id="planPinSkipBtn">Skip</button>
+        <button class="btn secondary" id="planPinStopBtn">Stop</button>
+      </span>
+    </div>
+    <div class="plan-canvas-hint" id="planCanvasHint">Tap anywhere on the plan to add a joinery item &middot; drag to pan &middot; pinch or scroll to zoom &middot; tap a marker to see its details</div>
   </section>
 
 </main>
+
+<!-- ---- (v31) Import work orders: preview + zone -> level ---- -->
+<div class="modal-backdrop" id="woImportBackdrop" hidden>
+  <div class="modal wo-import-modal">
+    <h2>Import work orders</h2>
+    <p class="sub" id="woImportSummary"></p>
+    <div class="wo-zones" id="woImportZones"></div>
+    <div class="wo-preview" id="woImportPreview"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="woImportCancelBtn">Cancel</button>
+      <button class="btn" id="woImportConfirmBtn">Import</button>
+    </div>
+  </div>
+</div>
 
 <!-- ---- crop dialog (image floorplan import) ---- -->
 <div class="modal-backdrop" id="cropBackdrop" hidden>
@@ -4635,6 +4700,7 @@
 
   function onPlanTap(worldX, worldY){
     if (!planSaved) return; // this level's plan hasn't read yet -- nothing to add onto
+    if (planPinMode){ pinModeTap(worldX, worldY); return; } // (v31) placing an imported item -- see startPinMode
     var hit = planMarkerAt(worldX, worldY);
     if (hit){
       var hitLevel = activeLevelName, hitRoom = hit.roomName || "", hitCode = hit.joineryCode || "";
@@ -4849,6 +4915,7 @@
     planSaved = null;
     planRenderTiles();
     planRenderMarkers();
+    if (planUnplacedBtn) planUnplacedBtn.hidden = true; // (v31) until this level's items are read
     showScreen("planCanvas");
     // planSaved keeps EXACTLY the shape the rendering/hit-testing code
     // below already expects (imageDataURL/imageTiles/imageW/imageH +
@@ -4876,6 +4943,8 @@
       planImageH = planSaved.imageH || 0;
       planRenderTiles();
       planRenderMarkers();
+      stopPinMode(); planUnplacedPanel.hidden = true; // (v31)
+      refreshUnplacedForLevel();
       requestAnimationFrame(function(){
         planFitToView();
         if (centerOnMarker){
@@ -4929,6 +4998,7 @@
     });
   });
   function closePlanCanvas(){
+    stopPinMode(); planUnplacedPanel.hidden = true; // (v31)
     showScreen(planCanvasReturnScreen);
     planCanvasReturnScreen = "rooms";
   }
@@ -7068,7 +7138,630 @@
   // policy blocks the real cdnjs.cloudflare.com pdf.js fetch, so the real
   // import path can only be exercised in a normally-networked browser (as
   // Site Measure's own identical code already has been, in production).
+  /* ============================== Import work orders + pin-drop them (v31, 2026-09-28) ==============================
+     Andrew: "would it be possible to create a button in the projects app
+     that can add this data. we would then pindrop these like we pindrop the
+     delivery location" -- "this data" being the job system's "Work Order
+     List" PDF (Rave Reports): per room heading ("2  C1.EQ.002 Dropoff -
+     Cleanup"), one line per work order ("15345  J.001 Stainless Steel
+     Cleanup ...").
+
+     READING: the PDF's own text (no OCR), by column position -- item # at
+     the far left, the room heading beside it, the WO # in the WO column and
+     its description (which starts with the joinery code) in the WO
+     Description column; a description that wraps onto a second line is
+     joined back on. Columns come from the report's own header row (fixed
+     defaults if it's missing). Headings that aren't a room (Management,
+     Travel, Allowances) and lines with no joinery code are listed as
+     skipped, never imported.
+
+     ROOMS / LEVELS: "H1.AH.002 Reception" = zone H1 (Building H, Level 1),
+     room AH.002. Each zone is mapped to a level once in the import dialog
+     (remembered per project on this device); rooms are named WITHOUT the
+     zone ("AH.002 Reception") to match rooms already set up that way, and
+     an existing room with the same number is reused. A heading covering
+     several rooms ("MH.028,035,039 Mental Health 1 Bed Room") becomes one
+     item per room by default -- same WO #, so each room gets its own pin
+     -- or one combined room if unticked; a range ("PH.005-011") stays one
+     room.
+
+     EXISTING ITEMS (same level, room and joinery code): a missing WO # is
+     filled in (logged in the item's edit history as an import), a matching
+     one is left alone, and a DIFFERENT one is never overwritten -- shown
+     in the preview instead. Everything else is added as a new item with no
+     marker yet ("unplaced"). Same sign-in + PIN confirmation as Edit item;
+     joinery-items.json and each level file are re-read strictly and
+     written once each.
+
+     PIN-DROP: a level's plan ("Place joinery items") shows "Unplaced (N)":
+     pick an item (or just start at the top), tap the plan, "Place here" --
+     exactly the delivery-location pin flow -- and it moves straight on to
+     the next one, so a whole import can be pinned in one pass. */
+  var WO_IMPORT_DEFAULT_COLS = { item: 47, wo: 82, desc: 140, hours: 306 };
+  var WO_HEADING_RE = /^([A-Z]\d{1,2})\.([A-Z]{1,4})\.(\d{2,4}(?:\s*(?:,|&|\band\b)\s*\d{2,4})*(?:\s*-\s*\d{2,4})?)\s*(.*)$/i;
+  var WO_CODE_RE = /^[A-Z]{1,3}(?:[.\-][A-Z0-9]+)*[.\-/]?[A-Z0-9/.\-]*$/i;
+  function woIsJoineryCode(tok){
+    tok = String(tok || "");
+    return tok.length <= 24 && /\d/.test(tok) && /[.\-]/.test(tok) && /^[A-Z]/i.test(tok) && WO_CODE_RE.test(tok);
+  }
+  // pdf.js -> [page][row]{y, items:[{x, str}]} (top-down, left-right).
+  function woExtractPdfRows(pdfDoc){
+    var pages = [];
+    var p = Promise.resolve();
+    for (var n = 1; n <= pdfDoc.numPages; n++){
+      (function(n){
+        p = p.then(function(){
+          return pdfDoc.getPage(n).then(function(page){
+            var vp = page.getViewport({ scale: 1 });
+            return page.getTextContent().then(function(tc){
+              var items = [];
+              tc.items.forEach(function(it){
+                var s = String(it.str || "");
+                if (!s.trim()) return;
+                var pt = vp.convertToViewportPoint(it.transform[4], it.transform[5]);
+                items.push({ x: pt[0], y: pt[1], str: s });
+              });
+              pages.push(woGroupRows(items));
+              if (page.cleanup) page.cleanup();
+            });
+          });
+        });
+      })(n);
+    }
+    return p.then(function(){ return pages; });
+  }
+  function woGroupRows(items){
+    items.sort(function(a, b){ return (a.y - b.y) || (a.x - b.x); });
+    var rows = [];
+    items.forEach(function(it){
+      var last = rows[rows.length - 1];
+      if (last && Math.abs(it.y - last.y) <= 3.5) last.items.push(it);
+      else rows.push({ y: it.y, items: [it] });
+    });
+    rows.forEach(function(r){ r.items.sort(function(a, b){ return a.x - b.x; }); });
+    return rows;
+  }
+  // Pure: rows -> { groups: [{itemNo, heading, wos:[{wo, desc}]}], cols }
+  function woParseReportRows(pages){
+    var cols = { item: WO_IMPORT_DEFAULT_COLS.item, wo: WO_IMPORT_DEFAULT_COLS.wo, desc: WO_IMPORT_DEFAULT_COLS.desc, hours: WO_IMPORT_DEFAULT_COLS.hours };
+    pages.some(function(rows){
+      return rows.some(function(row){
+        var wos = row.items.filter(function(i){ return i.str.trim() === "WO"; });
+        var hours = row.items.filter(function(i){ return /^Hours$/i.test(i.str.trim()); })[0];
+        if (wos.length >= 2 && hours){ cols.wo = wos[0].x; cols.desc = wos[1].x; cols.hours = hours.x; return true; }
+        return false;
+      });
+    });
+    var groups = [], byNo = {};
+    var current = null, lastWo = null;
+    function textBetween(items, minX, maxX){
+      return items.filter(function(i){ return i.x >= minX && i.x < maxX; }).map(function(i){ return i.str; }).join(" ").replace(/\s+/g, " ").trim();
+    }
+    pages.forEach(function(rows){
+      lastWo = null;
+      rows.forEach(function(row){
+        var its = row.items;
+        var first = its[0];
+        // Room heading: an item number left of the WO column, then text.
+        if (first && /^\d{1,4}$/.test(first.str.trim()) && first.x < cols.wo - 15 && its.length > 1 && its[1].x >= cols.wo - 12 && its[1].x < cols.desc - 12){
+          var no = first.str.trim();
+          lastWo = null;
+          if (byNo[no]){ current = byNo[no]; return; } // repeated at the top of the next page
+          current = { itemNo: no, heading: textBetween(its, its[1].x - 1, cols.hours - 4), wos: [] };
+          byNo[no] = current;
+          groups.push(current);
+          return;
+        }
+        if (!current) return;
+        var woTok = its.filter(function(i){ return Math.abs(i.x - cols.wo) <= 14 && /^\d{4,8}$/.test(i.str.trim()); })[0];
+        if (woTok){
+          lastWo = { wo: woTok.str.trim(), desc: textBetween(its, cols.desc - 12, cols.hours - 4) };
+          current.wos.push(lastWo);
+          return;
+        }
+        // A wrapped description line: only text in the description column.
+        if (lastWo){
+          var left = its.filter(function(i){ return i.x < cols.desc - 12; });
+          var cont = textBetween(its, cols.desc - 12, cols.hours - 4);
+          if (!left.length && cont) lastWo.desc = (lastWo.desc + " " + cont).replace(/\s+/g, " ").trim();
+        }
+      });
+    });
+    return { groups: groups, cols: cols };
+  }
+  // Pure: groups -> { rooms: [{zone, dept, numbers[], isRange, isList, name, splitDefault, heading, itemNo, wos:[{wo, code, desc}]}], skipped: [{heading, wo, desc, why}] }
+  function woInterpretGroups(groups){
+    var rooms = [], skipped = [];
+    groups.forEach(function(g){
+      var m = WO_HEADING_RE.exec(g.heading);
+      if (!m){
+        g.wos.forEach(function(w){ skipped.push({ heading: g.heading, wo: w.wo, desc: w.desc, why: "not a room" }); });
+        if (!g.wos.length) skipped.push({ heading: g.heading, wo: "", desc: "", why: "not a room" });
+        return;
+      }
+      var zone = m[1].toUpperCase(), dept = m[2].toUpperCase(), numText = m[3].replace(/\s+/g, " ").trim(), name = m[4].trim();
+      var isRange = /-/.test(numText);
+      var nums = isRange ? [numText.replace(/\s*-\s*/, "-")] : numText.split(/\s*(?:,|&|\band\b)\s*/i).filter(Boolean);
+      var wos = [];
+      g.wos.forEach(function(w){
+        var parts = w.desc.split(" ");
+        var code = parts[0];
+        if (!woIsJoineryCode(code)){ skipped.push({ heading: g.heading, wo: w.wo, desc: w.desc, why: "no joinery code" }); return; }
+        wos.push({ wo: w.wo, code: code, desc: parts.slice(1).join(" ").trim() });
+      });
+      if (!wos.length && !g.wos.length) skipped.push({ heading: g.heading, wo: "", desc: "", why: "no work orders" });
+      rooms.push({ itemNo: g.itemNo, heading: g.heading, zone: zone, dept: dept, numbers: nums, numText: numText, isRange: isRange, isList: nums.length > 1, name: name, split: nums.length > 1, wos: wos });
+    });
+    return { rooms: rooms, skipped: skipped };
+  }
+  // One heading -> the room names it becomes (zone dropped).
+  function woRoomNamesFor(room){
+    if (room.isList && room.split) return room.numbers.map(function(n){ return room.dept + "." + n + (room.name ? " " + room.name : ""); });
+    return [room.dept + "." + room.numText + (room.name ? " " + room.name : "")];
+  }
+  function woRoomNumberKeysFor(room){
+    if (room.isList && room.split) return room.numbers.map(function(n){ return (room.dept + "." + n).toLowerCase(); });
+    return [(room.dept + "." + room.numText).toLowerCase()];
+  }
+  // Existing room with the same name, else the ONE existing room whose name
+  // starts with the same room number; else null (a new room).
+  function woMatchExistingRoom(existingRoomNames, wantedName, numberKey){
+    var wl = wantedName.toLowerCase();
+    var exact = existingRoomNames.filter(function(n){ return n.toLowerCase() === wl; })[0];
+    if (exact) return exact;
+    var byNum = existingRoomNames.filter(function(n){
+      var l = n.toLowerCase();
+      return l === numberKey || l.indexOf(numberKey + " ") === 0;
+    });
+    return byNum.length === 1 ? byNum[0] : null;
+  }
+  // Pure: the plan of what an import would do.
+  //   levelRooms: { levelName: [roomName...] }, items: joinery-items.json
+  function woPlanImport(interp, zoneMap, levelRooms, items){
+    var rows = [];
+    var seen = {};
+    interp.rooms.forEach(function(room){
+      var level = zoneMap[room.zone] || "";
+      var names = woRoomNamesFor(room), keys = woRoomNumberKeysFor(room);
+      names.forEach(function(wanted, idx){
+        var existingRoom = level ? woMatchExistingRoom(levelRooms[level] || [], wanted, keys[idx]) : null;
+        var roomName = existingRoom || sanitizeFileBase(wanted);
+        room.wos.forEach(function(w){
+          var row = { zone: room.zone, level: level, room: roomName, roomIsNew: !existingRoom, heading: room.heading, itemNo: room.itemNo, wo: w.wo, code: w.code, desc: w.desc };
+          if (!level){ row.action = "skip-zone"; rows.push(row); return; }
+          // The same code twice in one room is two real items (two work
+          // orders, e.g. "J.T.017 ... 6600" and "J.T.017 ... 2300"): the
+          // second becomes "J.T.017 2" -- the same numbered-suffix rule the
+          // Add joinery item dialog uses -- so both get their own pin.
+          var dupKey = (level + "\u0000" + roomName + "\u0000" + w.code).toLowerCase();
+          seen[dupKey] = (seen[dupKey] || 0) + 1;
+          if (seen[dupKey] > 1) row.code = w.code + " " + seen[dupKey];
+          var ex = items.filter(function(it){
+            return it.level === level && String(it.room || "").toLowerCase() === roomName.toLowerCase() && String(it.joineryId || "").toLowerCase() === row.code.toLowerCase();
+          })[0];
+          if (!ex) row.action = "new";
+          else if (!String(ex.workOrderNo || "").trim()) row.action = "fill";
+          else if (String(ex.workOrderNo).trim() === w.wo) row.action = "same";
+          else { row.action = "differs"; row.existingWo = String(ex.workOrderNo).trim(); }
+          if (ex){ row.room = ex.room; row.code = ex.joineryId; }
+          rows.push(row);
+        });
+      });
+    });
+    return rows;
+  }
+
+  // ---------------- UI: Import dialog ----------------
+  var woImportBtn = document.getElementById("importWorkOrdersBtn");
+  var woImportFileInput = document.getElementById("woImportFileInput");
+  var woImportBackdrop = document.getElementById("woImportBackdrop");
+  var woImportSummaryEl = document.getElementById("woImportSummary");
+  var woImportZonesEl = document.getElementById("woImportZones");
+  var woImportPreviewEl = document.getElementById("woImportPreview");
+  var woImportConfirmBtn = document.getElementById("woImportConfirmBtn");
+  var woImportCancelBtn = document.getElementById("woImportCancelBtn");
+  var woImportState = null; // { fileName, interp, levels[], levelRooms{}, items[], zoneMap{}, plan[] }
+  function woZoneMapKey(){ return "utzline-projects:woImportZones:" + (activeProjectName || ""); }
+  function woLoadZoneMap(){ try{ return JSON.parse(localStorage.getItem(woZoneMapKey()) || "{}") || {}; }catch(e){ return {}; } }
+  function woSaveZoneMap(m){ try{ localStorage.setItem(woZoneMapKey(), JSON.stringify(m)); }catch(e){} }
+  if (woImportBtn) woImportBtn.addEventListener("click", function(){
+    if (!activeProjectHandle){ showToast("Open a project first."); return; }
+    woImportFileInput.value = "";
+    woImportFileInput.click();
+  });
+  if (woImportFileInput) woImportFileInput.addEventListener("change", function(){
+    var file = woImportFileInput.files && woImportFileInput.files[0];
+    woImportFileInput.value = ""; // so picking the same file again still fires
+    if (!file) return;
+    woStartImportFromFile(file);
+  });
+  function woStartImportFromFile(file){
+    if (!isPdfFile(file)){ showToast("Choose the Work Order List PDF from the job system."); return Promise.resolve(); }
+    showToast("Reading “" + file.name + "”…", 2500);
+    return withPdfImportLibsReady(function(){
+      ensurePdfWorker();
+      return file.arrayBuffer().then(function(buf){
+        return window.pdfjsLib.getDocument({ data: buf }).promise;
+      }).then(function(pdfDoc){
+        return woExtractPdfRows(pdfDoc).then(function(pages){
+          if (pdfDoc.destroy) pdfDoc.destroy();
+          return pages;
+        });
+      });
+    }).then(function(pages){
+      var parsed = woParseReportRows(pages);
+      var interp = woInterpretGroups(parsed.groups);
+      var woCount = interp.rooms.reduce(function(n, r){ return n + r.wos.length; }, 0);
+      if (!interp.rooms.length || !woCount){
+        showToast("Couldn't find any rooms with joinery work orders in that PDF — is it the Work Order List report?", 6000);
+        return;
+      }
+      return woLoadProjectContext().then(function(ctx){
+        var saved = woLoadZoneMap();
+        var zoneMap = {};
+        woZonesOf(interp).forEach(function(z){ zoneMap[z] = (saved[z] && ctx.levels.indexOf(saved[z]) !== -1) ? saved[z] : ""; });
+        woImportState = { fileName: file.name, interp: interp, levels: ctx.levels, levelRooms: ctx.levelRooms, items: ctx.items, zoneMap: zoneMap, plan: [] };
+        woRenderImportDialog();
+        woImportBackdrop.hidden = false;
+      });
+    }).catch(function(err){
+      console.error("Reading the work order PDF failed:", err);
+      if (err && (err.code === "pdf_import_failed" || err.code === "pdf_import_loading")){ showToast(pdfImportErrorToast(err)); return; }
+      if (isReadFailed(err)){ readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : "a level file"); return; }
+      showToast("Couldn't read that PDF — is it the Work Order List report?", 6000);
+    });
+  }
+  function woZonesOf(interp){
+    var z = [];
+    interp.rooms.forEach(function(r){ if (z.indexOf(r.zone) === -1) z.push(r.zone); });
+    return z.sort();
+  }
+  // Levels, each level's rooms, and joinery-items.json -- strictly.
+  function woLoadProjectContext(){
+    return listExistingLevelsStrict(activeProjectHandle).then(function(levels){
+      var levelRooms = {};
+      var p = Promise.resolve();
+      levels.forEach(function(lv){
+        p = p.then(function(){
+          return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){ levelRooms[lv] = level ? level.rooms.map(function(r){ return r.name; }) : []; });
+        });
+      });
+      return p.then(function(){ return readJoineryItems(activeProjectHandle); }).then(function(items){
+        // rooms named only on items (older data) count as existing too
+        items.forEach(function(it){
+          if (!levelRooms[it.level]) return;
+          if (it.room && levelRooms[it.level].indexOf(it.room) === -1) levelRooms[it.level].push(it.room);
+        });
+        return { levels: levels, levelRooms: levelRooms, items: items };
+      });
+    });
+  }
+  var WO_ACTION_LABELS = { "new": "New — to pin-drop", "fill": "Adds WO #", "same": "Already there", "differs": "WO # differs — kept", "skip-zone": "Zone not mapped" };
+  function woRenderImportDialog(){
+    var st = woImportState;
+    st.plan = woPlanImport(st.interp, st.zoneMap, st.levelRooms, st.items);
+    var counts = {};
+    st.plan.forEach(function(r){ counts[r.action] = (counts[r.action] || 0) + 1; });
+    var newRooms = {};
+    st.plan.forEach(function(r){ if ((r.action === "new") && r.roomIsNew) newRooms[r.level + "\u0000" + r.room] = true; });
+    var nNewRooms = Object.keys(newRooms).length;
+    woImportSummaryEl.innerHTML =
+      "<b>" + escapeHtml(st.fileName) + "</b> — " + st.interp.rooms.length + " rooms, " + st.plan.length + " joinery work orders" +
+      (st.interp.skipped.length ? ", " + st.interp.skipped.length + " lines skipped (no room or joinery code)" : "") + ".<br>" +
+      "<span class=\"wo-count new\">" + (counts["new"] || 0) + " new</span> · " +
+      "<span class=\"wo-count fill\">" + (counts.fill || 0) + " WO # to add</span> · " +
+      "<span class=\"wo-count same\">" + (counts.same || 0) + " already there</span>" +
+      (counts.differs ? " · <span class=\"wo-count differs\">" + counts.differs + " WO # differs (kept)</span>" : "") +
+      (counts["skip-zone"] ? " · <span class=\"wo-count skip\">" + counts["skip-zone"] + " in unmapped zones</span>" : "") +
+      (nNewRooms ? " · " + nNewRooms + " new room" + (nNewRooms === 1 ? "" : "s") : "");
+    // zone -> level
+    woImportZonesEl.innerHTML = "";
+    woZonesOf(st.interp).forEach(function(z){
+      var n = st.interp.rooms.filter(function(r){ return r.zone === z; }).length;
+      var row = document.createElement("div"); row.className = "wo-zone-row";
+      var lab = document.createElement("span"); lab.className = "wo-zone-label";
+      lab.textContent = "Zone " + z + " (" + n + " room" + (n === 1 ? "" : "s") + ") goes on";
+      var sel = document.createElement("select"); sel.setAttribute("data-zone", z);
+      sel.innerHTML = "<option value=\"\">— don't import —</option>" + st.levels.map(function(lv){ return "<option value=\"" + escapeHtml(lv) + "\">" + escapeHtml(lv) + "</option>"; }).join("");
+      sel.value = st.zoneMap[z] || "";
+      sel.addEventListener("change", function(){ st.zoneMap[z] = sel.value; woRenderImportDialog(); });
+      row.appendChild(lab); row.appendChild(sel);
+      woImportZonesEl.appendChild(row);
+    });
+    // preview, grouped by heading
+    var html = "";
+    var byHeading = {};
+    var order = [];
+    st.plan.forEach(function(r){ if (!byHeading[r.itemNo]){ byHeading[r.itemNo] = []; order.push(r.itemNo); } byHeading[r.itemNo].push(r); });
+    order.forEach(function(no){
+      var rs = byHeading[no];
+      var room = st.interp.rooms.filter(function(r){ return r.itemNo === no; })[0];
+      html += "<div class=\"wo-group\"><div class=\"wo-group-head\">" + escapeHtml(rs[0].heading) +
+        (room && room.isList ? " <label class=\"wo-split\"><input type=\"checkbox\" data-split=\"" + escapeHtml(no) + "\"" + (room.split ? " checked" : "") + "> one item per room (" + room.numbers.length + ")</label>" : "") + "</div>";
+      rs.forEach(function(r){
+        html += "<div class=\"wo-row wo-" + r.action + "\"><span class=\"wo-wo\">" + escapeHtml(r.wo) + "</span><span class=\"wo-code\">" + escapeHtml(r.code) + "</span>" +
+          "<span class=\"wo-where\">" + (r.level ? escapeHtml(r.level) + " · " : "") + escapeHtml(r.room) + (r.roomIsNew && r.level ? " <i>(new room)</i>" : "") + "</span>" +
+          "<span class=\"wo-desc\">" + escapeHtml(r.desc) + "</span>" +
+          "<span class=\"wo-action\">" + escapeHtml(WO_ACTION_LABELS[r.action] || r.action) + (r.action === "differs" ? " (has " + escapeHtml(r.existingWo) + ")" : "") + "</span></div>";
+      });
+      html += "</div>";
+    });
+    if (st.interp.skipped.length){
+      html += "<details class=\"wo-skipped\"><summary>Skipped lines (" + st.interp.skipped.length + ")</summary>" +
+        st.interp.skipped.map(function(s){ return "<div class=\"wo-row wo-skip\"><span class=\"wo-wo\">" + escapeHtml(s.wo) + "</span><span class=\"wo-desc\">" + escapeHtml(s.heading + (s.desc ? " — " + s.desc : "")) + "</span><span class=\"wo-action\">" + escapeHtml(s.why) + "</span></div>"; }).join("") + "</details>";
+    }
+    woImportPreviewEl.innerHTML = html;
+    Array.prototype.forEach.call(woImportPreviewEl.querySelectorAll("input[data-split]"), function(cb){
+      cb.addEventListener("change", function(){
+        var room = st.interp.rooms.filter(function(r){ return r.itemNo === cb.getAttribute("data-split"); })[0];
+        if (room){ room.split = cb.checked; woRenderImportDialog(); }
+      });
+    });
+    var todo = (counts["new"] || 0) + (counts.fill || 0);
+    woImportConfirmBtn.disabled = !todo;
+    woImportConfirmBtn.textContent = todo ? "Import " + todo + " item" + (todo === 1 ? "" : "s") : "Nothing to import";
+  }
+  function woCloseImportDialog(){ woImportBackdrop.hidden = true; woImportState = null; }
+  if (woImportCancelBtn) woImportCancelBtn.addEventListener("click", woCloseImportDialog);
+  if (woImportConfirmBtn) woImportConfirmBtn.addEventListener("click", function(){ woConfirmImport(); });
+  function woConfirmImport(){
+    var st = woImportState;
+    if (!st) return Promise.resolve();
+    if (!deviceUserName){ showToast("Sign in with your name on the Projects screen first — imports are logged under your name."); return Promise.resolve(); }
+    var who = deviceUserName;
+    return readUsersCsv().then(function(rows){
+      if (!findUserRowCI(rows, who)){ showToast("“" + who + "” is no longer in the shared name/PIN list — sign in again."); return; }
+      return openNumberpad({
+        title: "Confirm PIN",
+        subtitle: "to import work orders as “" + who + "”",
+        verify: function(pin){
+          return readUsersCsv().then(function(fresh){ var r = findUserRowCI(fresh, who); return !!(r && r.pin === pin); });
+        }
+      }).then(function(pin){
+        if (pin === null){ showToast("Import cancelled — nothing was changed."); return; }
+        woImportConfirmBtn.disabled = true;
+        return woApplyImport(st, who).then(function(res){
+          woSaveZoneMap(st.zoneMap);
+          woCloseImportDialog();
+          registerAllItems = [];
+          showToast("Imported: " + res.added + " new item" + (res.added === 1 ? "" : "s") + ", " + res.filled + " WO # added" +
+            (res.added ? ". Open a level's plan (Place joinery items) and use “Unplaced” to pin-drop them." : "."), 8000);
+          if (typeof populateLevelList === "function") populateLevelList();
+        });
+      });
+    }).catch(function(err){
+      console.error("Work order import failed:", err);
+      if (woImportConfirmBtn) woImportConfirmBtn.disabled = false;
+      if (isReadFailed(err)) readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : "a level file");
+      else showToast("Couldn't import — nothing was changed. Try again.", 6000);
+    });
+  }
+  // Re-reads everything strictly, re-plans against what's on disk NOW,
+  // writes each changed level file, then joinery-items.json once.
+  function woApplyImport(st, who){
+    return woLoadProjectContext().then(function(ctx){
+      var plan = woPlanImport(st.interp, st.zoneMap, ctx.levelRooms, ctx.items);
+      var at = new Date().toISOString();
+      var items = ctx.items;
+      var added = 0, filled = 0;
+      var newRoomsByLevel = {};
+      plan.forEach(function(r){
+        if (r.action === "new"){
+          items.push({ joineryId: r.code, description: r.desc, level: r.level, room: r.room, status: "created", workOrderNo: r.wo, dollarValue: 0,
+            importedFrom: { file: st.fileName, at: at, by: who } });
+          added++;
+          if (r.roomIsNew){ (newRoomsByLevel[r.level] = newRoomsByLevel[r.level] || []); if (newRoomsByLevel[r.level].indexOf(r.room) === -1) newRoomsByLevel[r.level].push(r.room); }
+        } else if (r.action === "fill"){
+          var ex = items.filter(function(it){ return it.level === r.level && it.room === r.room && it.joineryId === r.code; })[0];
+          if (!ex) return;
+          ex.workOrderNo = r.wo;
+          ex.editHistory = Array.isArray(ex.editHistory) ? ex.editHistory : [];
+          ex.editHistory.push({ at: at, by: who, changes: [{ field: "Work order #", from: "", to: r.wo }], note: "Imported from " + st.fileName });
+          filled++;
+        }
+      });
+      if (!added && !filled) return { added: 0, filled: 0 };
+      var levels = Object.keys(newRoomsByLevel);
+      var p = migrateLegacyLevelsIfNeeded(activeProjectHandle);
+      levels.forEach(function(lv){
+        p = p.then(function(){
+          return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){
+            var entry = level || { name: lv, imageDataURL: null, imageTiles: null, imageW: 0, imageH: 0, rooms: [], markers: [] };
+            var have = entry.rooms.map(function(r){ return r.name.toLowerCase(); });
+            newRoomsByLevel[lv].forEach(function(name){ if (have.indexOf(name.toLowerCase()) === -1){ entry.rooms.push({ name: name }); have.push(name.toLowerCase()); } });
+            return writeLevelFile(activeProjectHandle, activeProjectName, lv, entry);
+          });
+        });
+      });
+      return p.then(function(){ return writeJoineryItems(activeProjectHandle, items); }).then(function(){ return { added: added, filled: filled }; });
+    });
+  }
+
+  // ---------------- UI: Unplaced items + pin-drop on the level plan ----------------
+  var planUnplacedBtn = document.getElementById("planUnplacedBtn");
+  var planUnplacedPanel = document.getElementById("planUnplacedPanel");
+  var planUnplacedList = document.getElementById("planUnplacedList");
+  var planUnplacedSearch = document.getElementById("planUnplacedSearch");
+  var planPinBar = document.getElementById("planPinBar");
+  var planPinBarText = document.getElementById("planPinBarText");
+  var planPinPlaceBtn = document.getElementById("planPinPlaceBtn");
+  var planPinSkipBtn = document.getElementById("planPinSkipBtn");
+  var planPinStopBtn = document.getElementById("planPinStopBtn");
+  var planDraftG = document.getElementById("planCanvasDraft");
+  var planUnplacedItems = [];
+  var planPinMode = null; // { item, draft: {x, y} | null, busy }
+  var planPinSkipped = {};
+  function woItemKey(it){ return (it.room + "\u0000" + it.joineryId).toLowerCase(); }
+  function woMarkerKeys(){
+    var keys = {};
+    ((planSaved && planSaved.objects) || []).forEach(function(o){ if (o.type === "roomlink") keys[(String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase()] = true; });
+    return keys;
+  }
+  function refreshUnplacedForLevel(){
+    if (!planUnplacedBtn) return Promise.resolve();
+    var levelAtCall = activeLevelName;
+    return readJoineryItems(activeProjectHandle).then(function(items){
+      if (levelAtCall !== activeLevelName) return;
+      var placed = woMarkerKeys();
+      planUnplacedItems = items.filter(function(it){ return it.level === activeLevelName && !placed[woItemKey(it)]; })
+        .sort(function(a, b){
+          return String(a.room).localeCompare(String(b.room), undefined, { numeric: true, sensitivity: "base" }) ||
+            String(a.joineryId).localeCompare(String(b.joineryId), undefined, { numeric: true, sensitivity: "base" });
+        });
+      renderUnplacedButton();
+      if (!planUnplacedPanel.hidden) renderUnplacedList();
+    }).catch(function(err){ console.error("Reading items for the Unplaced list failed:", err); });
+  }
+  function renderUnplacedButton(){
+    var n = planUnplacedItems.length;
+    planUnplacedBtn.hidden = !n || !planSaved || !(planSaved.imageDataURL || (planSaved.imageTiles && planSaved.imageTiles.length));
+    planUnplacedBtn.textContent = "Unplaced (" + n + ")";
+  }
+  function renderUnplacedList(){
+    var q = (planUnplacedSearch.value || "").trim().toLowerCase();
+    var html = "", lastRoom = null;
+    planUnplacedItems.forEach(function(it, i){
+      var hay = (it.room + " " + it.joineryId + " " + (it.description || "") + " " + (it.workOrderNo || "")).toLowerCase();
+      if (q && hay.indexOf(q) === -1) return;
+      if (it.room !== lastRoom){ html += "<div class=\"unplaced-room\">" + escapeHtml(it.room) + "</div>"; lastRoom = it.room; }
+      html += "<button type=\"button\" class=\"unplaced-item\" data-idx=\"" + i + "\"><b>" + escapeHtml(it.joineryId || "(no code)") + "</b> " +
+        escapeHtml(it.description || "") + (it.workOrderNo ? " <span class=\"unplaced-wo\">WO " + escapeHtml(it.workOrderNo) + "</span>" : "") + "</button>";
+    });
+    planUnplacedList.innerHTML = html || "<p class=\"sub\" style=\"margin:8px 0;\">" + (planUnplacedItems.length ? "Nothing matches." : "Everything on this level is placed.") + "</p>";
+    Array.prototype.forEach.call(planUnplacedList.querySelectorAll(".unplaced-item"), function(b){
+      b.addEventListener("click", function(){ startPinMode(planUnplacedItems[+b.getAttribute("data-idx")]); });
+    });
+  }
+  if (planUnplacedBtn) planUnplacedBtn.addEventListener("click", function(){
+    planUnplacedPanel.hidden = !planUnplacedPanel.hidden;
+    if (!planUnplacedPanel.hidden){ planUnplacedSearch.value = ""; renderUnplacedList(); }
+  });
+  if (planUnplacedSearch) planUnplacedSearch.addEventListener("input", renderUnplacedList);
+  function startPinMode(item){
+    if (!item){ stopPinMode(); return; }
+    planUnplacedPanel.hidden = true;
+    planPinMode = { item: item, draft: null, busy: false };
+    renderPinDraft();
+    renderPinBar();
+  }
+  function stopPinMode(msg){
+    planPinMode = null;
+    planPinSkipped = {};
+    renderPinDraft();
+    if (planPinBar) planPinBar.hidden = true;
+    var hint = document.getElementById("planCanvasHint");
+    if (hint) hint.hidden = false;
+    if (msg) showToast(msg);
+  }
+  function renderPinBar(prefix){
+    var hint = document.getElementById("planCanvasHint");
+    if (hint) hint.hidden = !!planPinMode; // "tap to add an item" doesn't apply while placing
+    if (!planPinMode){ planPinBar.hidden = true; return; }
+    var it = planPinMode.item;
+    planPinBar.hidden = false;
+    planPinBarText.innerHTML = (prefix ? escapeHtml(prefix) + " " : "") + "Placing <b>" + escapeHtml(it.joineryId || "(no code)") + "</b> — " + escapeHtml(it.room) +
+      (it.workOrderNo ? " · WO " + escapeHtml(it.workOrderNo) : "") + ". " + (planPinMode.draft ? "Tap again to move it, or Place here." : "Tap the plan where it goes.");
+    planPinPlaceBtn.hidden = !planPinMode.draft;
+  }
+  function renderPinDraft(){
+    if (!planDraftG) return;
+    while (planDraftG.firstChild) planDraftG.removeChild(planDraftG.firstChild);
+    if (!planPinMode || !planPinMode.draft) return;
+    var d = planPinMode.draft, r = 26;
+    var ring = document.createElementNS(SVG_NS, "circle");
+    ring.setAttribute("cx", d.x); ring.setAttribute("cy", d.y); ring.setAttribute("r", r);
+    ring.setAttribute("fill", "rgba(255,59,59,0.35)"); ring.setAttribute("stroke", "#ffffff"); ring.setAttribute("stroke-width", 4); ring.setAttribute("stroke-dasharray", "8 6");
+    planDraftG.appendChild(ring);
+    var t = document.createElementNS(SVG_NS, "text");
+    t.setAttribute("x", d.x); t.setAttribute("y", d.y + r + 30); t.setAttribute("text-anchor", "middle");
+    t.setAttribute("font-size", 30); t.setAttribute("fill", "#fff"); t.setAttribute("paint-order", "stroke"); t.setAttribute("stroke", "#0b0707"); t.setAttribute("stroke-width", 5);
+    t.textContent = planPinMode.item.joineryId || planPinMode.item.room;
+    planDraftG.appendChild(t);
+  }
+  // Called by onPlanTap while placing -- a tap just (re)positions the draft.
+  function pinModeTap(x, y){
+    if (!planPinMode || planPinMode.busy) return;
+    planPinMode.draft = { x: x, y: y };
+    renderPinDraft();
+    renderPinBar();
+  }
+  function nextUnplacedAfter(item){
+    var remaining = planUnplacedItems.filter(function(it){ return it !== item && !planPinSkipped[woItemKey(it)]; });
+    if (!remaining.length) return null;
+    // same room first, then list order after this one
+    var sameRoom = remaining.filter(function(it){ return it.room === item.room; });
+    if (sameRoom.length) return sameRoom[0];
+    var idx = planUnplacedItems.indexOf(item);
+    var after = remaining.filter(function(it){ return planUnplacedItems.indexOf(it) > idx; });
+    return after[0] || remaining[0];
+  }
+  if (planPinSkipBtn) planPinSkipBtn.addEventListener("click", function(){
+    if (!planPinMode) return;
+    var cur = planPinMode.item;
+    planPinSkipped[woItemKey(cur)] = true;
+    var next = nextUnplacedAfter(cur);
+    if (!next){ stopPinMode("That's the last unplaced item on this level."); return; }
+    startPinMode(next);
+  });
+  if (planPinStopBtn) planPinStopBtn.addEventListener("click", function(){ stopPinMode(); });
+  if (planPinPlaceBtn) planPinPlaceBtn.addEventListener("click", function(){ placePinnedItem(); });
+  function placePinnedItem(){
+    if (!planPinMode || !planPinMode.draft || planPinMode.busy) return Promise.resolve();
+    var item = planPinMode.item, pt = planPinMode.draft;
+    planPinMode.busy = true;
+    planPinPlaceBtn.disabled = true;
+    var levelName = activeLevelName;
+    return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){
+      return readLevelFile(activeProjectHandle, activeProjectName, levelName);
+    }).then(function(level){
+      if (!level){ var e = new Error("This level has no plan file yet"); e.code = "no_level"; throw e; }
+      var already = (level.markers || []).some(function(o){ return o.type === "roomlink" && String(o.roomName || "").toLowerCase() === String(item.room).toLowerCase() && String(o.joineryCode || "").toLowerCase() === String(item.joineryId || "").toLowerCase(); });
+      if (already) return { already: true };
+      if (!level.rooms.some(function(r){ return r.name.toLowerCase() === String(item.room).toLowerCase(); })) level.rooms.push({ name: item.room });
+      var existingMaxId = (level.markers || []).reduce(function(m, o){ return Math.max(m, parseInt((o.id || "o0").slice(1), 10) || 0); }, 0);
+      if (existingMaxId >= planNextId) planNextId = existingMaxId + 1;
+      var marker = makeRoomLinkObject(pt.x, pt.y, item.room, item.joineryId || "");
+      level.markers = level.markers || [];
+      level.markers.push(marker);
+      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){ return { marker: marker, level: level }; });
+    }).then(function(res){
+      if (levelName !== activeLevelName) return;
+      if (res.already){
+        showToast((item.joineryId || item.room) + " is already on the plan (placed elsewhere meanwhile).");
+      } else if (planSaved){
+        planSaved.objects = planSaved.objects || [];
+        planSaved.objects.push(res.marker);
+        planRenderMarkers();
+      }
+      var placedItem = item;
+      var next = nextUnplacedAfter(placedItem);
+      planUnplacedItems = planUnplacedItems.filter(function(it){ return it !== placedItem; });
+      renderUnplacedButton();
+      registerAllItems = [];
+      if (!next){ stopPinMode("Placed " + (placedItem.joineryId || placedItem.room) + " — everything on this level is placed."); return; }
+      planPinMode = { item: next, draft: null, busy: false };
+      renderPinDraft();
+      renderPinBar("Placed " + (placedItem.joineryId || placedItem.room) + ".");
+    }).catch(function(err){
+      console.error("Placing the pin failed:", err);
+      if (planPinMode) planPinMode.busy = false;
+      if (isReadFailed(err)) readFailedToast("this level's file");
+      else showToast("Couldn't place it — nothing was changed. Try again.");
+    }).then(function(){ planPinPlaceBtn.disabled = false; });
+  }
+
   window.__testHooks = {
+    // (v31) work order import + pin-drop
+    woParseReportRowsForTest: function(pages){ return woParseReportRows(pages); },
+    woInterpretGroupsForTest: function(groups){ return woInterpretGroups(groups); },
+    woImportStateForTest: function(){ return woImportState; },
+    woStartImportFromFileForTest: function(file){ return woStartImportFromFile(file); },
+    unplacedItemsForTest: function(){ return planUnplacedItems.map(function(it){ return { room: it.room, joineryId: it.joineryId, workOrderNo: it.workOrderNo }; }); },
+    pinModeForTest: function(){ return planPinMode ? { item: { room: planPinMode.item.room, joineryId: planPinMode.item.joineryId }, draft: planPinMode.draft } : null; },
+    planTapForTest: function(x, y){ onPlanTap(x, y); },
+    planSavedMarkersForTest: function(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === 'roomlink'; }).map(function(o){ return { roomName: o.roomName, joineryCode: o.joineryCode, x: o.x, y: o.y }; }); },
+    refreshUnplacedForTest: function(){ return refreshUnplacedForLevel(); },
+    loadDeviceUserNameForTest: function(){ return loadDeviceUserName(); },
     // (2026-09-27) the reserved "Schedule Backups" name is never handed out to a project
     createNewProjectForTest: function(no, name){ return createNewProject(no, name); },
     renderPdfPageGrid: renderPdfPageGrid,

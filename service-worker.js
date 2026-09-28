@@ -538,7 +538,8 @@
 // see the card's own top-of-HTML comment and README.md's v29 entry.)
 var ICON_VERSION = "v1";
 // v30 (2026-09-27): "Schedule Backups" folder hidden from the project list.
-var CACHE_NAME = "utzline-projects-cache-v38";
+// v31 (2026-09-28): Import work orders (PDF) + Unplaced pin-drop on the level plan.
+var CACHE_NAME = "utzline-projects-cache-v39";
 
 var PRECACHE_URLS = [
   "./",

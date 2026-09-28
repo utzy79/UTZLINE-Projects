@@ -1,6 +1,32 @@
 # UTZLINE Projects — installable app
 
-**Current version: v30** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v31** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v31 (2026-09-28) — Import work orders (PDF) + pin-drop them on the plan:** Andrew: *"would it be possible to create a button in the projects app that can add this data. we would then pindrop these like we pindrop the delivery location"*. "This data" is the job system's **Work Order List** PDF: per room, each work order's WO #, joinery code and description.
+
+- **Import work orders (PDF)** is on a project's Levels screen, next to Joinery Register. The app reads the PDF's own text by column position (no OCR):
+  - The room heading, e.g. "2  C1.EQ.002 Dropoff - Cleanup".
+  - Each WO line, e.g. "15345  J.001 Stainless Steel Cleanup…", with a wrapped description joined back up.
+  - A heading repeated after a page break counts once.
+  - Headings that aren't rooms (Management, Travel, Allowances) and lines without a joinery code are listed as skipped, never imported.
+  - Tested on Andrew's real 13-page report: all 244 joinery work orders are accounted for (240 under rooms, 4 under "Travel").
+- **Zones to levels.** "H1.AH.002 Reception" is zone H1 (Building H, Level 1), room AH.002. Each zone gets a level picker in the dialog ("— don't import —" by default); the choice is remembered per project on the device.
+  - Rooms are named without the zone ("AH.002 Reception") so they match rooms already set up, and an existing room with the same number is reused.
+  - A heading covering several rooms ("MH.028,035,039 …") gives one item per room by default (untick to keep it as one room). A range ("PH.005-011") stays one room.
+  - The same code twice in one room (two work orders) becomes "J.T.017" and "J.T.017 2", the Add dialog's own suffix rule.
+- **Existing items** (same level, room and code):
+  - A missing WO # is filled in and logged in the item's edit history ("Imported from <file>", with your name).
+  - The same WO # is left alone.
+  - A different WO # is never overwritten; the preview shows it instead.
+  - The preview shows every line's outcome before anything is written.
+  - Import needs sign-in plus a PIN confirmation, like Edit item.
+  - joinery-items.json and each level file are re-read strictly and written once each; new rooms are added to the level files.
+  - Importing the same PDF again adds nothing.
+- **Pin-drop.** A level's plan ("Place joinery items") shows **Unplaced (N)**: the level's items that have no marker yet, grouped by room and searchable.
+  - Pick one, tap the plan (tap again to move it), then **Place here**. That's the delivery-location pin flow; it writes the marker to the level file.
+  - It then moves straight on to the next unplaced item (same room first), so a whole import can be pinned in one pass. **Skip** and **Stop** are always there.
+  - Plan taps still add items as before when you're not placing.
+- Test: `pdftest-projects/run_projects_wo_import.js` runs against the real report (`fixture_wo_report_3749.pdf`).
 
 **v30 (2026-09-27):** Hides the **Schedule Backups** folder from the project list. Scheduler v29 now keeps its daily spreadsheet backups in that folder, directly in the main Projects folder (Andrew: *"a schedule backups folder directly in the main folder ... I meant in the main folder. Not the individual projects folder."*). Every app lists every folder in the main folder as a project, so each one now leaves that folder out: `isReservedRootFolderName`, the same one-line rule in every app. Tested across all 11 apps by `pdftest-projects/run_schedule_backups_folder_hidden.js`, which fails on every app's previous build and passes on the new ones. A new project is also never given that folder name: creating a project called "Schedule Backups" gets "Schedule Backups 2", and so on, whether or not the folder exists yet.
 
