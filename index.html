@@ -532,34 +532,18 @@
   .doc-row-name{ font-size: 13px; }
   .doc-row-sub{ font-size: 12px; color: var(--muted); }
 
-  /* ---- Joinery item page: read-only rework summary (2026-09-23) -- see
-       readInstallReworkForItem's own comment. ---- */
-  .rework-item{ padding: 10px 0; border-top: 1px solid var(--border); }
-  .rework-item:first-child{ border-top: none; }
-  .rework-item-head{ display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }
-  .rework-item-cabinet{ font-weight: 600; }
-  .rework-item-date{ font-size: 12px; color: var(--muted); }
-  .rework-item-text{ font-size: 13px; margin: 6px 0 0; white-space: pre-wrap; }
-  .rework-item-status{ font-size: 12px; margin-top: 6px; color: var(--muted); }
-  .rework-item-status.received{ color: var(--accent); }
-  /* Rework Register colour scheme (2026-09-26) -- Andrew, verbatim:
-     "delivered is blue, signed off is green, red is only for outstanding
-     (not yet)." Scoped to this table only (the Joinery Item page's own
-     Rework card above keeps its existing accent-colour treatment) --
-     "this is purely on the rework register." */
-  .rr-status{ font-weight: 600; }
-  .rr-status.outstanding{ color: var(--danger); }
-  .rr-status.delivered{ color: #3987e5; }
+  /* ---- Rework Register (v33, 2026-09-28): state pills and the green
+       delivered rows come from the shared rework module's own CSS (urw-*).
+       Andrew (rework round): "reworks that are delivered to be green border
+       / text and sent to bottom of page (maybe a separate selectable
+       delivered folder)" -- this replaces the 2026-09-26 blue "Delivered to
+       site" text. ---- */
+  .btn.sm{ padding: 6px 11px; font-size: 12.5px; border-radius: 8px; }
+  .rr-scroll{ overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .rr-acts, .rr-nw{ white-space: nowrap; }
+  .rr-acts .btn{ margin-right: 6px; }
+  .rr-latest{ color: var(--muted); font-size: 12px; min-width: 150px; max-width: 260px; }
   .rr-signoff-date{ color: #33c46a; font-weight: 600; }
-  .rework-item-photos{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  .rework-item-photos img{ width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
-  /* Brief highlight when arriving from the Rework Register's "clicking on a
-     rework takes you to that rework" navigation (2026-09-23). */
-  .rework-item-flash{ animation: reworkItemFlash 2.2s ease-out; border-radius: 8px; }
-  @keyframes reworkItemFlash{
-    0%{ background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
-    100%{ background: transparent; box-shadow: 0 0 0 2px transparent; }
-  }
 
   /* ---- Joinery item page: Sub Orders summary (2026-09-27; received tick box v29) --
        "categorised" = grouped under a group-heading per type; colours
@@ -874,7 +858,7 @@
   <section id="screenReworkRegister" class="screen wide-table">
     <div class="backrow"><button class="btn secondary" id="backFromReworkRegisterBtn">&larr; Levels</button></div>
     <h1 id="reworkRegisterProjectLabel">Rework Register</h1>
-    <p class="sub">Every rework entry logged in Install ITP for this project, in one place.</p>
+    <p class="sub">Every rework logged in Install ITP for this project. Tap a rework to open it: its full log, photos, comments and its own PDF.</p>
     <div class="card">
       <div class="row">
         <div class="field" style="flex:1 1 160px; margin:0;">
@@ -884,44 +868,51 @@
           </select>
         </div>
         <div class="field" style="flex:1 1 160px; margin:0;">
-          <label for="reworkRegisterReceivedFilter">Delivered to site</label>
+          <label for="reworkRegisterReceivedFilter">State</label>
           <select id="reworkRegisterReceivedFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
             <option value="">All</option>
-            <option value="yes">Delivered to site</option>
             <option value="no">Not yet delivered</option>
+            <option value="logged">Logged</option>
+            <option value="machined">Cut</option>
+            <option value="manufactured">Ready to deliver</option>
+            <option value="yes">Delivered to site</option>
           </select>
         </div>
         <div class="field" style="flex:2 1 220px; margin:0;">
           <label for="reworkRegisterSearchInput">Search</label>
-          <input type="text" id="reworkRegisterSearchInput" placeholder="Joinery ID, cabinet #, or detail text…">
+          <input type="text" id="reworkRegisterSearchInput" placeholder="Joinery ID, room, cabinet #, or detail text…">
         </div>
       </div>
       <div class="row" style="margin-top:10px;">
+        <button class="btn secondary" id="reworkRegisterRefreshBtn">Refresh</button>
         <button class="btn secondary" id="reworkRegisterPrintBtn">Print / Save PDF</button>
         <button class="btn secondary" id="reworkRegisterShareBtn" hidden>Share…</button>
         <span class="sub" id="reworkRegisterCountLabel" style="margin:0 0 0 auto; align-self:center;"></span>
       </div>
     </div>
-    <div class="card" id="reworkRegisterTableCard">
-      <table class="register-table" id="reworkRegisterTable">
-        <thead>
-          <tr>
-            <th data-col="level">Level</th>
-            <th data-col="room">Room</th>
-            <th data-col="joineryId">Joinery ID</th>
-            <th data-col="cabinetNumber">Cabinet #</th>
-            <th data-col="text">Detail</th>
-            <th data-col="createdAt">Logged</th>
-            <th data-col="received">Delivered to site</th>
-            <th data-col="closedAt">Signed off date</th>
-          </tr>
-        </thead>
+    <div class="card rr-scroll" id="reworkRegisterTableCard">
+      <table class="register-table urw-table" id="reworkRegisterTable">
+        <thead></thead>
         <tbody id="reworkRegisterTableBody"></tbody>
       </table>
-      <div class="empty-note" id="reworkRegisterEmpty" hidden>No rework entries match this filter.</div>
+      <div class="empty-note" id="reworkRegisterEmpty" hidden>No outstanding reworks match this filter.</div>
       <div class="empty-note" id="reworkRegisterEmptyProject" hidden>No rework logged for this project yet -- entries are added from Install ITP's own long-press "Open rework" menu on a joinery marker.</div>
     </div>
+    <!-- (v33) delivered / closed-out reworks: green, in their own section at
+         the bottom, shown on tap -->
+    <button type="button" class="btn secondary urw-deliv-toggle" id="reworkRegisterDelivToggle">Delivered (0) ▸</button>
+    <div class="card rr-scroll urw-deliv-card" id="reworkRegisterDelivCard" hidden>
+      <table class="register-table urw-table" id="reworkRegisterDelivTable">
+        <thead></thead>
+        <tbody id="reworkRegisterDelivBody"></tbody>
+      </table>
+      <div class="empty-note" id="reworkRegisterDelivEmpty" hidden>Nothing delivered yet.</div>
+    </div>
   </section>
+
+  <!-- (v33) one rework: details, photos, comments, full status log, Print /
+       Share (its own stamped PDF). Rendered by the shared rework module. -->
+  <section id="screenReworkDetail" class="screen"></section>
 
   <!-- ---- Status-history hover popup (2026-09-23): "if you hover over a
        joinery item on this page, it gives you a list of all the status
@@ -997,17 +988,12 @@
       <h2 class="section-title">ITPs</h2>
       <div id="itemItpList"></div>
     </div>
-    <!-- Read-only rework summary (2026-09-23) -- Andrew, verbatim, on Install
-         ITP's new rework tracker: "fully trackable via this system and via
-         utzline projects summary pages per project." Reads Install ITP's own
-         "Install ITP Rework" flat branch (read-only -- this app never writes
-         rework data, only Install ITP does) via the exact same
-         readItpChecklistRaw walk every other ITP branch already uses here,
-         so it needs no new folder-reading code of its own. See
-         readInstallReworkForItem's own comment. -->
+    <!-- Rework summary (2026-09-23; v33 2026-09-28: folds the rework event
+         files, so it shows Cut / Ready to deliver / Delivered / Closed out
+         and comments from every app; delivered ones green at the bottom;
+         lists this item's per-rework PDFs, newest first). -->
     <div class="card">
       <h2 class="section-title">Rework</h2>
-      <div id="itemReworkPdfRow"></div>
       <div id="itemReworkList"></div>
     </div>
     <!-- Sub Orders summary (2026-09-27) -- Andrew, verbatim, the
@@ -1322,6 +1308,1506 @@
 
 <div id="toast"></div>
 
+<!-- UTZLINE-REWORK-MODULE BEGIN (generated from shared/utzline-rework.js -- don't edit here) -->
+<script>
+/* ==== UTZLINE shared rework module v1 (BEGIN) ====
+   One copy of this block is pasted, byte for byte, into every app that
+   shows or changes reworks (first: Scheduler v30 and Machine Schedule v17,
+   2026-09-28). Edit /home/claude/shared/utzline-rework.js and re-run
+   sync_rework_module.py; never edit an app's copy by hand.
+
+   Andrew (2026-09-28): "scheduler needs a rework register view also ...
+   look at it like the schedule but for reworks where we can open it, show
+   the reworks all or by project, you can then click on the rework to open
+   it, print it, share it, on the rework schedule we also need to be able to
+   mark it as complete ready to deliver. this should be visible on the
+   machining schedule also. with a cut button for when cut" / "also need to
+   fix this rework conflict. rework pdfs should be user datetime stamped.
+   they should also show the entire status log per rework and have larger
+   photos, each rework becomes its own pdf with larger photos (1/4) a4 per
+   photo, 4 per page)" / "reworks that are delivered to be green border /
+   text and sent to bottom of page (maybe a separate selectable delivered
+   folder)".
+
+   WHERE REWORKS LIVE (written by Install ITP, which creates them):
+     flat:   <Project>/Project Saves/UTZLINE ITP/Install ITP Rework/<Level> - <Room> - <Code>.json
+     legacy: <Project>/itp-install-rework/<Level>/<Room>/<Code>.json
+   One shared JSON per item: { joineryNo, level, room, reworks:[entry...] }.
+   Install ITP and Delivery ITP rewrite that whole file, which is how
+   OneDrive ends up with conflict copies when two people save it at once.
+
+   REWORK EVENT STANDARD v1 -- everything this module changes is a NEW file,
+   never a rewrite. One log folder per item file:
+     flat:   Project Saves/UTZLINE ITP/Install ITP Rework Log/<fileBase>/
+     legacy: itp-install-rework/<Level>/<Room>/<fileBase> log/
+   (the same folder the Viewer's comments already use, v61). Each event is
+     "<name> - <YYYY-MM-DD HH-mm-ss-mmm> - <kind>.json"
+     { kind, reworkId, level, room, joineryId, fileBase, cabinetNumber, at, by, app, ... }
+   kinds:
+     comment    { text }
+     state      { status: "logged" | "machined" | "manufactured", undo?: true }
+                machined = "Cut" (Machine Schedule), manufactured =
+                "Complete -- ready to deliver" (Scheduler)
+     delivered  { receivedDate, deliveryLocationPin?, locationSnapshot? }   (Delivery ITP, v22+)
+     closed     {}                      (Install ITP "Save & close out", v43+)
+   FOLD: an entry's state is the latest state change (its own statusHistory
+   plus state events, by time); delivered (in the file or as an event) always
+   wins; closed likewise. Events with a reworkId only apply to that entry.
+
+   PER-REWORK PDF: one rework per PDF, named by who made it and when
+     <fileBase> - <Cab X | Rework yyyy-mm-dd> - <name> - <YYYY-MM-DD HH-mm-ss>.pdf
+   saved beside the item's other rework PDFs (flat: PDF Files/UTZLINE ITP/
+   Install ITP Rework/; legacy: the item's itp-install-rework room folder),
+   so two people printing at once can never write the same file. It has the
+   details, the whole status log (oldest first), then the photos at a
+   quarter of an A4 page each, 4 per page.
+
+   4 GB tablet: the register keeps no photo data (photos are dropped as each
+   file is read -- only counts are kept); the photos are read again only for
+   the one rework that's opened, and let go when it's closed. The PDF
+   library is loaded only when someone prints or shares. */
+(function(global){
+  "use strict";
+
+  var STATES = {
+    logged:       { short: "Logged",           long: "Logged",                      pdf: "REWORK PENDING — LOGGED" },
+    machined:     { short: "Cut",              long: "Cut (machined)",              pdf: "CUT (MACHINED)" },
+    manufactured: { short: "Ready to deliver", long: "Complete — ready to deliver", pdf: "COMPLETE — READY TO DELIVER" },
+    delivered:    { short: "Delivered",        long: "Delivered to site",           pdf: "DELIVERED TO SITE" }
+  };
+  var STATE_ORDER = ["logged", "machined", "manufactured", "delivered"];
+  var QUICK_COMMENTS = ["Sent to saw"];
+  var FLAT_DATA = ["Project Saves", "UTZLINE ITP", "Install ITP Rework"];
+  var FLAT_LOG = ["Project Saves", "UTZLINE ITP", "Install ITP Rework Log"];
+  var FLAT_PDF = ["PDF Files", "UTZLINE ITP", "Install ITP Rework"];
+  var LEGACY_ROOT = "itp-install-rework";
+
+  /* ------------------------------ small helpers ------------------------------ */
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function p3(n){ return (n < 10 ? "00" : n < 100 ? "0" : "") + n; }
+  function stamp(d){
+    d = d || new Date();
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + " " +
+      p2(d.getHours()) + "-" + p2(d.getMinutes()) + "-" + p2(d.getSeconds()) + "-" + p3(d.getMilliseconds());
+  }
+  function stampSeconds(d){ return stamp(d).slice(0, 19); }
+  // Same rules as Install ITP's sanitizeFileBase (the rework file names).
+  function sanitizeFileBase(name){
+    var cleaned = String(name || "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().replace(/^[._]+|[._\s]+$/g, "");
+    return cleaned.slice(0, 80) || "item";
+  }
+  // Same rules as the family's overlayUserSlug (a name inside a filename).
+  function userSlug(name){
+    var clean = String(name || "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().replace(/^[._]+|[._\s]+$/g, "").slice(0, 60);
+    return clean || "Unnamed";
+  }
+  function isNotFound(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError" || /NotFound/.test(String(err.message || "")))); }
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtDate(iso, withTime){
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    var s = d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    if (withTime) s += " " + p2(d.getHours()) + ":" + p2(d.getMinutes());
+    return s;
+  }
+  function dirPath(base, segs, create){
+    var p = Promise.resolve(base);
+    segs.forEach(function(s){ p = p.then(function(h){ return h.getDirectoryHandle(s, { create: !!create }); }); });
+    return p;
+  }
+  function listEntries(dirH){
+    var out = [];
+    if (!dirH || typeof dirH.values !== "function") return Promise.resolve(out);
+    var iter = dirH.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return out;
+        if (res.value) out.push(res.value);
+        return step();
+      });
+    }
+    return step();
+  }
+  function readText(fh){ return fh.getFile().then(function(f){ return f.text(); }); }
+  function readJsonSoft(fh){
+    return readText(fh).then(function(t){
+      try{ var v = JSON.parse(t); return (v && typeof v === "object") ? v : null; }catch(e){ return null; }
+    }, function(){ return null; });
+  }
+  // Write, then read the size back (Android storage can report the old size
+  // for a moment -- one retry). Resolves the handle.
+  // data: a Blob (PDFs) or a string (event JSON -- written as text, which
+  // every file handle takes, and some older test fakes only handle).
+  function writeVerified(dirH, name, data){
+    var expected = (typeof data === "string") ? new Blob([data]).size : data.size;
+    var blob = data;
+    function attempt(){
+      return dirH.getFileHandle(name, { create: true }).then(function(fh){
+        return fh.createWritable().then(function(w){
+          return w.write(blob).then(function(){ return w.close(); });
+        }).then(function(){ return fh.getFile(); }).then(function(f){
+          if (typeof f.size === "number" && f.size !== expected){ var e = new Error("write didn't land (size " + f.size + " vs " + expected + ")"); e.code = "size_mismatch"; throw e; }
+          return fh;
+        });
+      });
+    }
+    return attempt().catch(function(err){
+      if (err && err.code === "size_mismatch") return new Promise(function(r){ setTimeout(r, 400); }).then(attempt);
+      throw err;
+    });
+  }
+  // Runs worker over items, `lanes` at a time.
+  function runQueue(items, worker, lanes){
+    var i = 0;
+    function lane(){
+      if (i >= items.length) return Promise.resolve();
+      var item = items[i++];
+      return Promise.resolve().then(function(){ return worker(item); }).catch(function(){}).then(lane);
+    }
+    var ls = [];
+    for (var k = 0; k < Math.max(1, lanes || 1); k++) ls.push(lane());
+    return Promise.all(ls);
+  }
+
+  /* ------------------------------ reading reworks ------------------------------ */
+  // Keeps everything but the photo/snapshot pixels (4 GB tablets).
+  function slimEntry(e){
+    var out = {};
+    Object.keys(e).forEach(function(k){ if (k !== "photos" && k !== "locationSnapshot") out[k] = e[k]; });
+    out.photoCount = Array.isArray(e.photos) ? e.photos.filter(function(p){ return p && p.dataUrl; }).length : 0;
+    out.hasSnapshot = !!(e.locationSnapshot && e.locationSnapshot.dataUrl);
+    return out;
+  }
+  function rowsFromData(data, where){
+    var entries = (data && Array.isArray(data.reworks)) ? data.reworks : [];
+    return entries.filter(function(e){ return e && typeof e === "object"; }).map(function(e){
+      return {
+        project: where.project || "", level: (data && data.level) || where.level || "", room: (data && data.room) || where.room || "",
+        code: (data && data.joineryNo) || where.code || "", fileBase: where.fileBase, fileName: where.fileName,
+        isFlat: where.isFlat, levelDir: where.levelDir || "", roomDir: where.roomDir || "", entry: slimEntry(e)
+      };
+    });
+  }
+  function jsonFiles(dirH){
+    return listEntries(dirH).then(function(es){ return es.filter(function(e){ return e.kind === "file" && /\.json$/i.test(e.name); }); });
+  }
+  function dirsIn(dirH){
+    return listEntries(dirH).then(function(es){ return es.filter(function(e){ return e.kind === "directory"; }); });
+  }
+  // Every rework entry in one project (flat and legacy locations both
+  // checked). Resolves { rows, unreadable } -- unreadable counts files that
+  // exist but couldn't be read (mid-sync); they are never shown as empty.
+  function listProjectReworks(projectHandle, projectName){
+    var rows = [], unreadable = 0;
+    function readFile(fh, where){
+      return readJsonSoft(fh).then(function(data){
+        if (!data){ unreadable++; return; }
+        rows.push.apply(rows, rowsFromData(data, where));
+      });
+    }
+    var flat = dirPath(projectHandle, FLAT_DATA, false).then(jsonFiles, function(){ return []; }).then(function(files){
+      return runQueue(files, function(fh){
+        var base = fh.name.replace(/\.json$/i, "");
+        var parts = base.split(" - ");
+        return readFile(fh, {
+          project: projectName, fileBase: base, fileName: fh.name, isFlat: true,
+          level: parts.length >= 3 ? parts[0] : "", room: parts.length >= 3 ? parts[1] : "",
+          code: parts.length >= 3 ? parts.slice(2).join(" - ") : base
+        });
+      }, 1);
+    });
+    var legacy = projectHandle.getDirectoryHandle(LEGACY_ROOT, { create: false }).then(dirsIn, function(){ return []; }).then(function(levels){
+      var p = Promise.resolve();
+      levels.forEach(function(levelH){
+        p = p.then(function(){ return dirsIn(levelH); }).then(function(rooms){
+          var q = Promise.resolve();
+          rooms.forEach(function(roomH){
+            q = q.then(function(){ return jsonFiles(roomH); }).then(function(files){
+              return runQueue(files, function(fh){
+                var base = fh.name.replace(/\.json$/i, "");
+                return readFile(fh, { project: projectName, fileBase: base, fileName: fh.name, isFlat: false, level: levelH.name, room: roomH.name, levelDir: levelH.name, roomDir: roomH.name, code: base });
+              }, 1);
+            });
+          });
+          return q;
+        });
+      });
+      return p;
+    });
+    return flat.then(function(){ return legacy; }).then(function(){ return { rows: rows, unreadable: unreadable }; });
+  }
+  // The reworks of ONE joinery item (level/room/code), both locations.
+  function listItemReworks(projectHandle, projectName, level, room, code){
+    var flatName = sanitizeFileBase(level) + " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(code) + ".json";
+    var legacyName = sanitizeFileBase(code) + ".json";
+    var rows = [], unreadable = 0;
+    var flat = dirPath(projectHandle, FLAT_DATA, false).then(function(d){ return d.getFileHandle(flatName, { create: false }); }).then(function(fh){
+      return readJsonSoft(fh).then(function(data){
+        if (!data){ unreadable++; return; }
+        var base = flatName.replace(/\.json$/i, "");
+        rows.push.apply(rows, rowsFromData(data, { project: projectName, fileBase: base, fileName: flatName, isFlat: true, level: level, room: room, code: code }));
+      });
+    }, function(){});
+    var legacy = dirPath(projectHandle, [LEGACY_ROOT, level, room], false).then(function(d){ return d.getFileHandle(legacyName, { create: false }); }).then(function(fh){
+      return readJsonSoft(fh).then(function(data){
+        if (!data){ unreadable++; return; }
+        var base = legacyName.replace(/\.json$/i, "");
+        rows.push.apply(rows, rowsFromData(data, { project: projectName, fileBase: base, fileName: legacyName, isFlat: false, level: level, room: room, levelDir: level, roomDir: room, code: code }));
+      });
+    }, function(){});
+    return Promise.all([flat, legacy]).then(function(){ return { rows: rows, unreadable: unreadable }; });
+  }
+  // A row for the item an ITP app has open (it knows where it is already).
+  function rowFor(isFlat, level, room, code, entry, projectName){
+    var fileBase = isFlat ? sanitizeFileBase(level) + " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(code) : sanitizeFileBase(code);
+    return { project: projectName || "", level: level, room: room, code: code, fileBase: fileBase, fileName: fileBase + ".json", isFlat: !!isFlat,
+      levelDir: isFlat ? "" : level, roomDir: isFlat ? "" : room, entry: entry || {} };
+  }
+  function dataDir(projectHandle, row){
+    return row.isFlat ? dirPath(projectHandle, FLAT_DATA, false) : dirPath(projectHandle, [LEGACY_ROOT, row.levelDir || row.level, row.roomDir || row.room], false);
+  }
+  // The full entry (photos included) for one row, read fresh. Rejects with
+  // code "read_failed" if the file can't be read, "gone" if the entry was
+  // deleted since the list was made.
+  function readFullEntry(projectHandle, row){
+    return dataDir(projectHandle, row).then(function(d){ return d.getFileHandle(row.fileName, { create: false }); }).then(function(fh){
+      return readText(fh);
+    }).then(function(text){
+      var data;
+      try{ data = JSON.parse(text); }catch(e){ var er = new Error("unreadable"); er.code = "read_failed"; throw er; }
+      var list = (data && Array.isArray(data.reworks)) ? data.reworks : [];
+      for (var i = 0; i < list.length; i++){
+        var e = list[i];
+        if (!e) continue;
+        if ((row.entry.id && e.id === row.entry.id) || (!row.entry.id && e.createdAt === row.entry.createdAt && (e.text || "") === (row.entry.text || ""))) return e;
+      }
+      var g = new Error("gone"); g.code = "gone"; throw g;
+    }, function(err){
+      if (err && (err.code === "read_failed" || err.code === "gone")) throw err;
+      var e2 = new Error(isNotFound(err) ? "gone" : "unreadable"); e2.code = isNotFound(err) ? "gone" : "read_failed"; throw e2;
+    });
+  }
+
+  /* ------------------------------ the log (event files) ------------------------------ */
+  function logDir(projectHandle, row, create){
+    if (row.isFlat) return dirPath(projectHandle, FLAT_LOG.concat([row.fileBase]), create);
+    return dirPath(projectHandle, [LEGACY_ROOT, row.levelDir || row.level, row.roomDir || row.room], false).then(function(h){
+      return h.getDirectoryHandle(row.fileBase + " log", { create: !!create });
+    });
+  }
+  // Every event for one item file (all its entries). Missing folder -> [].
+  // A single file mid-sync is skipped (it shows up on the next read); the
+  // count of skipped files comes back as .skipped.
+  function readLog(projectHandle, row){
+    return logDir(projectHandle, row, false).then(function(dirH){
+      return jsonFiles(dirH).then(function(files){
+        var out = [];
+        out.skipped = 0;
+        return runQueue(files, function(fh){
+          return readJsonSoft(fh).then(function(ev){
+            if (ev && typeof ev === "object"){ ev._file = fh.name; out.push(ev); }
+            else out.skipped++;
+          });
+        }, 2).then(function(){ return out; });
+      });
+    }, function(err){
+      if (isNotFound(err)) { var none = []; none.skipped = 0; return none; }
+      throw err;
+    });
+  }
+  function eventsFor(entry, events){
+    return (events || []).filter(function(ev){
+      if (!ev || typeof ev !== "object") return false;
+      if (ev.reworkId && entry.id && ev.reworkId !== entry.id) return false;
+      return true;
+    });
+  }
+  function writeEvent(projectHandle, row, kind, fields, by, app){
+    var at = new Date();
+    var ev = {
+      kind: kind, reworkId: row.entry.id || "", level: row.level, room: row.room, joineryId: row.code, fileBase: row.fileBase,
+      cabinetNumber: row.entry.cabinetNumber || "", at: at.toISOString(), by: by || "", app: app || ""
+    };
+    Object.keys(fields || {}).forEach(function(k){ ev[k] = fields[k]; });
+    var name = userSlug(by) + " - " + stamp(at) + " - " + kind + ".json";
+    var text = JSON.stringify(ev);
+    return logDir(projectHandle, row, true).then(function(dirH){
+      return writeVerified(dirH, name, text);
+    }).then(function(){ ev._file = name; return ev; });
+  }
+
+  /* ------------------------------ fold + log lines ------------------------------ */
+  function fold(entry, events){
+    entry = entry || {};
+    var evs = eventsFor(entry, events);
+    var changes = [];
+    var hist = Array.isArray(entry.statusHistory) ? entry.statusHistory : [];
+    var deliveredFile = null;
+    hist.forEach(function(h){
+      if (!h || !h.status) return;
+      if (h.status === "delivered"){ if (!deliveredFile) deliveredFile = { at: h.at || "", by: h.by || "" }; return; }
+      if (STATES[h.status]) changes.push({ status: h.status, at: h.at || "", by: h.by || "", src: "file" });
+    });
+    if (!hist.length && entry.status && entry.status !== "delivered" && STATES[entry.status]){
+      changes.push({ status: entry.status, at: entry.statusAt || entry.createdAt || "", by: entry.statusBy || entry.createdBy || "", src: "file" });
+    }
+    evs.forEach(function(ev){
+      if (ev.kind === "state" && STATES[ev.status] && ev.status !== "delivered"){
+        changes.push({ status: ev.status, at: ev.at || "", by: ev.by || "", src: "event", app: ev.app || "", undo: !!ev.undo, file: ev._file || "" });
+      }
+    });
+    changes.sort(function(a, b){ return String(a.at).localeCompare(String(b.at)); });
+    var latest = changes.length ? changes[changes.length - 1] : null;
+
+    var delivered = null;
+    if (entry.received || entry.status === "delivered" || deliveredFile){
+      delivered = {
+        at: (deliveredFile && deliveredFile.at) || (entry.status === "delivered" ? entry.statusAt : "") || entry.receivedDate || "",
+        by: entry.receivedBy || (deliveredFile && deliveredFile.by) || "", date: entry.receivedDate || "", src: "file",
+        pin: entry.deliveryLocationPin || null, snapshot: (entry.locationSnapshot && entry.locationSnapshot.dataUrl) ? entry.locationSnapshot : null
+      };
+    }
+    // Delivered events: the FIRST is the delivery (its date stays); a later
+    // one is a retaken pin -- its pin + snapshot replace the earlier ones.
+    var delEvs = evs.filter(function(ev){ return ev.kind === "delivered"; }).sort(function(a, b){ return String(a.at).localeCompare(String(b.at)); });
+    var retakes = [];
+    delEvs.forEach(function(ev, k){
+      if (!delivered){
+        delivered = { at: ev.at || "", by: ev.by || "", date: ev.receivedDate || String(ev.at || "").slice(0, 10), src: "event", app: ev.app || "", pin: null, snapshot: null };
+      } else retakes.push(ev);
+      if (ev.deliveryLocationPin) delivered.pin = ev.deliveryLocationPin;
+      if (ev.locationSnapshot && ev.locationSnapshot.dataUrl) delivered.snapshot = ev.locationSnapshot;
+    });
+    if (delivered) delivered.retakes = retakes;
+    var closed = null;
+    if (entry.closed) closed = { at: entry.closedAt || "", by: entry.closedBy || "", src: "file" };
+    evs.forEach(function(ev){
+      if (ev.kind === "closed" && !closed) closed = { at: ev.at || "", by: ev.by || "", src: "event", app: ev.app || "" };
+    });
+    var comments = evs.filter(function(ev){ return ev.kind === "comment"; }).sort(function(a, b){ return String(a.at).localeCompare(String(b.at)); });
+    var status = delivered ? "delivered" : (latest ? latest.status : "logged");
+    // The state before the latest change (what an undo goes back to).
+    var before = "logged";
+    if (changes.length >= 2) before = changes[changes.length - 2].status;
+    return {
+      status: status,
+      statusAt: delivered ? delivered.at : (latest ? latest.at : (entry.createdAt || "")),
+      statusBy: delivered ? delivered.by : (latest ? latest.by : (entry.createdBy || "")),
+      latestChange: latest, previousStatus: before, changes: changes,
+      delivered: delivered, closed: closed, isDone: !!(delivered || closed),
+      comments: comments, lastComment: comments.length ? comments[comments.length - 1] : null
+    };
+  }
+  // Every line of the log, newest first: [{at, by, what, kind, app}]
+  function logLines(entry, events){
+    var f = fold(entry, events);
+    var out = [];
+    if (entry.createdAt) out.push({ at: entry.createdAt, by: entry.createdBy || "", what: "Logged", kind: "logged", app: "" });
+    var skippedFirstLogged = false;
+    f.changes.forEach(function(c){
+      if (c.src === "file" && c.status === "logged" && !skippedFirstLogged && (!entry.createdAt || !c.at || c.at === entry.createdAt || Math.abs(new Date(c.at) - new Date(entry.createdAt)) < 5000)){
+        skippedFirstLogged = true; // the same moment as "Logged"
+        return;
+      }
+      var label = STATES[c.status] ? STATES[c.status].long : c.status;
+      out.push({ at: c.at, by: c.by, what: c.undo ? ("Undone — back to " + label) : label, kind: c.status, app: c.app || "" });
+    });
+    if (f.delivered){
+      out.push({ at: f.delivered.at, by: f.delivered.by, what: "Delivered to site" + (f.delivered.date && String(f.delivered.at).slice(0, 10) !== f.delivered.date ? " (" + f.delivered.date + ")" : ""), kind: "delivered", app: f.delivered.app || "" });
+      (f.delivered.retakes || []).forEach(function(ev){ out.push({ at: ev.at || "", by: ev.by || "", what: "Delivery pin + photo retaken", kind: "delivered", app: ev.app || "" }); });
+    }
+    if (f.closed) out.push({ at: f.closed.at, by: f.closed.by, what: "Closed out", kind: "closed", app: f.closed.app || "" });
+    f.comments.forEach(function(c){ out.push({ at: c.at, by: c.by || "", what: "Comment: " + (c.text || ""), kind: "comment", app: c.app || "" }); });
+    out.sort(function(a, b){ return String(b.at || "").localeCompare(String(a.at || "")); });
+    return out;
+  }
+  function stateLabel(status, short){ var s = STATES[status] || STATES.logged; return short ? s.short : s.long; }
+
+  /* ------------------------------ PDFs ------------------------------ */
+  function pdfDir(projectHandle, row, create){
+    if (row.isFlat) return dirPath(projectHandle, FLAT_PDF, create);
+    return dataDir(projectHandle, row);
+  }
+  function pdfPartFor(entry){
+    if (entry.cabinetNumber) return "Cab " + sanitizeFileBase(entry.cabinetNumber);
+    var d = entry.createdAt ? new Date(entry.createdAt) : null;
+    return "Rework" + (d && !isNaN(d.getTime()) ? " " + d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) : "");
+  }
+  function pdfFileName(row, entry, by, when){
+    return row.fileBase + " - " + pdfPartFor(entry) + " - " + userSlug(by) + " - " + stampSeconds(when || new Date()) + ".pdf";
+  }
+  // Rework PDFs for one item file, newest first: [{name, handle, perRework, when}]
+  function listItemPdfs(projectHandle, row){
+    return pdfDir(projectHandle, row, false).then(function(d){ return listEntries(d); }, function(){ return []; }).then(function(es){
+      var prefix = row.fileBase + " - ";
+      var out = [];
+      es.forEach(function(e){
+        if (e.kind !== "file" || !/\.pdf$/i.test(e.name)) return;
+        if (e.name === row.fileBase + ".pdf") out.push({ name: e.name, handle: e, perRework: false, when: "" });
+        else if (e.name.indexOf(prefix) === 0){
+          var m = e.name.match(/(\d{4}-\d\d-\d\d \d\d-\d\d-\d\d)\.pdf$/i);
+          out.push({ name: e.name, handle: e, perRework: true, when: m ? m[1] : "" });
+        }
+      });
+      out.sort(function(a, b){
+        if (a.perRework !== b.perRework) return a.perRework ? -1 : 1;
+        return String(b.when).localeCompare(String(a.when));
+      });
+      return out;
+    });
+  }
+  function imageFormat(dataUrl){ return /^data:image\/png/i.test(String(dataUrl || "")) ? "PNG" : "JPEG"; }
+  function fitInto(w, h, boxW, boxH){
+    w = w || 1; h = h || 1;
+    var s = Math.min(boxW / w, boxH / h);
+    return { w: w * s, h: h * s };
+  }
+  function imageSize(dataUrl){
+    return new Promise(function(resolve){
+      try{
+        var img = new Image();
+        img.onload = function(){ resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 }); };
+        img.onerror = function(){ resolve(null); };
+        img.src = dataUrl;
+      }catch(e){ resolve(null); }
+    });
+  }
+  // opts: { jsPDF, row, entry (full, with photos), events, project:{name,no,contractor},
+  //         companyLogo:{dataUrl,w,h}|null, appLogo:{dataUrl,w,h}|null, by, appName, when }
+  // Resolves a Blob.
+  function buildPdf(opts){
+    var entry = opts.entry, row = opts.row;
+    var photos = (Array.isArray(entry.photos) ? entry.photos : []).filter(function(p){ return p && p.dataUrl; }).map(function(p, i){
+      return { dataUrl: p.dataUrl, w: p.w, h: p.h, caption: "Photo " + (i + 1) + (p.addedAt || p.addedBy ? " — " + [fmtDate(p.addedAt, true), p.addedBy || ""].filter(Boolean).join(" — ") : "") };
+    });
+    var fd = fold(entry, opts.events).delivered;
+    var snapSrc = (entry.locationSnapshot && entry.locationSnapshot.dataUrl) ? entry.locationSnapshot : (fd && fd.snapshot) || null;
+    if (snapSrc){
+      var s = snapSrc;
+      photos.push({ dataUrl: s.dataUrl, w: s.w, h: s.h, caption: "Delivery location" + (s.capturedAt || s.capturedBy ? " — " + [fmtDate(s.capturedAt, true), s.capturedBy || ""].filter(Boolean).join(" — ") : "") });
+    }
+    // Photos saved without a size get measured first (keeps their shape).
+    return Promise.all(photos.map(function(p){
+      if (p.w > 0 && p.h > 0) return p;
+      return imageSize(p.dataUrl).then(function(sz){ if (sz){ p.w = sz.w; p.h = sz.h; } return p; });
+    })).then(function(){ return drawPdf(opts, photos); });
+  }
+  function drawPdf(opts, photos){
+    var entry = opts.entry, row = opts.row, when = opts.when || new Date();
+    var f = fold(entry, opts.events);
+    var doc = new opts.jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+    var W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    var M = 36, CW = W - M * 2;
+    var RED = [190, 30, 24], GREEN = [31, 120, 70];
+    var logoH = 0, cl = opts.companyLogo, al = opts.appLogo;
+    var clSize = null;
+    if (cl && cl.dataUrl && cl.w > 0 && cl.h > 0){ clSize = fitInto(cl.w, cl.h, 170, 70); logoH = clSize.h; }
+    if (al && al.dataUrl) logoH = Math.max(logoH, 44);
+    var y = M + logoH + (logoH ? 14 : 0);
+    function drawLogos(){
+      if (clSize){ try{ doc.addImage(cl.dataUrl, imageFormat(cl.dataUrl), M, M, clSize.w, clSize.h, undefined, "FAST"); }catch(e){} }
+      if (al && al.dataUrl){ try{ doc.addImage(al.dataUrl, imageFormat(al.dataUrl), W - M - 44, M, 44, 44, undefined, "FAST"); }catch(e){} }
+    }
+    drawLogos();
+    var done = f.isDone;
+    var tagText = f.closed ? "CLOSED OUT" : (STATES[f.status] || STATES.logged).pdf;
+    doc.setFont("helvetica", "bold").setFontSize(15);
+    doc.setTextColor.apply(doc, RED);
+    doc.text("JOINERY REWORK", M, y);
+    doc.setFontSize(8.5);
+    var tagW = doc.getTextWidth(tagText) + 14;
+    if (done){ doc.setFillColor(217, 242, 227); doc.setTextColor.apply(doc, GREEN); }
+    else if (f.status === "logged"){ doc.setFillColor(251, 221, 212); doc.setTextColor.apply(doc, RED); }
+    else if (f.status === "machined"){ doc.setFillColor(252, 238, 205); doc.setTextColor(140, 90, 0); }
+    else { doc.setFillColor(214, 230, 250); doc.setTextColor(25, 80, 150); }
+    doc.roundedRect(W - M - tagW, y - 11, tagW, 15, 3, 3, "F");
+    doc.text(tagText, W - M - tagW + 7, y);
+    doc.setTextColor(20);
+    y += 9;
+    doc.setDrawColor.apply(doc, RED); doc.setLineWidth(1.4); doc.line(M, y, W - M, y);
+    y += 17;
+    var proj = opts.project || {};
+    var fields = [
+      ["Project No.", proj.no || "—"], ["Project", proj.name || row.project || "—"],
+      ["Head Contractor / Builder", proj.contractor || "—"], ["Level", row.level || "—"],
+      ["Area / Room", row.room || "—"], ["Joinery No.", row.code || "—"],
+      ["Cabinet", entry.cabinetNumber || "—"], ["Logged", [fmtDate(entry.createdAt, true), entry.createdBy || ""].filter(Boolean).join(" — ") || "—"],
+      ["Current state", f.closed ? "Closed out" : stateLabel(f.status)], ["State set", [fmtDate(f.closed ? f.closed.at : f.statusAt, true), f.closed ? f.closed.by : f.statusBy].filter(Boolean).join(" — ") || "—"],
+      ["Delivered to site", f.delivered ? [f.delivered.date || fmtDate(f.delivered.at), f.delivered.by || ""].filter(Boolean).join(" — ") : "Not yet"], ["Photos", String(photos.filter(function(p){ return !/^Delivery location/.test(p.caption); }).length)]
+    ];
+    var colW = CW / 2;
+    fields.forEach(function(fl, i){
+      var fx = M + (i % 2) * colW, fy = y + Math.floor(i / 2) * 28;
+      doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(90);
+      doc.text(fl[0].toUpperCase(), fx, fy);
+      doc.setFont("helvetica", "bold").setFontSize(9.5).setTextColor(20);
+      doc.text(doc.splitTextToSize(String(fl[1]), colW - 10)[0] || "", fx, fy + 12);
+    });
+    y += Math.ceil(fields.length / 2) * 28 + 6;
+    doc.setDrawColor.apply(doc, RED); doc.setLineWidth(1.4); doc.line(M, y, W - M, y);
+    doc.setLineWidth(1);
+    y += 18;
+    var bottom = H - 34;
+    function newPage(){ doc.addPage(); drawLogos(); y = M + logoH + (logoH ? 14 : 0); }
+    function ensure(h){ if (y + h > bottom) newPage(); }
+    function heading(t){
+      ensure(30);
+      doc.setFont("helvetica", "bold").setFontSize(10).setTextColor.apply(doc, RED);
+      doc.text(t, M, y);
+      doc.setTextColor(20);
+      y += 12;
+    }
+    heading("REWORK");
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(20);
+    var textLines = doc.splitTextToSize(entry.text || "(no description)", CW);
+    textLines.forEach(function(l){ ensure(13); doc.text(l, M, y + 2); y += 13; });
+    y += 12;
+    heading("STATUS LOG");
+    var cols = [{ t: "Date & time", w: 96 }, { t: "Who", w: 92 }, { t: "What", w: CW - 96 - 92 - 90 }, { t: "App", w: 90 }];
+    function tableHead(){
+      doc.setFillColor(242, 242, 242); doc.rect(M, y - 9, CW, 14, "F");
+      doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(70);
+      var x = M + 4;
+      cols.forEach(function(c){ doc.text(c.t, x, y); x += c.w; });
+      y += 12;
+    }
+    tableHead();
+    var lines = logLines(entry, opts.events).slice().reverse(); // oldest first on paper
+    doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(20);
+    lines.forEach(function(l){
+      var what = doc.splitTextToSize(l.what || "", cols[2].w - 6);
+      var who = doc.splitTextToSize(l.by || "—", cols[1].w - 6);
+      var app = doc.splitTextToSize(String(l.app || "").replace(/^UTZLINE\s+/i, ""), cols[3].w - 6);
+      var n = Math.max(what.length, who.length, app.length, 1);
+      var h = n * 10.5 + 4;
+      if (y + h > bottom){ newPage(); tableHead(); doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(20); }
+      var x = M + 4;
+      doc.text(fmtDate(l.at, true) || "—", x, y); x += cols[0].w;
+      doc.text(who, x, y); x += cols[1].w;
+      if (l.kind === "delivered" || l.kind === "closed") doc.setTextColor.apply(doc, GREEN);
+      doc.text(what, x, y); x += cols[2].w;
+      doc.setTextColor(110);
+      doc.text(app, x, y);
+      doc.setTextColor(20);
+      y += h;
+      doc.setDrawColor(225); doc.setLineWidth(0.5); doc.line(M, y - 9, W - M, y - 9);
+    });
+    if (!lines.length){ doc.text("(nothing logged yet)", M + 4, y); y += 12; }
+
+    // Photos: a quarter of an A4 page each (2 across). They start on page 1
+    // straight under the log when a row fits there, and only run on to the
+    // next pages (4 per page) when they don't (Andrew: "rework pdf photo
+    // size is good right now, but only overflow to page 2,3,etc if they
+    // dont fit on page 1").
+    if (photos.length){
+      var PM = 24, GAP = 12, headH = 18, capH = 13, footH = 26;
+      var cellW = (W - PM * 2 - GAP) / 2;
+      var cellH = (H - PM - headH - footH - GAP) / 2;
+      var photoTitle = "PHOTOS — " + [row.code, entry.cabinetNumber ? "Cabinet " + entry.cabinetNumber : "", row.level, row.room].filter(Boolean).join(" · ");
+      var py = y + 14;
+      function photoPage(){
+        doc.addPage();
+        doc.setFont("helvetica", "bold").setFontSize(9.5).setTextColor.apply(doc, RED);
+        doc.text(photoTitle, PM, PM + 8);
+        doc.setTextColor(20);
+        py = PM + headH;
+      }
+      if (py + 16 + cellH > H - footH) photoPage();
+      else {
+        doc.setFont("helvetica", "bold").setFontSize(10).setTextColor.apply(doc, RED);
+        doc.text("PHOTOS", M, py);
+        doc.setTextColor(20);
+        py += 10;
+      }
+      for (var pi = 0; pi < photos.length; pi += 2){
+        if (py + cellH > H - footH) photoPage();
+        for (var col = 0; col < 2 && pi + col < photos.length; col++){
+          var ph = photos[pi + col];
+          var cx = PM + col * (cellW + GAP), cy = py;
+          var box = fitInto(ph.w, ph.h, cellW, cellH - capH);
+          var ox = cx + (cellW - box.w) / 2, oy = cy; // top of the cell, caption right under it
+          try{
+            doc.addImage(ph.dataUrl, imageFormat(ph.dataUrl), ox, oy, box.w, box.h, undefined, "FAST");
+            doc.setDrawColor(190).setLineWidth(0.6).rect(ox, oy, box.w, box.h);
+          }catch(e){
+            doc.setDrawColor(200).rect(cx, cy, cellW, cellH - capH);
+            doc.setFontSize(8).setTextColor(150).text("(photo couldn't be drawn)", cx + 8, cy + 16);
+          }
+          doc.setFont("helvetica", "normal").setFontSize(7.5).setTextColor(90);
+          doc.text(doc.splitTextToSize(ph.caption, cellW)[0] || "", cx + cellW / 2, oy + box.h + 10, { align: "center" });
+          doc.setTextColor(20);
+        }
+        py += cellH + GAP;
+      }
+    }
+
+    var total = doc.internal.getNumberOfPages();
+    var genLine = "Generated by " + (opts.appName || "UTZLINE") + " — " + (opts.by || "") + " — " + fmtDate(when.toISOString(), true);
+    for (var pg = 1; pg <= total; pg++){
+      doc.setPage(pg);
+      doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(140);
+      doc.text(genLine, M, H - 16);
+      doc.text("Page " + pg + " of " + total, W - M, H - 16, { align: "right" });
+    }
+    return doc.output("blob");
+  }
+  function savePdf(projectHandle, row, name, blob){
+    return pdfDir(projectHandle, row, true).then(function(d){ return writeVerified(d, name, blob); });
+  }
+
+  /* ------------------------------ UI: register + detail + item card ------------------------------ */
+  var CSS = [
+    ".urw-pill{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;}",
+    ".urw-pill.st-logged{background:rgba(255,93,93,.15);color:#ff8f8f;}",
+    ".urw-pill.st-machined{background:rgba(224,161,44,.18);color:#f0bf5a;}",
+    ".urw-pill.st-manufactured{background:rgba(57,135,229,.2);color:#8cbcf5;}",
+    ".urw-pill.st-delivered,.urw-pill.st-closed{background:rgba(51,196,106,.16);color:var(--ok,#33c46a);}",
+    ".urw-table td.urw-text{white-space:normal;min-width:180px;max-width:320px;}",
+    ".urw-table td.urw-latest{white-space:normal;min-width:160px;max-width:260px;color:var(--muted);font-size:12px;}",
+    ".urw-table tbody tr{cursor:pointer;}",
+    ".urw-table td.urw-acts{white-space:nowrap;}",
+    ".urw-table td.urw-acts .btn{margin-right:6px;}",
+    ".urw-done-note{font-size:12px;color:var(--muted);margin-right:4px;}",
+    ".urw-table tr.urw-delivered td{color:var(--ok,#33c46a);}",
+    ".urw-table tr.urw-delivered td:first-child{box-shadow:inset 3px 0 0 var(--ok,#33c46a);}",
+    ".urw-deliv-card{border-color:var(--ok,#33c46a)!important;}",
+    ".btn.secondary.urw-deliv-toggle{margin:16px 0 10px;color:var(--ok,#33c46a);border-color:var(--ok,#33c46a);}",
+    ".urw-meta{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin:0 0 12px;}",
+    ".urw-meta dt{color:var(--muted);} .urw-meta dd{margin:0;}",
+    ".urw-desc{font-size:14px;white-space:pre-wrap;margin:0 0 12px;}",
+    ".urw-detail.urw-is-done{border:1px solid var(--ok,#33c46a);}",
+    ".urw-detail.urw-is-done h2,.urw-detail.urw-is-done .urw-desc{color:var(--ok,#33c46a);}",
+    ".urw-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}",
+    ".urw-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;}",
+    ".urw-photo{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--panel2);cursor:zoom-in;padding:0;}",
+    ".urw-photo img{display:block;width:100%;height:110px;object-fit:cover;}",
+    ".urw-photo-cap{font-size:11px;color:var(--muted);padding:4px 6px;text-align:left;}",
+    ".urw-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}",
+    ".urw-comment{width:100%;min-height:64px;box-sizing:border-box;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:inherit;font-size:14px;margin-bottom:8px;}",
+    ".urw-log{list-style:none;margin:0;padding:0;}",
+    ".urw-log li{padding:8px 0;border-top:1px solid var(--border);font-size:13px;display:flex;gap:10px;flex-wrap:wrap;}",
+    ".urw-log li:first-child{border-top:none;}",
+    ".urw-log .urw-when{color:var(--muted);min-width:128px;}",
+    ".urw-log .urw-who{font-weight:600;min-width:90px;}",
+    ".urw-log .urw-what{flex:1 1 200px;}",
+    ".urw-log .urw-app{color:var(--muted2);font-size:11.5px;}",
+    ".urw-log li.k-delivered .urw-what,.urw-log li.k-closed .urw-what{color:var(--ok,#33c46a);font-weight:600;}",
+    ".urw-log li.k-comment .urw-what{font-style:italic;}",
+    ".urw-zoom{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:60;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:16px;}",
+    ".urw-zoom img{max-width:100%;max-height:calc(100% - 60px);object-fit:contain;}",
+    ".urw-item-row{padding:10px 0;border-top:1px solid var(--border);display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;}",
+    ".urw-item-row:first-child{border-top:none;}",
+    ".urw-item-row.urw-delivered{box-shadow:inset 3px 0 0 var(--ok,#33c46a);padding-left:10px;}",
+    ".urw-item-row.urw-delivered .urw-item-main{color:var(--ok,#33c46a);}",
+    ".urw-item-main{flex:1 1 260px;font-size:13px;}",
+    ".urw-item-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:600;}",
+    ".urw-item-sub{font-size:12px;color:var(--muted);margin-top:4px;}",
+    ".urw-strip{margin-bottom:14px;}",
+    ".urw-strip-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}",
+    ".urw-strip-head h2{margin:0;font-size:15px;}",
+    ".urw-strip-list{margin-top:8px;}",
+    ".urw-strip-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap;font-size:13px;}",
+    ".urw-strip-row:first-child{border-top:none;}",
+    ".urw-strip-row .urw-strip-text{flex:1 1 280px;}",
+    ".urw-muted{color:var(--muted);}",
+    ".urw-small{font-size:12px;}"
+  ].join("\n");
+  function injectCss(){
+    if (document.getElementById("urw-css")) return;
+    var st = document.createElement("style");
+    st.id = "urw-css";
+    st.textContent = CSS;
+    document.head.appendChild(st);
+  }
+  function pillHtml(f){
+    var key = f.closed ? "closed" : f.status;
+    var label = f.closed ? "Closed out" : stateLabel(f.status, true);
+    return "<span class=\"urw-pill st-" + key + "\">" + escapeHtml(label) + "</span>";
+  }
+  function rowKey(row){ return (row.project || "") + "\u0000" + (row.isFlat ? "F" : "L") + "\u0000" + (row.levelDir || "") + "\u0000" + (row.roomDir || "") + "\u0000" + row.fileName; }
+  function entryKey(row){ return rowKey(row) + "\u0000" + (row.entry.id || row.entry.createdAt || ""); }
+  function latestLine(row, events){
+    var l = logLines(row.entry, events)[0];
+    if (!l) return "";
+    return l.what + " — " + [l.by, fmtDate(l.at, true)].filter(Boolean).join(", ");
+  }
+  function dataUrlFromBlob(blob){
+    return new Promise(function(resolve, reject){
+      var r = new FileReader();
+      r.onload = function(){ resolve(r.result); };
+      r.onerror = function(){ reject(r.error); };
+      r.readAsDataURL(blob);
+    });
+  }
+  function downscaleToDataUrl(blob, maxDim){
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function(){
+        var s = Math.min(1, maxDim / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+        var c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(img.naturalWidth * s)); c.height = Math.max(1, Math.round(img.naturalHeight * s));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve({ dataUrl: c.toDataURL("image/png"), w: c.width, h: c.height });
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("image didn't load")); };
+      img.src = url;
+    });
+  }
+
+  /* cfg:
+       appName            "UTZLINE Scheduler"
+       registerEl         <section> the register renders into
+       detailEl           <section> the rework page renders into
+       show(name)         app shows "reworks" | "reworkDetail"
+       onRegisterBack()   the register's Back button
+       listProjects()     -> Promise<[project name]>
+       getProjectHandle(name) -> Promise<handle>
+       getRootHandle()    -> the Projects root (company logo)
+       getUser()          -> signed-in name or ""
+       confirmPin(name, why) -> Promise<bool>
+       toast(msg, ms)
+       loadJsPdf()        -> Promise<jsPDF constructor>
+       appLogoUrl         "./icons/icon-192.png"
+       isDesktop()        -> bool (print in place vs open the PDF)
+       action             { status, button, rowButton, doneNote, undoButton, doneToast, canApply(foldedStatus) }
+       afterRender()      optional, after the register table repaints (sticky scroll bar)
+  */
+  function create(cfg){
+    injectCss();
+    var st = {
+      rows: [], logs: {}, loadedProjects: {}, projectFilter: "", stateFilter: "", search: "", showDelivered: false,
+      sort: { col: "logged", desc: true }, loadSeq: 0, loading: false, detail: null, detailReturn: null, zoomEl: null,
+      listeners: []
+    };
+    function toast(m, ms){ if (cfg.toast) cfg.toast(m, ms); }
+    function notify(){ st.listeners.forEach(function(fn){ try{ fn(); }catch(e){ console.error(e); } }); }
+    function eventsOf(row){ return st.logs[rowKey(row)] || null; }
+    function foldRow(row){ return fold(row.entry, eventsOf(row) || []); }
+
+    /* ---- loading ---- */
+    function loadProject(name, seq){
+      return cfg.getProjectHandle(name).then(function(h){
+        return listProjectReworks(h, name).then(function(res){
+          if (seq !== st.loadSeq) return;
+          st.rows = st.rows.filter(function(r){ return r.project !== name; }).concat(res.rows.map(function(r){ r.projectHandle = h; return r; }));
+          st.loadedProjects[name] = { unreadable: res.unreadable, at: Date.now() };
+          return res.rows;
+        });
+      }).catch(function(err){
+        console.error("Reading reworks for " + name + " failed:", err);
+        if (seq === st.loadSeq) st.loadedProjects[name] = { unreadable: 1, failed: true, at: Date.now() };
+        return [];
+      });
+    }
+    function loadLogs(rows, seq){
+      var byFile = {};
+      rows.forEach(function(r){ byFile[rowKey(r)] = r; });
+      return runQueue(Object.keys(byFile).map(function(k){ return byFile[k]; }), function(r){
+        return readLog(r.projectHandle, r).then(function(evs){
+          if (seq !== st.loadSeq) return;
+          st.logs[rowKey(r)] = evs;
+          scheduleRender();
+        }, function(err){ console.error("Reading rework log failed:", err); });
+      }, 2);
+    }
+    var renderTimer = null;
+    function scheduleRender(){
+      if (renderTimer) return;
+      renderTimer = setTimeout(function(){ renderTimer = null; renderRegister(); notify(); }, 120);
+    }
+    // Loads every project (or one), painting as each lands.
+    function loadAll(onlyProject){
+      var seq = ++st.loadSeq;
+      st.loading = true;
+      renderRegister();
+      var names = onlyProject ? Promise.resolve([onlyProject]) : cfg.listProjects();
+      var p = names.then(function(list){
+        st.projectNames = onlyProject ? (st.projectNames || [onlyProject]) : list.slice();
+        if (!onlyProject) st.rows = st.rows.filter(function(r){ return list.indexOf(r.project) !== -1; });
+        renderRegister();
+        var p = Promise.resolve();
+        var logWork = [];
+        list.forEach(function(name){
+          p = p.then(function(){ return loadProject(name, seq); }).then(function(rows){
+            if (seq !== st.loadSeq) return;
+            renderRegister(); notify();
+            logWork.push(loadLogs(rows, seq));
+          });
+        });
+        return p.then(function(){ return Promise.all(logWork); });
+      }).then(function(){
+        if (seq !== st.loadSeq) return;
+        st.loading = false;
+        if (!onlyProject) st.allLoadedAt = Date.now();
+        renderRegister(); notify();
+      }, function(err){
+        console.error("Loading reworks failed:", err);
+        if (seq === st.loadSeq){ st.loading = false; renderRegister(); notify(); }
+      });
+      st.loadingP = p;
+      return p;
+    }
+
+    /* ---- register ---- */
+    function filteredRows(){
+      var q = st.search.trim().toLowerCase();
+      return st.rows.filter(function(r){
+        if (st.projectFilter && r.project !== st.projectFilter) return false;
+        if (q){
+          var hay = [r.project, r.level, r.room, r.code, r.entry.cabinetNumber, r.entry.text, r.entry.createdBy].join(" ").toLowerCase();
+          if (hay.indexOf(q) === -1) return false;
+        }
+        return true;
+      });
+    }
+    function sortRows(rows){
+      var col = st.sort.col, dir = st.sort.desc ? -1 : 1;
+      function val(r){
+        var f = foldRow(r);
+        switch (col){
+          case "project": return r.project; case "level": return r.level; case "room": return r.room; case "code": return r.code;
+          case "cabinet": return r.entry.cabinetNumber || ""; case "text": return r.entry.text || ""; case "photos": return r.entry.photoCount || 0;
+          case "state": return STATE_ORDER.indexOf(f.status);
+          case "latest": var l = logLines(r.entry, eventsOf(r) || [])[0]; return l ? l.at : "";
+          default: return r.entry.createdAt || "";
+        }
+      }
+      return rows.slice().sort(function(a, b){
+        var va = val(a), vb = val(b);
+        if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+        return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: "base" }) * dir;
+      });
+    }
+    // State and the action sit right after the item's identity, so on a
+    // tablet in portrait they're on screen without scrolling sideways.
+    var COLS = [["project", "Project"], ["level", "Level"], ["room", "Room"], ["code", "Joinery ID"], ["cabinet", "Cabinet"], ["state", "State"], ["", ""], ["text", "Rework"], ["photos", "Photos"], ["logged", "Logged"], ["latest", "Latest"]];
+    function theadHtml(){
+      return "<thead><tr>" + COLS.map(function(c){
+        if (!c[0]) return "<th></th>";
+        var cls = st.sort.col === c[0] ? (" class=\"sorted" + (st.sort.desc ? " desc" : "") + "\"") : "";
+        return "<th data-urw-col=\"" + c[0] + "\"" + cls + ">" + c[1] + "</th>";
+      }).join("") + "</tr></thead>";
+    }
+    function rowHtml(r, idx){
+      var f = foldRow(r);
+      var evs = eventsOf(r);
+      var e = r.entry;
+      var act = "";
+      if (!f.isDone && cfg.action){
+        if (cfg.action.canApply(f.status)) act = "<button type=\"button\" class=\"btn sm\" data-urw-act=\"" + idx + "\">" + escapeHtml(cfg.action.rowButton || cfg.action.button) + "</button>";
+      }
+      return "<tr data-urw-row=\"" + idx + "\" class=\"" + (f.isDone ? "urw-delivered" : "") + "\">" +
+        "<td>" + escapeHtml(r.project) + "</td><td>" + escapeHtml(r.level) + "</td><td>" + escapeHtml(r.room) + "</td>" +
+        "<td><b>" + escapeHtml(r.code) + "</b></td><td>" + escapeHtml(e.cabinetNumber || "—") + "</td>" +
+        "<td>" + pillHtml(f) + "</td>" +
+        "<td class=\"urw-acts\">" + act + "<button type=\"button\" class=\"btn secondary sm\" data-urw-open=\"" + idx + "\">Open</button></td>" +
+        "<td class=\"urw-text\">" + escapeHtml(e.text || "(no description)") + "</td>" +
+        "<td>" + (e.photoCount ? e.photoCount : "—") + "</td>" +
+        "<td>" + escapeHtml(fmtDate(e.createdAt, true)) + (e.createdBy ? "<div class=\"urw-small urw-muted\">" + escapeHtml(e.createdBy) + "</div>" : "") + "</td>" +
+        "<td class=\"urw-latest\">" + (evs ? escapeHtml(latestLine(r, evs)) : "…") + "</td></tr>";
+    }
+    var regRows = [];
+    function renderRegister(){
+      var el = cfg.registerEl;
+      if (!el) return;
+      if (!el.__urwBuilt){
+        el.__urwBuilt = true;
+        el.innerHTML =
+          "<div class=\"row backrow\"><button class=\"btn secondary sm\" data-urw=\"back\">&larr; Home</button><h1 style=\"margin:0;\">Rework register</h1></div>" +
+          "<div class=\"filters-bar\">" +
+            "<select data-urw=\"project\"><option value=\"\">All projects</option></select>" +
+            "<select data-urw=\"state\"><option value=\"\">All outstanding</option><option value=\"logged\">Logged</option><option value=\"machined\">Cut</option><option value=\"manufactured\">Ready to deliver</option></select>" +
+            "<input type=\"text\" data-urw=\"search\" placeholder=\"Search code, cabinet, room or text\">" +
+            "<button class=\"btn secondary sm\" data-urw=\"refresh\">Refresh</button>" +
+          "</div>" +
+          "<p class=\"table-count\" data-urw=\"count\"></p>" +
+          "<div class=\"card table-scroll\" data-urw=\"outCard\"><table class=\"sched-table urw-table\" data-urw=\"outTable\"></table>" +
+            "<div class=\"empty-note\" data-urw=\"outEmpty\" hidden>No outstanding reworks.</div></div>" +
+          "<button type=\"button\" class=\"btn secondary urw-deliv-toggle\" data-urw=\"delivToggle\">Delivered (0) ▸</button>" +
+          "<div class=\"card table-scroll urw-deliv-card\" data-urw=\"delivCard\" hidden><table class=\"sched-table urw-table\" data-urw=\"delivTable\"></table>" +
+            "<div class=\"empty-note\" data-urw=\"delivEmpty\" hidden>Nothing delivered yet.</div></div>";
+        el.querySelector("[data-urw=back]").addEventListener("click", function(){ if (cfg.onRegisterBack) cfg.onRegisterBack(); });
+        var sel = el.querySelector("[data-urw=project]");
+        sel.addEventListener("change", function(){ st.projectFilter = sel.value; renderRegister(); });
+        var sSel = el.querySelector("[data-urw=state]");
+        sSel.addEventListener("change", function(){ st.stateFilter = sSel.value; renderRegister(); });
+        var search = el.querySelector("[data-urw=search]");
+        search.addEventListener("input", function(){ st.search = search.value; renderRegister(); });
+        el.querySelector("[data-urw=refresh]").addEventListener("click", function(){ loadAll(); });
+        el.querySelector("[data-urw=delivToggle]").addEventListener("click", function(){ st.showDelivered = !st.showDelivered; renderRegister(); });
+        el.addEventListener("click", function(ev){
+          var t = ev.target;
+          var th = t.closest ? t.closest("th[data-urw-col]") : null;
+          if (th){
+            var c = th.getAttribute("data-urw-col");
+            if (st.sort.col === c) st.sort.desc = !st.sort.desc; else { st.sort.col = c; st.sort.desc = (c === "logged" || c === "latest"); }
+            renderRegister();
+            return;
+          }
+          var a = t.closest ? t.closest("[data-urw-act]") : null;
+          if (a){ ev.stopPropagation(); applyAction(regRows[+a.getAttribute("data-urw-act")]); return; }
+          var o = t.closest ? t.closest("[data-urw-open]") : null;
+          if (o){ openDetail(regRows[+o.getAttribute("data-urw-open")], "register"); return; }
+          var tr = t.closest ? t.closest("tr[data-urw-row]") : null;
+          if (tr) openDetail(regRows[+tr.getAttribute("data-urw-row")], "register");
+        });
+      }
+      var projSel = el.querySelector("[data-urw=project]");
+      var names = (st.projectNames || []).slice();
+      if (st.projectFilter && names.indexOf(st.projectFilter) === -1) names.push(st.projectFilter);
+      var want = "<option value=\"\">All projects</option>" + names.map(function(n){ return "<option value=\"" + escapeHtml(n) + "\">" + escapeHtml(n) + "</option>"; }).join("");
+      if (projSel.__last !== want){ projSel.innerHTML = want; projSel.__last = want; }
+      projSel.value = st.projectFilter || "";
+      el.querySelector("[data-urw=state]").value = st.stateFilter || "";
+      var rows = filteredRows();
+      var out = [], deliv = [];
+      rows.forEach(function(r){ (foldRow(r).isDone ? deliv : out).push(r); });
+      if (st.stateFilter) out = out.filter(function(r){ return foldRow(r).status === st.stateFilter; });
+      out = sortRows(out); deliv = sortRows(deliv);
+      regRows = out.concat(deliv);
+      var html = theadHtml() + "<tbody>" + out.map(function(r, i){ return rowHtml(r, i); }).join("") + "</tbody>";
+      el.querySelector("[data-urw=outTable]").innerHTML = html;
+      el.querySelector("[data-urw=outEmpty]").hidden = !!out.length || st.loading;
+      el.querySelector("[data-urw=delivTable]").innerHTML = theadHtml() + "<tbody>" + deliv.map(function(r, i){ return rowHtml(r, out.length + i); }).join("") + "</tbody>";
+      el.querySelector("[data-urw=delivEmpty]").hidden = !!deliv.length;
+      el.querySelector("[data-urw=delivCard]").hidden = !st.showDelivered;
+      el.querySelector("[data-urw=delivToggle]").textContent = "Delivered (" + deliv.length + ") " + (st.showDelivered ? "▾" : "▸");
+      var unreadable = 0;
+      Object.keys(st.loadedProjects).forEach(function(k){ if (!st.projectFilter || k === st.projectFilter) unreadable += st.loadedProjects[k].unreadable || 0; });
+      el.querySelector("[data-urw=count]").textContent =
+        (st.loading ? "Reading reworks… " : "") + out.length + " outstanding · " + deliv.length + " delivered" +
+        (unreadable ? " · " + unreadable + " file" + (unreadable === 1 ? "" : "s") + " couldn't be read (still syncing?) — Refresh in a moment" : "");
+      if (cfg.afterRender) cfg.afterRender();
+    }
+    function openRegister(projectName){
+      st.projectFilter = projectName || "";
+      cfg.show("reworks");
+      renderRegister();
+      return loadAll();
+    }
+
+    /* ---- actions ---- */
+    function freshFold(row){
+      return Promise.all([readFullEntry(row.projectHandle, row), readLog(row.projectHandle, row)]).then(function(res){
+        var full = res[0];
+        row.entry = slimEntry(full);
+        st.logs[rowKey(row)] = res[1];
+        return { full: full, f: fold(full, res[1]) };
+      });
+    }
+    function readErrMsg(err){
+      if (err && err.code === "gone") return "That rework isn't in the file any more (deleted in Install ITP?) — refresh the list.";
+      return "Couldn't read this rework just now (still syncing?) — nothing was changed. Try again in a moment.";
+    }
+    function afterChange(row){
+      renderRegister(); notify();
+      if (st.detail && entryKey(st.detail.row) === entryKey(row)) renderDetail();
+    }
+    function applyAction(row){
+      if (!row || !cfg.action) return Promise.resolve(false);
+      var user = cfg.getUser();
+      if (!user){ toast("Choose your name (and PIN) on the Home screen first — every rework change is logged against a name.", 4200); return Promise.resolve(false); }
+      return freshFold(row).then(function(res){
+        if (res.f.isDone){ toast("Already delivered — nothing to change."); afterChange(row); return false; }
+        if (!cfg.action.canApply(res.f.status)){
+          toast(res.f.status === cfg.action.status ? "Already marked: " + cfg.action.doneNote + "." : "It's already past that (" + stateLabel(res.f.status) + ").");
+          afterChange(row); return false;
+        }
+        return writeEvent(row.projectHandle, row, "state", { status: cfg.action.status }, user, cfg.appName).then(function(ev){
+          (st.logs[rowKey(row)] = st.logs[rowKey(row)] || []).push(ev);
+          toast(cfg.action.doneToast || "Saved.");
+          afterChange(row);
+          return true;
+        });
+      }, function(err){ toast(readErrMsg(err), 4200); return false; }).catch(function(err){
+        console.error("Rework state change failed:", err);
+        toast("Couldn't save that — try again.");
+        return false;
+      });
+    }
+    function undoAction(row){
+      if (!row || !cfg.action) return Promise.resolve(false);
+      var user = cfg.getUser();
+      if (!user){ toast("Choose your name (and PIN) on the Home screen first."); return Promise.resolve(false); }
+      return freshFold(row).then(function(res){
+        var f = res.f;
+        if (f.isDone || f.status !== cfg.action.status){ toast("Nothing to undo — it's " + stateLabel(f.status).toLowerCase() + " now."); afterChange(row); return false; }
+        return cfg.confirmPin(user, "to undo “" + cfg.action.doneNote + "” as “" + user + "”").then(function(ok){
+          if (!ok){ toast("Undo cancelled — nothing was changed."); return false; }
+          return writeEvent(row.projectHandle, row, "state", { status: f.previousStatus || "logged", undo: true }, user, cfg.appName).then(function(ev){
+            (st.logs[rowKey(row)] = st.logs[rowKey(row)] || []).push(ev);
+            toast("Undone — back to " + stateLabel(f.previousStatus || "logged").toLowerCase() + ".");
+            afterChange(row);
+            return true;
+          });
+        });
+      }, function(err){ toast(readErrMsg(err), 4200); return false; }).catch(function(err){
+        console.error("Rework undo failed:", err);
+        toast("Couldn't save that — try again.");
+        return false;
+      });
+    }
+    function addComment(row, text){
+      text = String(text || "").trim();
+      if (!text){ toast("Type a comment first (or tap a quick pick)."); return Promise.resolve(false); }
+      var user = cfg.getUser();
+      if (!user){ toast("Choose your name (and PIN) on the Home screen first — comments are logged against a name.", 4200); return Promise.resolve(false); }
+      return writeEvent(row.projectHandle, row, "comment", { text: text }, user, cfg.appName).then(function(ev){
+        (st.logs[rowKey(row)] = st.logs[rowKey(row)] || []).push(ev);
+        toast("Comment added.");
+        afterChange(row);
+        return true;
+      }).catch(function(err){
+        console.error("Adding rework comment failed:", err);
+        toast("Couldn't save the comment — try again.");
+        return false;
+      });
+    }
+
+    /* ---- PDF: print / share ---- */
+    var logoCache = { app: undefined };
+    function appLogo(){
+      if (logoCache.app !== undefined) return Promise.resolve(logoCache.app);
+      if (!cfg.appLogoUrl || typeof fetch !== "function") return Promise.resolve(null);
+      return fetch(cfg.appLogoUrl).then(function(r){ if (!r.ok) throw new Error("no logo"); return r.blob(); }).then(dataUrlFromBlob).then(function(u){
+        logoCache.app = { dataUrl: u, w: 1, h: 1 };
+        return logoCache.app;
+      }).catch(function(){ logoCache.app = null; return null; });
+    }
+    function companyLogo(){
+      var root = cfg.getRootHandle && cfg.getRootHandle();
+      if (!root) return Promise.resolve(null);
+      return root.getFileHandle("company-logo.png", { create: false }).then(function(fh){ return fh.getFile(); }).then(function(file){
+        if (!(file instanceof Blob)) return null;
+        return downscaleToDataUrl(file, 500);
+      }).catch(function(){ return null; });
+    }
+    function projectMeta(row){
+      return row.projectHandle.getFileHandle("project-meta.json", { create: false }).then(readJsonSoft).then(function(m){
+        return m ? { no: String(m.no || ""), name: String(m.name || ""), contractor: String(m.contractor || "") } : null;
+      }, function(){ return null; });
+    }
+    // Builds the PDF and saves a copy beside the item's other rework PDFs.
+    // Resolves { blob, name, saved }.
+    function makePdf(row){
+      var user = cfg.getUser() || "";
+      var when = new Date();
+      return Promise.all([cfg.loadJsPdf(), readFullEntry(row.projectHandle, row), readLog(row.projectHandle, row), projectMeta(row), companyLogo(), appLogo()]).then(function(res){
+        st.logs[rowKey(row)] = res[2];
+        return buildPdf({ jsPDF: res[0], row: row, entry: res[1], events: res[2], project: res[3] || { name: row.project }, companyLogo: res[4], appLogo: res[5], by: user, appName: cfg.appName, when: when });
+      }).then(function(blob){
+        var name = pdfFileName(row, row.entry, user || "Unnamed", when);
+        return savePdf(row.projectHandle, row, name, blob).then(function(){ return { blob: blob, name: name, saved: true }; }, function(err){
+          console.error("Saving the rework PDF failed:", err);
+          return { blob: blob, name: name, saved: false };
+        });
+      });
+    }
+    function pdfErr(err){
+      console.error("Rework PDF failed:", err);
+      if (err && (err.code === "gone" || err.code === "read_failed")) toast(readErrMsg(err), 4200);
+      else toast("Couldn't make the PDF — try again." + (err && /library/i.test(String(err.message)) ? " (The PDF library didn't load.)" : ""), 4200);
+    }
+    // Opens the PDF in the device's viewer. False when the browser blocked
+    // it (the tap was too long ago by the time the PDF was ready).
+    function openBlob(blob, name){
+      var url = URL.createObjectURL(blob);
+      var w = null;
+      try{ w = window.open(url, "_blank"); }catch(e){ w = null; }
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+      return !!w;
+    }
+    function downloadBlob(blob, name){
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+    }
+    // A made PDF the browser wouldn't open/share straight away (sharing
+    // needs a fresh tap): the rework page shows "PDF ready -- Open / Share"
+    // buttons for it.
+    function setReady(row, res){
+      if (st.detail && entryKey(st.detail.row) === entryKey(row)){
+        st.detail.ready = res;
+        renderDetail();
+      } else {
+        downloadBlob(res.blob, res.name);
+      }
+    }
+    function shareBlob(row, res){
+      var file = null;
+      try{ file = new File([res.blob], res.name, { type: "application/pdf" }); }catch(e){ file = null; }
+      var can = false;
+      try{ can = !!(file && navigator.canShare && navigator.canShare({ files: [file] })); }catch(e){ can = false; }
+      if (!can || !navigator.share) return Promise.resolve("unsupported");
+      return navigator.share({ files: [file], title: res.name, text: "Rework — " + [row.code, row.entry.cabinetNumber ? "Cabinet " + row.entry.cabinetNumber : "", row.project].filter(Boolean).join(" · ") }).then(function(){
+        return "shared";
+      }, function(err){
+        if (err && err.name === "AbortError") return "cancelled";
+        if (err && err.name === "NotAllowedError") return "blocked";
+        console.error("Share failed:", err);
+        return "failed";
+      });
+    }
+    function printRow(row){
+      toast("Making the PDF…", 8000);
+      return makePdf(row).then(function(res){
+        var savedNote = res.saved ? " A copy is saved in the project's rework PDFs." : " (Couldn't save a copy in the project folder.)";
+        if (cfg.isDesktop && cfg.isDesktop()){
+          var url = URL.createObjectURL(res.blob);
+          var fr = document.createElement("iframe");
+          fr.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;";
+          fr.src = url;
+          fr.onload = function(){
+            try{ fr.contentWindow.focus(); fr.contentWindow.print(); }
+            catch(e){ if (!openBlob(res.blob, res.name)) setReady(row, res); }
+            setTimeout(function(){ fr.remove(); URL.revokeObjectURL(url); }, 120000);
+          };
+          document.body.appendChild(fr);
+          toast("Printing “" + res.name + "”." + savedNote, 5000);
+        } else if (openBlob(res.blob, res.name)){
+          toast("Opened “" + res.name + "” — print it from there." + savedNote, 5000);
+        } else {
+          setReady(row, res);
+          toast("The PDF is ready — tap Open to print it." + savedNote, 5000);
+        }
+        return res;
+      }).catch(function(err){ pdfErr(err); return null; });
+    }
+    function shareRow(row){
+      toast("Making the PDF…", 8000);
+      return makePdf(row).then(function(res){
+        var savedNote = res.saved ? " A copy is saved in the project's rework PDFs." : "";
+        return shareBlob(row, res).then(function(outcome){
+          if (outcome === "shared") toast("Shared." + savedNote);
+          else if (outcome === "cancelled") toast("Share cancelled." + (res.saved ? " The PDF is still saved in the project's rework PDFs." : ""));
+          else if (outcome === "blocked"){ setReady(row, res); toast("The PDF is ready — tap Share again to send it.", 5000); }
+          else {
+            if (!openBlob(res.blob, res.name)) setReady(row, res);
+            toast("Sharing isn't available here — the PDF was opened instead." + savedNote, 5000);
+          }
+          return res;
+        });
+      }).catch(function(err){ pdfErr(err); return null; });
+    }
+
+    /* ---- detail page ---- */
+    function openDetail(row, returnTo){
+      if (!row) return;
+      closeZoom();
+      st.detail = { row: row, full: null, loading: true, error: "" };
+      st.detailReturn = returnTo || "register";
+      cfg.show("reworkDetail");
+      renderDetail();
+      var d = st.detail;
+      return Promise.all([readFullEntry(row.projectHandle, row), readLog(row.projectHandle, row)]).then(function(res){
+        if (st.detail !== d) return;
+        d.full = res[0];
+        row.entry = slimEntry(res[0]);
+        st.logs[rowKey(row)] = res[1];
+        d.loading = false;
+        renderDetail();
+        renderRegister();
+      }, function(err){
+        if (st.detail !== d) return;
+        d.loading = false;
+        d.error = readErrMsg(err);
+        renderDetail();
+      });
+    }
+    function closeDetail(){
+      closeZoom();
+      var ret = st.detailReturn;
+      if (st.detail){ st.detail.full = null; st.detail.ready = null; } // let the photos (and any made PDF) go
+      st.detail = null;
+      if (cfg.detailEl) cfg.detailEl.innerHTML = "";
+      if (typeof ret === "function") ret();
+      else { cfg.show("reworks"); renderRegister(); }
+    }
+    function renderDetail(){
+      var el = cfg.detailEl, d = st.detail;
+      if (!el || !d) return;
+      var row = d.row, e = d.full || row.entry, evs = eventsOf(row) || [];
+      var f = fold(e, evs);
+      var title = "Rework — " + [row.code, e.cabinetNumber ? "Cabinet " + e.cabinetNumber : ""].filter(Boolean).join(" · ");
+      var act = "";
+      if (cfg.action && !f.isDone){
+        if (cfg.action.canApply(f.status)) act += "<button type=\"button\" class=\"btn\" data-urw-d=\"act\">" + escapeHtml(cfg.action.button) + "</button>";
+        else if (f.status === cfg.action.status) act += "<span class=\"urw-done-note\">✓ " + escapeHtml(cfg.action.doneNote) + (f.statusBy ? " — " + escapeHtml(f.statusBy) : "") + (f.statusAt ? ", " + escapeHtml(fmtDate(f.statusAt, true)) : "") + "</span><button type=\"button\" class=\"btn secondary sm\" data-urw-d=\"undo\">" + escapeHtml(cfg.action.undoButton || "Undo") + "</button>";
+      }
+      var photos = (d.full && Array.isArray(d.full.photos)) ? d.full.photos.filter(function(p){ return p && p.dataUrl; }) : [];
+      var snap = d.full && d.full.locationSnapshot && d.full.locationSnapshot.dataUrl ? d.full.locationSnapshot : ((f.delivered && f.delivered.snapshot) || null);
+      var lines = logLines(e, evs);
+      el.innerHTML =
+        "<div class=\"row backrow\"><button class=\"btn secondary sm\" data-urw-d=\"back\">&larr; Back</button><h1 style=\"margin:0;\">" + escapeHtml(title) + "</h1></div>" +
+        (d.error ? "<div class=\"card\"><p class=\"sub\" style=\"margin:0;\">" + escapeHtml(d.error) + "</p></div>" : "") +
+        "<div class=\"card urw-detail" + (f.isDone ? " urw-is-done" : "") + "\">" +
+          "<dl class=\"urw-meta\">" +
+            "<dt>Project</dt><dd>" + escapeHtml(row.project) + "</dd>" +
+            "<dt>Level</dt><dd>" + escapeHtml(row.level || "—") + "</dd>" +
+            "<dt>Room</dt><dd>" + escapeHtml(row.room || "—") + "</dd>" +
+            "<dt>Joinery ID</dt><dd><b>" + escapeHtml(row.code) + "</b></dd>" +
+            "<dt>Cabinet</dt><dd>" + escapeHtml(e.cabinetNumber || "—") + "</dd>" +
+            "<dt>Logged</dt><dd>" + escapeHtml([fmtDate(e.createdAt, true), e.createdBy || ""].filter(Boolean).join(" — ") || "—") + "</dd>" +
+            "<dt>State</dt><dd>" + pillHtml(f) + (f.statusAt ? " <span class=\"urw-small urw-muted\">" + escapeHtml([f.statusBy, fmtDate(f.statusAt, true)].filter(Boolean).join(", ")) + "</span>" : "") + "</dd>" +
+            (f.delivered ? "<dt>Delivered</dt><dd>" + escapeHtml([f.delivered.date || fmtDate(f.delivered.at), f.delivered.by].filter(Boolean).join(" — ")) + "</dd>" : "") +
+          "</dl>" +
+          "<p class=\"urw-desc\">" + escapeHtml(e.text || "(no description)") + "</p>" +
+          "<div class=\"urw-actions\">" + act +
+            "<button type=\"button\" class=\"btn secondary\" data-urw-d=\"print\">Print</button>" +
+            "<button type=\"button\" class=\"btn secondary\" data-urw-d=\"share\">Share</button>" +
+          "</div>" +
+          (d.ready ? "<div class=\"urw-actions\" style=\"margin-top:10px;\"><span class=\"urw-small\">PDF ready: " + escapeHtml(d.ready.name) + "</span>" +
+            "<button type=\"button\" class=\"btn sm\" data-urw-d=\"readyOpen\">Open</button><button type=\"button\" class=\"btn sm\" data-urw-d=\"readyShare\">Share</button></div>" : "") +
+        "</div>" +
+        "<div class=\"card\"><h2 class=\"section-title\">Photos" + (photos.length ? " (" + photos.length + ")" : "") + "</h2>" +
+          (d.loading ? "<p class=\"sub\" style=\"margin:0;\">Loading…</p>" :
+            (photos.length || snap ? "<div class=\"urw-photos\">" + photos.map(function(p, i){
+              return "<button type=\"button\" class=\"urw-photo\" data-urw-photo=\"" + i + "\"><img alt=\"Rework photo " + (i + 1) + "\" src=\"" + p.dataUrl + "\"><div class=\"urw-photo-cap\">" + escapeHtml([fmtDate(p.addedAt, true), p.addedBy].filter(Boolean).join(" — ")) + "</div></button>";
+            }).join("") + (snap ? "<button type=\"button\" class=\"urw-photo\" data-urw-photo=\"snap\"><img alt=\"Delivery location\" src=\"" + snap.dataUrl + "\"><div class=\"urw-photo-cap\">Delivery location</div></button>" : "") + "</div>"
+            : "<p class=\"sub\" style=\"margin:0;\">No photos.</p>")) +
+        "</div>" +
+        "<div class=\"card\"><h2 class=\"section-title\">Add a comment</h2>" +
+          "<div class=\"urw-chips\">" + QUICK_COMMENTS.map(function(q){ return "<button type=\"button\" class=\"btn secondary sm\" data-urw-quick=\"" + escapeHtml(q) + "\">" + escapeHtml(q) + "</button>"; }).join("") + "</div>" +
+          "<textarea class=\"urw-comment\" data-urw-d=\"comment\" placeholder=\"e.g. Sent to saw\"></textarea>" +
+          "<button type=\"button\" class=\"btn\" data-urw-d=\"addComment\">Add comment</button>" +
+          "<p class=\"sub urw-small\" style=\"margin:8px 0 0;\">Logged with your name, the date and the time.</p>" +
+        "</div>" +
+        "<div class=\"card\"><h2 class=\"section-title\">Status log</h2>" +
+          (lines.length ? "<ul class=\"urw-log\">" + lines.map(function(l){
+            return "<li class=\"k-" + l.kind + "\"><span class=\"urw-when\">" + escapeHtml(fmtDate(l.at, true) || "—") + "</span><span class=\"urw-who\">" + escapeHtml(l.by || "—") + "</span><span class=\"urw-what\">" + escapeHtml(l.what) + "</span>" + (l.app ? "<span class=\"urw-app\">" + escapeHtml(l.app) + "</span>" : "") + "</li>";
+          }).join("") + "</ul>" : "<p class=\"sub\" style=\"margin:0;\">Nothing logged yet.</p>") +
+        "</div>";
+      el.querySelector("[data-urw-d=back]").addEventListener("click", closeDetail);
+      var ab = el.querySelector("[data-urw-d=act]");
+      if (ab) ab.addEventListener("click", function(){ ab.disabled = true; applyAction(row).then(function(){ ab.disabled = false; }); });
+      var ub = el.querySelector("[data-urw-d=undo]");
+      if (ub) ub.addEventListener("click", function(){ undoAction(row); });
+      var pb = el.querySelector("[data-urw-d=print]"), sb = el.querySelector("[data-urw-d=share]");
+      pb.addEventListener("click", function(){ pb.disabled = true; printRow(row).then(function(){ pb.disabled = false; }); });
+      sb.addEventListener("click", function(){ sb.disabled = true; shareRow(row).then(function(){ sb.disabled = false; }); });
+      var ro = el.querySelector("[data-urw-d=readyOpen]"), rs = el.querySelector("[data-urw-d=readyShare]");
+      if (ro) ro.addEventListener("click", function(){ if (!openBlob(d.ready.blob, d.ready.name)) downloadBlob(d.ready.blob, d.ready.name); });
+      if (rs) rs.addEventListener("click", function(){
+        var res = d.ready;
+        shareBlob(row, res).then(function(outcome){
+          if (outcome === "shared") toast("Shared.");
+          else if (outcome === "cancelled") toast("Share cancelled.");
+          else if (outcome === "unsupported" || outcome === "failed") downloadBlob(res.blob, res.name);
+        });
+      });
+      var ta = el.querySelector("[data-urw-d=comment]");
+      Array.prototype.forEach.call(el.querySelectorAll("[data-urw-quick]"), function(b){
+        b.addEventListener("click", function(){ ta.value = b.getAttribute("data-urw-quick"); ta.focus(); });
+      });
+      var cb = el.querySelector("[data-urw-d=addComment]");
+      cb.addEventListener("click", function(){
+        cb.disabled = true;
+        addComment(row, ta.value).then(function(ok){ cb.disabled = false; if (ok && st.detail) renderDetail(); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll("[data-urw-photo]"), function(b){
+        b.addEventListener("click", function(){
+          var k = b.getAttribute("data-urw-photo");
+          var src = k === "snap" ? (snap && snap.dataUrl) : (photos[+k] && photos[+k].dataUrl);
+          if (src) openZoom(src);
+        });
+      });
+    }
+    function openZoom(src){
+      closeZoom();
+      var z = document.createElement("div");
+      z.className = "urw-zoom";
+      z.innerHTML = "<img alt=\"Photo\"><button type=\"button\" class=\"btn secondary\">Close</button>";
+      z.querySelector("img").src = src;
+      z.addEventListener("click", closeZoom);
+      document.body.appendChild(z);
+      st.zoomEl = z;
+    }
+    function closeZoom(){
+      if (!st.zoomEl) return false;
+      st.zoomEl.querySelector("img").removeAttribute("src");
+      st.zoomEl.remove();
+      st.zoomEl = null;
+      return true;
+    }
+
+    /* ---- Joinery Item page card ---- */
+    function renderItemCard(container, item, onOpenDetail){
+      container.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+      var token = {};
+      container.__urwToken = token;
+      return listItemReworks(item.projectHandle, item.project, item.level, item.room, item.code).then(function(res){
+        if (container.__urwToken !== token) return;
+        var rows = res.rows.map(function(r){ r.projectHandle = item.projectHandle; return r; });
+        // keep the register's copies in step
+        rows.forEach(function(r){
+          var k = entryKey(r);
+          var existing = null;
+          st.rows.forEach(function(x){ if (entryKey(x) === k) existing = x; });
+          if (existing){ existing.entry = r.entry; } else if (st.loadedProjects[item.project]) st.rows.push(r);
+        });
+        function paint(){
+          if (container.__urwToken !== token) return;
+          if (!rows.length){
+            container.innerHTML = "<p class=\"sub\" style=\"margin:0;\">" + (res.unreadable ? "Couldn't read this item's rework file just now (still syncing?) — try again in a moment." : "No rework logged for this item.") + "</p>";
+            return;
+          }
+          var ordered = rows.slice().sort(function(a, b){
+            var da = foldRow(a).isDone, db = foldRow(b).isDone;
+            if (da !== db) return da ? 1 : -1;
+            return String(b.entry.createdAt || "").localeCompare(String(a.entry.createdAt || ""));
+          });
+          container.innerHTML = "";
+          ordered.forEach(function(r){
+            var f = foldRow(r), evs = eventsOf(r);
+            var div = document.createElement("div");
+            div.className = "urw-item-row" + (f.isDone ? " urw-delivered" : "");
+            div.innerHTML = "<div class=\"urw-item-main\"><div class=\"urw-item-head\">" + escapeHtml(r.entry.cabinetNumber ? "Cabinet " + r.entry.cabinetNumber : "No cabinet number") + " " + pillHtml(f) + "</div>" +
+              (r.entry.text ? "<div style=\"margin-top:4px;white-space:pre-wrap;\">" + escapeHtml(r.entry.text) + "</div>" : "") +
+              "<div class=\"urw-item-sub\">Logged " + escapeHtml([fmtDate(r.entry.createdAt, true), r.entry.createdBy].filter(Boolean).join(" — ")) + (r.entry.photoCount ? " · " + r.entry.photoCount + " photo" + (r.entry.photoCount === 1 ? "" : "s") : "") + "</div>" +
+              (evs && evs.length ? "<div class=\"urw-item-sub\">Latest: " + escapeHtml(latestLine(r, evs)) + "</div>" : "") + "</div>";
+            var ob = document.createElement("button");
+            ob.type = "button"; ob.className = "btn secondary sm"; ob.textContent = "Open rework";
+            ob.addEventListener("click", function(){ openDetail(r, onOpenDetail); });
+            div.appendChild(ob);
+            container.appendChild(div);
+          });
+        }
+        paint();
+        var files = {};
+        rows.forEach(function(r){ files[rowKey(r)] = r; });
+        return runQueue(Object.keys(files).map(function(k){ return files[k]; }), function(r){
+          return readLog(item.projectHandle, r).then(function(evs){ st.logs[rowKey(r)] = evs; });
+        }, 1).then(paint).then(function(){
+          // Saved rework PDFs for this item (per-rework ones first, then the
+          // older all-in-one file Install ITP kept up to date).
+          var pdfLists = Object.keys(files).map(function(k){ return listItemPdfs(item.projectHandle, files[k]); });
+          return Promise.all(pdfLists).then(function(lists){
+            if (container.__urwToken !== token) return;
+            var all = [].concat.apply([], lists);
+            if (!all.length) return;
+            var box = document.createElement("div");
+            box.className = "urw-item-row";
+            box.style.display = "block";
+            box.innerHTML = "<div class=\"urw-item-head\">Rework PDFs</div>";
+            all.slice(0, 12).forEach(function(p){
+              var line = document.createElement("div");
+              line.className = "urw-strip-row";
+              line.innerHTML = "<span class=\"urw-strip-text urw-small\">" + escapeHtml(p.perRework ? p.name : p.name + " (older: every rework in one file)") + "</span>";
+              var b = document.createElement("button");
+              b.type = "button"; b.className = "btn secondary sm"; b.textContent = "Open";
+              b.addEventListener("click", function(){
+                p.handle.getFile().then(function(file){ if (!openBlob(file, p.name)) downloadBlob(file, p.name); }).catch(function(){ toast("Couldn't open that file — try again."); });
+              });
+              line.appendChild(b);
+              box.appendChild(line);
+            });
+            container.appendChild(box);
+          });
+        });
+      }).catch(function(err){
+        console.error("Reading item reworks failed:", err);
+        if (container.__urwToken === token) container.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load rework tracking.</p>";
+      });
+    }
+
+    /* ---- compact strip (Machine Schedule: "Reworks to cut") ---- */
+    // filterFn(row, folded) picks the rows; projectName limits to one project.
+    function renderStrip(container, opts){
+      var rows = st.rows.filter(function(r){
+        if (opts.project && r.project !== opts.project) return false;
+        var f = foldRow(r);
+        return !f.isDone && opts.filter(f.status);
+      }).sort(function(a, b){ return String(a.entry.createdAt || "").localeCompare(String(b.entry.createdAt || "")); });
+      var loading = st.loading && !rows.length;
+      container.hidden = !rows.length && !loading;
+      if (container.hidden){ container.innerHTML = ""; return; }
+      var collapsed = !!container.__urwCollapsed;
+      container.innerHTML = "<div class=\"urw-strip-head\"><h2>" + escapeHtml(opts.title) + " (" + rows.length + ")</h2><div class=\"row\">" +
+        "<button type=\"button\" class=\"btn secondary sm\" data-urw-s=\"all\">Rework register</button>" +
+        "<button type=\"button\" class=\"btn secondary sm\" data-urw-s=\"toggle\">" + (collapsed ? "Show" : "Hide") + "</button></div></div>" +
+        (collapsed ? "" : "<div class=\"urw-strip-list\">" + (loading ? "<p class=\"sub\" style=\"margin:0;\">Reading reworks…</p>" : "") + "</div>");
+      container.querySelector("[data-urw-s=toggle]").addEventListener("click", function(){ container.__urwCollapsed = !collapsed; renderStrip(container, opts); });
+      container.querySelector("[data-urw-s=all]").addEventListener("click", function(){ if (opts.onOpenRegister) opts.onOpenRegister(); });
+      if (collapsed) return;
+      var list = container.querySelector(".urw-strip-list");
+      rows.forEach(function(r){
+        var f = foldRow(r);
+        var line = document.createElement("div");
+        line.className = "urw-strip-row";
+        line.innerHTML = "<span class=\"urw-strip-text\"><b>" + escapeHtml(r.code) + "</b>" + (r.entry.cabinetNumber ? " · Cab " + escapeHtml(r.entry.cabinetNumber) : "") +
+          " <span class=\"urw-muted\">" + escapeHtml([opts.project ? "" : r.project, r.level, r.room].filter(Boolean).join(" · ")) + "</span> " + pillHtml(f) +
+          (r.entry.text ? "<div class=\"urw-small\" style=\"margin-top:3px;white-space:pre-wrap;\">" + escapeHtml(r.entry.text) + "</div>" : "") +
+          "<div class=\"urw-small urw-muted\">Logged " + escapeHtml([fmtDate(r.entry.createdAt, true), r.entry.createdBy].filter(Boolean).join(" — ")) + "</div></span>";
+        var acts = document.createElement("span");
+        acts.className = "row";
+        if (cfg.action && cfg.action.canApply(f.status)){
+          var cb = document.createElement("button");
+          cb.type = "button"; cb.className = "btn sm"; cb.textContent = cfg.action.rowButton || cfg.action.button;
+          cb.addEventListener("click", function(){ cb.disabled = true; applyAction(r).then(function(){ cb.disabled = false; }); });
+          acts.appendChild(cb);
+        }
+        var ob = document.createElement("button");
+        ob.type = "button"; ob.className = "btn secondary sm"; ob.textContent = "Open";
+        ob.addEventListener("click", function(){ openDetail(r, opts.onDetailBack); });
+        acts.appendChild(ob);
+        line.appendChild(acts);
+        list.appendChild(line);
+      });
+    }
+    // Reads reworks in the background unless they were read in the last
+    // maxAgeMs -- every project, or just onlyProject (a project's own
+    // schedule never reads the other projects' reworks).
+    function ensureLoaded(maxAgeMs, onlyProject){
+      maxAgeMs = maxAgeMs || 180000;
+      if (st.loading) return st.loadingP || Promise.resolve();
+      if (onlyProject){
+        var lp = st.loadedProjects[onlyProject];
+        if (lp && !lp.failed && Date.now() - lp.at < maxAgeMs) return Promise.resolve();
+        var seq = st.loadSeq;
+        return loadProject(onlyProject, seq).then(function(rows){
+          if (seq !== st.loadSeq) return;
+          renderRegister(); notify();
+          return loadLogs(rows, seq);
+        }).then(function(){ notify(); });
+      }
+      var names = Object.keys(st.loadedProjects);
+      var fresh = st.allLoadedAt && Date.now() - st.allLoadedAt < maxAgeMs && names.every(function(n){ return !st.loadedProjects[n].failed; });
+      if (fresh) return Promise.resolve();
+      return loadAll();
+    }
+
+    return {
+      openRegister: openRegister, refresh: function(){ return loadAll(); }, ensureLoaded: ensureLoaded,
+      openDetail: openDetail, closeDetail: closeDetail, closeOverlay: closeZoom,
+      renderItemCard: renderItemCard, renderStrip: renderStrip,
+      applyAction: applyAction, undoAction: undoAction, addComment: addComment, printRow: printRow, shareRow: shareRow, makePdf: makePdf,
+      onChange: function(fn){ st.listeners.push(fn); },
+      state: function(){ return st; },
+      rows: function(){ return st.rows; }, foldRow: foldRow, eventsOf: eventsOf,
+      isDetailOpen: function(){ return !!st.detail; }
+    };
+  }
+
+  global.UtzRework = {
+    VERSION: 1, STATES: STATES, STATE_ORDER: STATE_ORDER, QUICK_COMMENTS: QUICK_COMMENTS,
+    stamp: stamp, userSlug: userSlug, sanitizeFileBase: sanitizeFileBase, fmtDate: fmtDate,
+    listProjectReworks: listProjectReworks, listItemReworks: listItemReworks, readFullEntry: readFullEntry, rowFor: rowFor, slimEntry: slimEntry,
+    readLog: readLog, writeEvent: writeEvent, logDir: logDir, fold: fold, logLines: logLines, stateLabel: stateLabel,
+    pdfFileName: pdfFileName, buildPdf: buildPdf, savePdf: savePdf, listItemPdfs: listItemPdfs, pdfDir: pdfDir,
+    create: create
+  };
+})(window);
+/* ==== UTZLINE shared rework module v1 (END) ==== */
+</script>
+<!-- UTZLINE-REWORK-MODULE END -->
 <script>
 (function(){
   "use strict";
@@ -4213,20 +5699,6 @@
       return { pin: pin, snapshot: snapshot };
     });
   }
-  // Install ITP's own rework-tracker file for this item (read-only -- see
-  // this card's own top-of-HTML comment). Lives in the exact same flat
-  // "Project Saves/UTZLINE ITP/<branch>/<Level> - <Room> - <Code>.json"
-  // shape as every other ITP checklist here, just under its own
-  // "Install ITP Rework" branch -- Install ITP deliberately kept rework
-  // data in its own file, separate from the checklist's own JSON, so this
-  // reader (and any future one) never needs to understand the checklist's
-  // 16-row/signoff/photos shape at all. Resolves to an empty array (not a
-  // rejection) for "no rework logged yet", the normal, common case.
-  function readInstallReworkForItem(projectHandle, item){
-    return readItpChecklistRaw(projectHandle, "Install ITP Rework", item).then(function(data){
-      return (data && Array.isArray(data.reworks)) ? data.reworks : [];
-    });
-  }
   // Sub Orders summary (2026-09-27; mark-as-received added v29, same day)
   // -- see this card's own top-of-HTML comment. UTZLINE Sub Orders owns
   // this data: it is the only app that attaches, unattaches or edits an
@@ -4396,29 +5868,6 @@
       var prefix = itpPdfBaseNameForItem(item) + "_";
       return listFilesInDir(dirH, function(name){ return name.indexOf(prefix) === 0 && /\.pdf$/i.test(name); });
     }, function(){ return []; });
-  }
-  // Install ITP's own cumulative rework PDF for this item (2026-09-24) --
-  // Andrew, verbatim: "the rework section can open the rework pdf to view.
-  // any rework images for this joinery item get attached to that rework
-  // pdf." Unlike the checklist's own ITP PDFs (a new timestamped file per
-  // signed-off state, so listItpPdfsForItem above lists every one that
-  // matches), Install ITP keeps exactly ONE always-current rework PDF per
-  // item -- same fixed, un-timestamped filename as the rework JSON itself,
-  // just under "Install ITP Rework"'s own sibling PDF Files/ branch
-  // (getReworkPdfDirFlat's own comment in redline-itp-pwa) -- so this is a
-  // single getFileHandle lookup, not a listing. Resolves to null (not a
-  // rejection) both when no rework has ever been logged for this item and
-  // when every logged entry has since been deleted (Install ITP removes
-  // the PDF the moment the last entry goes), so the caller can tell "no
-  // rework PDF to show" apart from "couldn't read it" the same way every
-  // other reader here does.
-  function readReworkPdfForItem(projectHandle, item){
-    return projectDir(projectHandle, ["PDF Files", "UTZLINE ITP", "Install ITP Rework"], false).then(function(dirH){
-      var fileName = itpPdfBaseNameForItem(item) + ".pdf";
-      return dirH.getFileHandle(fileName, { create: false }).then(function(fh){
-        return { fileName: fileName, handle: fh };
-      });
-    }, function(){ return null; }).catch(function(){ return null; });
   }
 
   /* ============================== Solid Surface Completion (READ-ONLY, 2026-09-26) ==============================
@@ -5447,21 +6896,26 @@
   backFromRegisterBtn.addEventListener("click", function(){ showScreen("levels"); });
 
   /* ============================== Rework Register ==============================
-     Andrew, verbatim: "Projects to have a rework section per project where
-     you can press a button and see a status list of all reworks for that
-     project. Sortable, filterable and clicking on a rework takes you to
-     that rework. Also need the ability to print the rework page or email /
-     share it." Same filter/sort/table conventions as the Joinery Register
-     just above, but flattened one level further: registerAllItems is one
-     row per JOINERY ITEM, while reworkRegisterAllRows is one row per REWORK
-     ENTRY (an item with 3 reworks logged contributes 3 rows here), since
-     "clicking on a rework" means each entry needs its own row and its own
-     click target -- not the item that owns it. Assembled by reading every
-     item's own rework file (readInstallReworkForItem, already used by the
-     Joinery Item page's own Rework card) and flattening the results, rather
-     than any new folder-walking code. */
+     Andrew, verbatim (2026-09-23): "Projects to have a rework section per
+     project where you can press a button and see a status list of all
+     reworks for that project. Sortable, filterable and clicking on a rework
+     takes you to that rework. Also need the ability to print the rework
+     page or email / share it." One row per rework ENTRY.
+     v33 (2026-09-28, the rework round): rebuilt on the shared rework module
+     (window.UtzRework -- claude/utzline-rework-event-standard-v1.md). Rows
+     come from UtzRework.listProjectReworks (flat + legacy, no photo pixels
+     kept -- 4 GB tablets), each item file's event log is read in the
+     background, and every row's state is FOLDED from the file + its events:
+     Logged / Cut (Machine Schedule) / Ready to deliver (Scheduler) /
+     Delivered to site (Delivery ITP) / Closed out (Install ITP), plus
+     comments from any app. Delivered and closed-out reworks sit in a green
+     "Delivered (N)" section at the bottom. Tapping a rework opens the
+     module's rework page (log, photos, comments, Print / Share its own
+     stamped PDF); the "Item" button opens the joinery item page. This app
+     still never rewrites Install ITP's rework file -- a comment or a PDF is
+     a new file of its own. */
   var reworkRegisterLevelFilter = document.getElementById("reworkRegisterLevelFilter");
-  var reworkRegisterReceivedFilter = document.getElementById("reworkRegisterReceivedFilter");
+  var reworkRegisterReceivedFilter = document.getElementById("reworkRegisterReceivedFilter"); // (v33) the State filter; id kept
   var reworkRegisterSearchInput = document.getElementById("reworkRegisterSearchInput");
   var reworkRegisterTable = document.getElementById("reworkRegisterTable");
   var reworkRegisterTableBody = document.getElementById("reworkRegisterTableBody");
@@ -5473,42 +6927,109 @@
   var backFromReworkRegisterBtn = document.getElementById("backFromReworkRegisterBtn");
   var reworkRegisterPrintBtn = document.getElementById("reworkRegisterPrintBtn");
   var reworkRegisterShareBtn = document.getElementById("reworkRegisterShareBtn");
+  var reworkRegisterRefreshBtn = document.getElementById("reworkRegisterRefreshBtn");
+  var reworkRegisterDelivToggle = document.getElementById("reworkRegisterDelivToggle");
+  var reworkRegisterDelivCard = document.getElementById("reworkRegisterDelivCard");
+  var reworkRegisterDelivTable = document.getElementById("reworkRegisterDelivTable");
+  var reworkRegisterDelivBody = document.getElementById("reworkRegisterDelivBody");
+  var reworkRegisterDelivEmpty = document.getElementById("reworkRegisterDelivEmpty");
 
-  var reworkRegisterAllRows = []; // [{ item, entry }], newest-created first within each item, items in joinery-items.json order
-  // Most-recently-logged first by default -- unlike the Joinery Register
-  // (which defaults to Level, since that's how items are naturally toured),
-  // a rework register is naturally read "what's newest," same as Install
-  // ITP's own rework history list on the joinery marker itself.
+  // Most-recently-logged first by default -- a rework register is read
+  // "what's newest", same as Install ITP's own rework list.
   var reworkRegisterSort = { col: "createdAt", dir: "desc" };
+  var reworkRegisterShowDelivered = false;
+  var reworkRegisterLoading = false;
+  var reworkRegisterRendered = { out: [], deliv: [] }; // the rows on screen, in order (Print / Share use them)
 
-  function reworkRegisterMatchesFilters(row){
-    if (reworkRegisterLevelFilter.value && row.item.level !== reworkRegisterLevelFilter.value) return false;
-    var recv = reworkRegisterReceivedFilter.value;
-    if (recv === "yes" && !row.entry.received) return false;
-    if (recv === "no" && row.entry.received) return false;
+  var printDesktopForTest = null;
+  // Desktop prints the rework PDF in place; a tablet/phone opens it in the
+  // device's PDF viewer instead (same test as the Scheduler's).
+  function isDesktopForPrint(){
+    if (printDesktopForTest !== null) return printDesktopForTest;
+    var ua = navigator.userAgent || "";
+    if (navigator.userAgentData && navigator.userAgentData.mobile) return false;
+    if (/Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i.test(ua)) return false;
+    if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return false;
+    return true;
+  }
+  var reworkUi = (window.UtzRework && typeof window.UtzRework.create === "function") ? window.UtzRework.create({
+    appName: "UTZLINE Projects",
+    registerEl: null, // this app keeps its own per-project register (level filter, register PDF) -- below
+    detailEl: document.getElementById("screenReworkDetail"),
+    show: function(name){
+      if (name === "reworkDetail") showScreen("reworkDetail");
+      else { showScreen("reworkRegister"); renderReworkRegisterTable(); }
+    },
+    listProjects: function(){ return Promise.resolve(activeProjectName ? [activeProjectName] : []); },
+    getProjectHandle: function(name){
+      return (activeProjectHandle && name === activeProjectName) ? Promise.resolve(activeProjectHandle) : Promise.reject(new Error("That project isn't open."));
+    },
+    getRootHandle: function(){ return projectsRootHandle; },
+    getUser: function(){ return deviceUserName; },
+    confirmPin: function(){ return Promise.resolve(false); }, // no state buttons in Projects, so nothing to undo
+    toast: function(m, ms){ showToast(m, ms); },
+    loadJsPdf: function(){
+      return (window.jspdf && window.jspdf.jsPDF) ? Promise.resolve(window.jspdf.jsPDF) : Promise.reject(new Error("The PDF library didn't load."));
+    },
+    appLogoUrl: "./icons/icon-192.png",
+    isDesktop: isDesktopForPrint
+  }) : null;
+
+  function reworkRowsForProject(){
+    if (!reworkUi) return [];
+    return reworkUi.rows().filter(function(r){ return r.project === activeProjectName; });
+  }
+  function reworkFoldOf(r){ return reworkUi.foldRow(r); }
+  function reworkLatestOf(r){
+    var evs = reworkUi.eventsOf(r);
+    if (!evs) return null; // log not read yet
+    return window.UtzRework.logLines(r.entry, evs)[0] || null;
+  }
+  function reworkPillHtml(f){
+    var key = f.closed ? "closed" : f.status;
+    var label = f.closed ? "Closed out" : window.UtzRework.stateLabel(f.status, true);
+    return "<span class=\"urw-pill st-" + key + "\">" + escapeHtml(label) + "</span>";
+  }
+  var REWORK_STATE_RANK = { logged: 0, machined: 1, manufactured: 2, delivered: 3, closed: 4 };
+  function reworkDeliveredText(f){
+    if (!f.delivered) return "Not yet";
+    return [f.delivered.date || formatHistoryDate(f.delivered.at), f.delivered.by].filter(Boolean).join(" — ");
+  }
+
+  function reworkRegisterMatchesFilters(row, f){
+    if (reworkRegisterLevelFilter.value && row.level !== reworkRegisterLevelFilter.value) return false;
+    var s = reworkRegisterReceivedFilter.value;
+    if (s === "yes" && !f.isDone) return false;
+    if (s === "no" && f.isDone) return false;
+    if ((s === "logged" || s === "machined" || s === "manufactured") && (f.isDone || f.status !== s)) return false;
     var q = reworkRegisterSearchInput.value.trim().toLowerCase();
     if (q){
-      var hay = ((row.item.joineryId || "") + " " + (row.item.room || "") + " " + (row.entry.cabinetNumber || "") + " " + (row.entry.text || "") + " " + (row.entry.createdBy || "")).toLowerCase();
+      var e = row.entry;
+      var hay = [row.code, row.level, row.room, e.cabinetNumber, e.text, e.createdBy].join(" ").toLowerCase();
       if (hay.indexOf(q) === -1) return false;
     }
     return true;
   }
+  function reworkRegisterSortValue(r, col){
+    var e = r.entry, f;
+    switch (col){
+      case "level": return String(r.level || "");
+      case "room": return String(r.room || "");
+      case "joineryId": return String(r.code || "");
+      case "cabinetNumber": return String(e.cabinetNumber || "");
+      case "text": return String(e.text || "");
+      case "state": f = reworkFoldOf(r); return f.closed ? 4 : (REWORK_STATE_RANK[f.status] || 0);
+      case "received": f = reworkFoldOf(r); return f.delivered ? String(f.delivered.at || f.delivered.date || "") : "";
+      case "closedAt": f = reworkFoldOf(r); return f.closed ? String(f.closed.at || "") : "";
+      case "latest": var l = reworkLatestOf(r); return l ? String(l.at || "") : "";
+      default: return String(e.createdAt || "");
+    }
+  }
   function reworkRegisterCompare(a, b){
     var col = reworkRegisterSort.col;
-    var cmp;
-    if (col === "createdAt"){
-      cmp = new Date(a.entry.createdAt || 0).getTime() - new Date(b.entry.createdAt || 0).getTime();
-    } else if (col === "received"){
-      cmp = (a.entry.received ? 1 : 0) - (b.entry.received ? 1 : 0);
-    } else if (col === "closedAt"){
-      cmp = new Date(a.entry.closedAt || 0).getTime() - new Date(b.entry.closedAt || 0).getTime();
-    } else if (col === "level" || col === "room" || col === "joineryId"){
-      var av = String(a.item[col] || "").toLowerCase(), bv = String(b.item[col] || "").toLowerCase();
-      cmp = av < bv ? -1 : (av > bv ? 1 : 0);
-    } else { // cabinetNumber, text
-      var av2 = String(a.entry[col] || "").toLowerCase(), bv2 = String(b.entry[col] || "").toLowerCase();
-      cmp = av2 < bv2 ? -1 : (av2 > bv2 ? 1 : 0);
-    }
+    var va = reworkRegisterSortValue(a, col), vb = reworkRegisterSortValue(b, col);
+    var cmp = (typeof va === "number" && typeof vb === "number") ? va - vb
+      : String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: "base" });
     return reworkRegisterSort.dir === "desc" ? -cmp : cmp;
   }
   function reworkRegisterRowDetailText(entry){
@@ -5516,112 +7037,166 @@
     if (!t) return "—";
     return t.length > 90 ? (t.slice(0, 87) + "…") : t;
   }
+  // { out, deliv, all }: the filtered rows, outstanding and delivered, sorted.
   function currentReworkRegisterRows(){
-    var filtered = reworkRegisterAllRows.filter(reworkRegisterMatchesFilters);
-    filtered.sort(reworkRegisterCompare);
-    return filtered;
+    var all = reworkRowsForProject();
+    var out = [], deliv = [];
+    all.forEach(function(r){
+      var f = reworkFoldOf(r);
+      if (!reworkRegisterMatchesFilters(r, f)) return;
+      (f.isDone ? deliv : out).push(r);
+    });
+    out.sort(reworkRegisterCompare);
+    deliv.sort(reworkRegisterCompare);
+    return { out: out, deliv: deliv, all: all };
+  }
+  // State and the buttons sit right after the item's identity, so on a
+  // tablet in portrait they're on screen without scrolling sideways.
+  var REWORK_REGISTER_COLS = [
+    ["level", "Level"], ["room", "Room"], ["joineryId", "Joinery ID"], ["cabinetNumber", "Cabinet #"], ["state", "State"], ["", ""],
+    ["text", "Detail"], ["createdAt", "Logged"], ["received", "Delivered to site"], ["closedAt", "Signed off date"], ["latest", "Latest"]
+  ];
+  function reworkRegisterTheadHtml(){
+    return "<tr>" + REWORK_REGISTER_COLS.map(function(c){
+      if (!c[0]) return "<th></th>";
+      var cls = reworkRegisterSort.col === c[0] ? (" class=\"sorted" + (reworkRegisterSort.dir === "desc" ? " desc" : "") + "\"") : "";
+      return "<th data-col=\"" + c[0] + "\"" + cls + ">" + c[1] + "</th>";
+    }).join("") + "</tr>";
+  }
+  function reworkRegisterRowHtml(r, idx){
+    var e = r.entry, f = reworkFoldOf(r), l = reworkLatestOf(r);
+    return "<tr data-rr-row=\"" + idx + "\" class=\"" + (f.isDone ? "urw-delivered" : "") + "\">" +
+      "<td class=\"rr-nw\">" + escapeHtml(r.level || "—") + "</td>" +
+      "<td class=\"rr-nw\">" + escapeHtml(r.room || "—") + "</td>" +
+      "<td class=\"rr-nw\"><b>" + escapeHtml(r.code || "—") + "</b></td>" +
+      "<td class=\"rr-nw\">" + escapeHtml(e.cabinetNumber || "—") + "</td>" +
+      "<td>" + reworkPillHtml(f) + "</td>" +
+      "<td class=\"rr-acts\"><button type=\"button\" class=\"btn secondary sm\" data-rr-open=\"" + idx + "\">Open</button>" +
+        "<button type=\"button\" class=\"btn secondary sm\" data-rr-item=\"" + idx + "\">Item</button></td>" +
+      "<td class=\"urw-text\">" + escapeHtml(reworkRegisterRowDetailText(e)) + "</td>" +
+      "<td>" + escapeHtml(formatHistoryDate(e.createdAt)) + (e.createdBy ? "<div class=\"urw-small urw-muted\">" + escapeHtml(e.createdBy) + "</div>" : "") + "</td>" +
+      "<td>" + (f.delivered ? escapeHtml(reworkDeliveredText(f)) : "<span class=\"muted-cell\">Not yet</span>") + "</td>" +
+      "<td>" + (f.closed ? "<span class=\"rr-signoff-date\">" + escapeHtml(formatHistoryDate(f.closed.at)) + "</span>" : "<span class=\"muted-cell\">—</span>") + "</td>" +
+      "<td class=\"rr-latest\">" + (l ? escapeHtml(l.what + " — " + [l.by, formatHistoryDate(l.at)].filter(Boolean).join(", ")) : "…") + "</td></tr>";
   }
   function renderReworkRegisterTable(){
-    var filtered = currentReworkRegisterRows();
-    reworkRegisterTableBody.innerHTML = "";
-    filtered.forEach(function(row){
-      var item = row.item, entry = row.entry;
-      // Colour scheme (2026-09-26) -- Andrew, verbatim: "delivered is blue,
-      // signed off is green, red is only for outstanding (not yet)."
-      // "Delivered to site" renames the old "Received" milestone (same
-      // underlying entry.received/receivedDate field -- the photo+pin-drop
-      // requirement and the Delivery-ITP-only capture flow are Delivery
-      // ITP's own build, still queued; this app only ever displays the
-      // result). "Signed off date" is entry.closedAt (Install ITP's own
-      // existing "Save & close out" milestone, Andrew's own name for it
-      // here on the Register) -- green once set, plain em-dash otherwise.
-      var receivedHtml = entry.received
-        ? "<span class=\"rr-status delivered\">Delivered to site" + (entry.receivedDate ? " (" + escapeHtml(entry.receivedDate) + ")" : "") + "</span>"
-        : "<span class=\"rr-status outstanding\">Not yet delivered</span>";
-      var signoffHtml = entry.closedAt
-        ? "<span class=\"rr-signoff-date\">" + escapeHtml(formatHistoryDate(entry.closedAt)) + "</span>"
-        : "<span class=\"muted-cell\">—</span>";
-      var tr = document.createElement("tr");
-      tr.innerHTML =
-        "<td>" + escapeHtml(item.level) + "</td>" +
-        "<td>" + escapeHtml(item.room) + "</td>" +
-        "<td>" + escapeHtml(item.joineryId) + "</td>" +
-        "<td>" + escapeHtml(entry.cabinetNumber || "—") + "</td>" +
-        "<td>" + escapeHtml(reworkRegisterRowDetailText(entry)) + "</td>" +
-        "<td>" + escapeHtml(formatHistoryDate(entry.createdAt)) + "</td>" +
-        "<td>" + receivedHtml + "</td>" +
-        "<td>" + signoffHtml + "</td>";
-      tr.addEventListener("click", function(){
-        // "Clicking on a rework takes you to that rework" -- there's no
-        // separate rework-detail screen in this app (Projects is read-only
-        // for rework data), so this opens that entry's own Joinery Item
-        // page and scrolls to/flashes the exact card, via
-        // pendingReworkHighlightId (consumed in renderJoineryItemLinkedSections above).
-        pendingReworkHighlightId = entry.id || null;
-        openJoineryItemPage(item, "reworkRegister");
-      });
-      reworkRegisterTableBody.appendChild(tr);
-    });
-    reworkRegisterTable.hidden = reworkRegisterAllRows.length === 0;
-    reworkRegisterEmptyProject.hidden = reworkRegisterAllRows.length !== 0;
-    reworkRegisterEmpty.hidden = !(reworkRegisterAllRows.length > 0 && filtered.length === 0);
-    reworkRegisterCountLabel.textContent = filtered.length + (filtered.length === 1 ? " rework entry" : " rework entries") +
-      (filtered.length !== reworkRegisterAllRows.length ? (" (of " + reworkRegisterAllRows.length + ")") : "");
-    Array.prototype.forEach.call(reworkRegisterTable.querySelectorAll("th"), function(th){
-      th.classList.remove("sorted", "desc");
-      if (th.getAttribute("data-col") === reworkRegisterSort.col){
-        th.classList.add("sorted");
-        if (reworkRegisterSort.dir === "desc") th.classList.add("desc");
-      }
+    var cur = currentReworkRegisterRows();
+    reworkRegisterRendered = { out: cur.out, deliv: cur.deliv };
+    var head = reworkRegisterTheadHtml();
+    reworkRegisterTable.tHead.innerHTML = head;
+    reworkRegisterDelivTable.tHead.innerHTML = head;
+    reworkRegisterTableBody.innerHTML = cur.out.map(function(r, i){ return reworkRegisterRowHtml(r, i); }).join("");
+    reworkRegisterDelivBody.innerHTML = cur.deliv.map(function(r, i){ return reworkRegisterRowHtml(r, cur.out.length + i); }).join("");
+    var none = cur.all.length === 0;
+    reworkRegisterTable.hidden = none;
+    reworkRegisterEmptyProject.hidden = !(none && !reworkRegisterLoading);
+    reworkRegisterEmpty.hidden = !(!none && cur.out.length === 0);
+    var showDeliv = reworkRegisterShowDelivered || reworkRegisterReceivedFilter.value === "yes";
+    reworkRegisterDelivToggle.hidden = none;
+    reworkRegisterDelivToggle.textContent = "Delivered (" + cur.deliv.length + ") " + (showDeliv ? "▾" : "▸");
+    reworkRegisterDelivCard.hidden = none || !showDeliv;
+    reworkRegisterDelivEmpty.hidden = cur.deliv.length > 0;
+    var st = reworkUi ? reworkUi.state() : null;
+    var lp = st && st.loadedProjects ? st.loadedProjects[activeProjectName] : null;
+    var unreadable = lp ? (lp.unreadable || 0) : 0;
+    var shown = cur.out.length + cur.deliv.length;
+    reworkRegisterCountLabel.textContent =
+      (reworkRegisterLoading ? "Reading reworks… " : "") +
+      cur.out.length + " outstanding · " + cur.deliv.length + " delivered" +
+      (shown !== cur.all.length ? " (of " + cur.all.length + ")" : "") +
+      (unreadable ? " · " + unreadable + " file" + (unreadable === 1 ? "" : "s") + " couldn't be read (still syncing?) — Refresh in a moment" : "");
+  }
+  function reworkRegisterRowAt(idx){
+    var all = reworkRegisterRendered.out.concat(reworkRegisterRendered.deliv);
+    return all[idx] || null;
+  }
+  function openReworkFromRegister(row){
+    if (!row || !reworkUi) return;
+    reworkUi.openDetail(row, function(){ showScreen("reworkRegister"); renderReworkRegisterTable(); });
+  }
+  function openItemFromReworkRow(row){
+    if (!row) return;
+    readJoineryItems(activeProjectHandle).then(function(items){
+      var norm = function(v){ return String(v || "").trim().toLowerCase(); };
+      var item = items.filter(function(it){
+        return norm(it.joineryId) === norm(row.code) && norm(it.level) === norm(row.level) && norm(it.room) === norm(row.room);
+      })[0] || items.filter(function(it){ return norm(it.joineryId) === norm(row.code) && norm(it.level) === norm(row.level); })[0];
+      if (!item){ showToast("“" + row.code + "” isn't in this project's joinery items any more."); return; }
+      openJoineryItemPage(item, "reworkRegister");
+    }).catch(function(err){
+      console.error("Opening the joinery item failed:", err);
+      if (isReadFailed(err)) showToast("Couldn't read joinery-items.json (still syncing?) — try again in a moment.", 4500);
+      else showToast("Couldn't open that joinery item.");
     });
   }
-  Array.prototype.forEach.call(reworkRegisterTable.querySelectorAll("th"), function(th){
-    th.addEventListener("click", function(){
+  function onReworkRegisterClick(ev){
+    var t = ev.target;
+    var th = t.closest ? t.closest("th[data-col]") : null;
+    if (th){
       var col = th.getAttribute("data-col");
       if (reworkRegisterSort.col === col){ reworkRegisterSort.dir = reworkRegisterSort.dir === "asc" ? "desc" : "asc"; }
-      else { reworkRegisterSort.col = col; reworkRegisterSort.dir = col === "createdAt" ? "desc" : "asc"; }
+      else { reworkRegisterSort.col = col; reworkRegisterSort.dir = (col === "createdAt" || col === "latest") ? "desc" : "asc"; }
       renderReworkRegisterTable();
-    });
+      return;
+    }
+    var ib = t.closest ? t.closest("[data-rr-item]") : null;
+    if (ib){ ev.stopPropagation(); openItemFromReworkRow(reworkRegisterRowAt(+ib.getAttribute("data-rr-item"))); return; }
+    var ob = t.closest ? t.closest("[data-rr-open]") : null;
+    if (ob){ openReworkFromRegister(reworkRegisterRowAt(+ob.getAttribute("data-rr-open"))); return; }
+    var tr = t.closest ? t.closest("tr[data-rr-row]") : null;
+    if (tr) openReworkFromRegister(reworkRegisterRowAt(+tr.getAttribute("data-rr-row")));
+  }
+  reworkRegisterTable.addEventListener("click", onReworkRegisterClick);
+  reworkRegisterDelivTable.addEventListener("click", onReworkRegisterClick);
+  reworkRegisterDelivToggle.addEventListener("click", function(){
+    reworkRegisterShowDelivered = !(reworkRegisterShowDelivered || reworkRegisterReceivedFilter.value === "yes");
+    if (!reworkRegisterShowDelivered && reworkRegisterReceivedFilter.value === "yes") reworkRegisterReceivedFilter.value = "";
+    renderReworkRegisterTable();
   });
   reworkRegisterLevelFilter.addEventListener("change", renderReworkRegisterTable);
   reworkRegisterReceivedFilter.addEventListener("change", renderReworkRegisterTable);
   reworkRegisterSearchInput.addEventListener("input", debounce(renderReworkRegisterTable, 100)); // v23 sweep: coalesced, see the Register's own search
+  if (reworkUi) reworkUi.onChange(function(){ if (currentScreenName === "reworkRegister") renderReworkRegisterTable(); });
 
+  function fillReworkLevelFilter(levelNames){
+    var names = (levelNames || []).slice();
+    reworkRowsForProject().forEach(function(r){ if (r.level && names.indexOf(r.level) === -1) names.push(r.level); });
+    var prevLevel = reworkRegisterLevelFilter.value;
+    reworkRegisterLevelFilter.innerHTML = "<option value=\"\">All levels</option>";
+    names.forEach(function(name){
+      var opt = document.createElement("option");
+      opt.value = name; opt.textContent = name;
+      reworkRegisterLevelFilter.appendChild(opt);
+    });
+    if (names.indexOf(prevLevel) !== -1) reworkRegisterLevelFilter.value = prevLevel;
+  }
+  // Reads this project's reworks (and then each item file's log) fresh --
+  // the table paints as the rows land and again as each log lands.
+  function loadReworkRegister(){
+    if (!reworkUi){ showToast("The rework module didn't load — reload the app."); return Promise.resolve(); }
+    var proj = activeProjectName;
+    reworkRegisterLoading = true;
+    renderReworkRegisterTable();
+    var levelsP = listExistingLevels(activeProjectHandle).catch(function(){ return []; });
+    return reworkUi.ensureLoaded(1, proj).then(function(){ return levelsP; }).then(function(levelNames){
+      if (proj !== activeProjectName) return;
+      fillReworkLevelFilter(levelNames);
+    }).catch(function(err){
+      console.error("Opening Rework Register failed:", err);
+      showToast("Couldn't read this project's reworks (still syncing?) — try Refresh in a moment.", 4500);
+    }).then(function(){
+      if (proj !== activeProjectName) return;
+      reworkRegisterLoading = false;
+      renderReworkRegisterTable();
+    });
+  }
   function openReworkRegister(){
     reworkRegisterProjectLabel.textContent = activeProjectName + " — Rework Register";
     showScreen("reworkRegister");
-    reworkRegisterTableBody.innerHTML = "";
-    reworkRegisterCountLabel.textContent = "Loading…";
-    return Promise.all([
-      readJoineryItems(activeProjectHandle),
-      listExistingLevels(activeProjectHandle)
-    ]).then(function(results){
-      var items = results[0] || [];
-      var levelNames = results[1] || [];
-      return Promise.all(items.map(function(item){
-        return readInstallReworkForItem(activeProjectHandle, item).then(function(reworks){
-          return reworks.map(function(entry){ return { item: item, entry: entry }; });
-        });
-      })).then(function(perItemRows){
-        reworkRegisterAllRows = [].concat.apply([], perItemRows);
-        var prevLevel = reworkRegisterLevelFilter.value;
-        reworkRegisterLevelFilter.innerHTML = "<option value=\"\">All levels</option>";
-        levelNames.forEach(function(name){
-          var opt = document.createElement("option");
-          opt.value = name; opt.textContent = name;
-          reworkRegisterLevelFilter.appendChild(opt);
-        });
-        if (levelNames.indexOf(prevLevel) !== -1) reworkRegisterLevelFilter.value = prevLevel;
-        renderReworkRegisterTable();
-      });
-    }).catch(function(err){
-      console.error("Opening Rework Register failed:", err);
-      reworkRegisterCountLabel.textContent = "";
-      if (isReadFailed(err)) showToast("Couldn't read joinery-items.json (still syncing?) — try again in a moment.", 4500);
-      else showToast("Couldn't open the Rework Register.");
-    });
+    return loadReworkRegister();
   }
   openReworkRegisterBtn.addEventListener("click", openReworkRegister);
+  reworkRegisterRefreshBtn.addEventListener("click", loadReworkRegister);
   backFromReworkRegisterBtn.addEventListener("click", function(){ showScreen("levels"); });
 
   /* ---- Rework Register: Print / Share (2026-09-23) -- Andrew: "Also need
@@ -5669,9 +7244,11 @@
   function reworkRegisterPdfFilename(){
     return sanitizeFileBase(activeProjectName || "Project") + " - Rework Register.pdf";
   }
-  // Landscape table of the CURRENT filtered/sorted rows, drawn by hand row
-  // by row -- the same manual jsPDF approach Install ITP's own
-  // exportChecklistPdf already uses, rather than a table-plugin dependency.
+  // Landscape table of the rows on screen (outstanding, then delivered --
+  // same filters and sort), drawn by hand row by row -- the same manual
+  // jsPDF approach Install ITP's own exportChecklistPdf already uses.
+  // (v33) State and Latest columns, folded from each rework's event log.
+  var REWORK_STATE_RGB = { logged: [214, 40, 40], machined: [196, 130, 10], manufactured: [57, 135, 229], delivered: [40, 160, 80], closed: [40, 160, 80] };
   function buildReworkRegisterPdf(rows){
     var doc = new window.jspdf.jsPDF({ orientation: "landscape", unit: "pt", format: "a4", compress: true });
     var pageW = doc.internal.pageSize.getWidth();
@@ -5683,22 +7260,25 @@
     doc.setFont("helvetica", "bold").setFontSize(14).setTextColor(20);
     doc.text("UTZLINE Rework Register — " + (activeProjectName || ""), margin, y);
     y += 16;
+    var nDone = rows.filter(function(r){ return reworkFoldOf(r).isDone; }).length;
     doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(120);
-    doc.text(rows.length + (rows.length === 1 ? " rework entry" : " rework entries") + " — generated " + new Date().toLocaleString(), margin, y);
+    doc.text((rows.length - nDone) + " outstanding · " + nDone + " delivered — generated " + new Date().toLocaleString() + (deviceUserName ? " by " + deviceUserName : ""), margin, y);
     y += 12;
     doc.setDrawColor(20).setLineWidth(1);
     doc.line(margin, y, pageW - margin, y);
     y += 14;
 
     var cols = [
-      { key: "level", label: "LEVEL", frac: 0.08 },
-      { key: "room", label: "ROOM", frac: 0.1 },
-      { key: "joineryId", label: "JOINERY ID", frac: 0.1 },
-      { key: "cabinetNumber", label: "CABINET #", frac: 0.09 },
-      { key: "text", label: "DETAIL", frac: 0.27 },
-      { key: "createdAt", label: "LOGGED", frac: 0.12 },
-      { key: "received", label: "DELIVERED TO SITE", frac: 0.13 },
-      { key: "closedAt", label: "SIGNED OFF DATE", frac: 0.11 }
+      { key: "level", label: "LEVEL", frac: 0.07 },
+      { key: "room", label: "ROOM", frac: 0.09 },
+      { key: "joineryId", label: "JOINERY ID", frac: 0.08 },
+      { key: "cabinetNumber", label: "CABINET #", frac: 0.07 },
+      { key: "state", label: "STATE", frac: 0.1 },
+      { key: "text", label: "DETAIL", frac: 0.2 },
+      { key: "createdAt", label: "LOGGED", frac: 0.1 },
+      { key: "received", label: "DELIVERED", frac: 0.1 },
+      { key: "closedAt", label: "SIGNED OFF", frac: 0.08 },
+      { key: "latest", label: "LATEST", frac: 0.11 }
     ];
     cols.forEach(function(c){ c.w = c.frac * contentW; });
     var headerH = 16;
@@ -5713,15 +7293,28 @@
     }
     drawTableHeader();
 
+    var sectionDone = null;
     rows.forEach(function(row){
-      var item = row.item, entry = row.entry;
+      var entry = row.entry, f = reworkFoldOf(row), l = reworkLatestOf(row);
+      if (sectionDone !== f.isDone && f.isDone && sectionDone !== null){
+        // the delivered section starts
+        if (y + 40 > pageH - margin){ doc.addPage(); y = margin; }
+        y += 10;
+        doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(40, 160, 80);
+        doc.text("DELIVERED / CLOSED OUT", margin, y + 4);
+        y += 12;
+        drawTableHeader();
+      }
+      sectionDone = f.isDone;
       var cellText = {
-        level: item.level || "", room: item.room || "", joineryId: item.joineryId || "",
+        level: row.level || "", room: row.room || "", joineryId: row.code || "",
         cabinetNumber: entry.cabinetNumber || "—",
+        state: f.closed ? "Closed out" : window.UtzRework.stateLabel(f.status, true),
         text: entry.text || "—",
-        createdAt: formatHistoryDate(entry.createdAt),
-        received: entry.received ? ("Delivered to site" + (entry.receivedDate ? (" (" + entry.receivedDate + ")") : "")) : "Not yet delivered",
-        closedAt: entry.closedAt ? formatHistoryDate(entry.closedAt) : "—"
+        createdAt: formatHistoryDate(entry.createdAt) + (entry.createdBy ? " — " + entry.createdBy : ""),
+        received: reworkDeliveredText(f),
+        closedAt: f.closed ? formatHistoryDate(f.closed.at) : "—",
+        latest: l ? (l.what + " — " + [l.by, formatHistoryDate(l.at)].filter(Boolean).join(", ")) : "—"
       };
       var wrapped = {}, maxLines = 1;
       cols.forEach(function(c){
@@ -5737,19 +7330,14 @@
         drawTableHeader();
       }
       var rx = margin;
+      var stateKey = f.closed ? "closed" : f.status;
       cols.forEach(function(c){
-        // Colour scheme (2026-09-26) -- "delivered is blue, signed off is
-        // green, red is only for outstanding (not yet)", matching the
-        // on-screen .rr-status/.rr-signoff-date rules above.
-        var isBold = (c.key === "received" && entry.received) || (c.key === "closedAt" && entry.closedAt);
-        doc.setFont("helvetica", isBold ? "bold" : "normal").setFontSize(8);
-        if (c.key === "received"){
-          if (entry.received) doc.setTextColor(57, 135, 229); else doc.setTextColor(255, 59, 59);
-        } else if (c.key === "closedAt"){
-          if (entry.closedAt) doc.setTextColor(51, 196, 106); else doc.setTextColor(20);
-        } else {
-          doc.setTextColor(20);
-        }
+        var bold = c.key === "state" || (c.key === "closedAt" && f.closed);
+        doc.setFont("helvetica", bold ? "bold" : "normal").setFontSize(8);
+        if (c.key === "state") doc.setTextColor.apply(doc, REWORK_STATE_RGB[stateKey] || [20, 20, 20]);
+        else if (f.isDone) doc.setTextColor(40, 160, 80); // delivered rows: green (Andrew, rework round)
+        else if (c.key === "latest") doc.setTextColor(110);
+        else doc.setTextColor(20);
         doc.text(wrapped[c.key], rx + 4, y + 8);
         rx += c.w;
       });
@@ -5758,14 +7346,25 @@
       y += rowH;
     });
 
+    var total = doc.internal.getNumberOfPages();
+    for (var pg = 1; pg <= total; pg++){
+      doc.setPage(pg);
+      doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(140);
+      doc.text("Page " + pg + " of " + total, pageW - margin, pageH - 14, { align: "right" });
+    }
     return doc;
+  }
+  // The rows as shown: outstanding, then delivered.
+  function reworkRegisterRowsForPdf(){
+    var cur = currentReworkRegisterRows();
+    return cur.out.concat(cur.deliv);
   }
   reworkRegisterPrintBtn.addEventListener("click", function(){
     if (!window.jspdf || !window.jspdf.jsPDF){
       showToast("The PDF library failed to load — check your connection and reload the app.");
       return;
     }
-    var rows = currentReworkRegisterRows();
+    var rows = reworkRegisterRowsForPdf();
     if (!rows.length){ showToast("No rework entries to export with the current filters."); return; }
     var doc = buildReworkRegisterPdf(rows);
     var blob = doc.output("blob");
@@ -5783,7 +7382,7 @@
       showToast("The PDF library failed to load — check your connection and reload the app.");
       return;
     }
-    var rows = currentReworkRegisterRows();
+    var rows = reworkRegisterRowsForPdf();
     if (!rows.length){ showToast("No rework entries to share with the current filters."); return; }
     var doc = buildReworkRegisterPdf(rows);
     var blob = doc.output("blob");
@@ -5830,17 +7429,11 @@
   var itemShopDrawingsList = document.getElementById("itemShopDrawingsList");
   var itemJobNotesList = document.getElementById("itemJobNotesList");
   var itemItpList = document.getElementById("itemItpList");
-  var itemReworkPdfRow = document.getElementById("itemReworkPdfRow");
   var itemReworkList = document.getElementById("itemReworkList");
   var itemSubOrdersList = document.getElementById("itemSubOrdersList");
   var itemDeliveryLocation = document.getElementById("itemDeliveryLocation");
   var activeJoineryItem = null;
   var joineryItemReturnScreen = "levels";
-  // Set just before navigating to a Joinery Item page from the Rework
-  // Register (below), so that page's own Rework card can scroll to and
-  // flash the exact entry that was clicked, per Andrew's "clicking on a
-  // rework takes you to that rework."
-  var pendingReworkHighlightId = null;
   // Opens a file handle's contents in a new tab -- same pattern source.html
   // already uses for "View job note"/"View shop drawing" (an object URL,
   // revoked a minute later, long enough for the browser to have opened it).
@@ -5904,7 +7497,6 @@
     itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
-    itemReworkPdfRow.innerHTML = "";
 
     readLatestJoineryOverlayForItem(activeProjectHandle, item).then(function(overlay){
       if (activeJoineryItem !== item) return; // navigated away before this resolved
@@ -6001,77 +7593,14 @@
       itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load ITP checklists.</p>";
     });
 
-    // Read-only rework summary (2026-09-23) -- Andrew, verbatim, on Install
-    // ITP's new rework tracker: "fully trackable via this system and via
-    // utzline projects summary pages per project." Newest first, same
-    // convention as Install ITP's own history list; this app never writes
-    // to Install ITP's rework file, only displays it.
-    //
-    // UPDATE (2026-09-24, Round 2): Andrew, on the same page, verbatim:
-    // "the rework section can open the rework pdf to view. any rework
-    // images for this joinery item get attached to that rework pdf...
-    // Photos card is not required here, as they are attached to each
-    // relevant itp / report." Photos are no longer shown inline in this
-    // per-entry summary (they now live in the rework PDF, same reasoning
-    // as the standalone Photos card's own removal in Round 1) -- instead,
-    // an "Open" row for the item's one always-current rework PDF appears
-    // above the entry list, same docRow pattern as every other linked
-    // document on this page, whenever Install ITP has generated one
-    // (readReworkPdfForItem resolves null once there's no rework logged,
-    // or once the last entry's been deleted and Install ITP has removed
-    // its own PDF again).
-    itemReworkPdfRow.innerHTML = "";
-    readReworkPdfForItem(activeProjectHandle, item).then(function(pdf){
-      if (activeJoineryItem !== item) return;
-      if (!pdf) return;
-      itemReworkPdfRow.appendChild(docRow("Rework PDF", "Every rework entry logged for this item, with photos", pdf.handle));
-    }).catch(function(err){
-      console.error("Reading rework PDF failed:", err);
-    });
-    itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
-    readInstallReworkForItem(activeProjectHandle, item).then(function(reworks){
-      if (activeJoineryItem !== item) return;
-      if (!reworks.length){
-        itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No rework logged for this item.</p>";
-        return;
-      }
-      itemReworkList.innerHTML = "";
-      reworks.forEach(function(r){
-        var row = document.createElement("div");
-        row.className = "rework-item";
-        if (r.id) row.setAttribute("data-rework-id", r.id);
-        var cabinetText = r.cabinetNumber ? ("Cabinet " + r.cabinetNumber) : "No cabinet number";
-        var createdText = formatHistoryDate(r.createdAt) + (r.createdBy ? " — " + escapeHtml(r.createdBy) : "");
-        var statusText = r.received
-          ? "Received back on site" + (r.receivedDate ? " (" + escapeHtml(r.receivedDate) + ")" : "")
-          : "Not yet received back on site";
-        row.innerHTML =
-          "<div class=\"rework-item-head\"><span class=\"rework-item-cabinet\">" + escapeHtml(cabinetText) + "</span><span class=\"rework-item-date\">" + createdText + "</span></div>" +
-          (r.text ? "<p class=\"rework-item-text\">" + escapeHtml(r.text) + "</p>" : "") +
-          "<div class=\"rework-item-status" + (r.received ? " received" : "") + "\">" + escapeHtml(statusText) + "</div>";
-        itemReworkList.appendChild(row);
-      });
-      // "Clicking on a rework takes you to that rework" (Andrew, 2026-09-23,
-      // on the new project-wide Rework Register below) -- a register row
-      // sets pendingReworkHighlightId before calling openJoineryItemPage,
-      // so once this specific item's own entries have rendered, the exact
-      // entry clicked (not just the card) scrolls into view and flashes
-      // briefly. Cleared immediately so it never re-fires on a later,
-      // unrelated visit to this same item's page.
-      if (pendingReworkHighlightId){
-        var targetEntryId = pendingReworkHighlightId;
-        pendingReworkHighlightId = null;
-        var targetEl = itemReworkList.querySelector("[data-rework-id=\"" + CSS.escape(targetEntryId) + "\"]");
-        if (targetEl){
-          targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          targetEl.classList.add("rework-item-flash");
-          setTimeout(function(){ targetEl.classList.remove("rework-item-flash"); }, 2200);
-        }
-      }
-    }).catch(function(err){
-      console.error("Reading rework tracker failed:", err);
-      itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load rework tracking.</p>";
-    });
+    // Rework summary (2026-09-23) -- Andrew: "fully trackable via this
+    // system and via utzline projects summary pages per project."
+    // (v33) Rendered by the shared rework module: each rework's state folded
+    // from its event log (Cut / Ready to deliver / Delivered / Closed out,
+    // comments), outstanding first and delivered green at the bottom, an
+    // "Open rework" button (log, photos, comments, Print / Share its own
+    // PDF), then this item's saved rework PDFs, per-rework ones first.
+    renderItemReworkCard(item);
 
     // Sub Orders summary (2026-09-27; mark-as-received added v29, same day)
     // -- see this card's own top-of-HTML comment / readSubOrdersForItem's
@@ -6410,7 +7939,7 @@
         return applyJoineryItemEdit(activeProjectHandle, item.level, item.room, item.joineryId, edits, editorName).then(function(result){
           if (!result.changes.length){ showToast("No changes to save."); closeEditItemDialog(); return; }
           // Mutate the SAME in-memory item object (not a new reference) --
-          // this object is shared with registerAllItems/reworkRegisterAllRows
+          // this object is shared with registerAllItems
           // etc., same convention the old backfill/toggle code followed.
           // BUG FIX (2026-09-26, Andrew: "when you put in dollar value in the
           // edit card and press save, it says nothing to save and doesnt put
@@ -6442,6 +7971,22 @@
     });
   });
 
+  // (v33) The item page's Rework card -- see its call in
+  // renderJoineryItemLinkedSections. Back from a rework page returns here and
+  // repaints the card (a comment may have been added).
+  function renderItemReworkCard(item){
+    if (!reworkUi){
+      itemReworkList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load rework tracking (reload the app).</p>";
+      return;
+    }
+    reworkUi.renderItemCard(itemReworkList, {
+      projectHandle: activeProjectHandle, project: activeProjectName,
+      level: item.level || "", room: item.room || "", code: item.joineryId || ""
+    }, function(){
+      showScreen("joineryItem");
+      if (activeJoineryItem === item) renderItemReworkCard(item);
+    });
+  }
   function openJoineryItemPage(item, returnScreen){
     activeJoineryItem = item;
     joineryItemReturnScreen = returnScreen || "levels";
@@ -6533,6 +8078,7 @@
     planCanvas: document.getElementById("screenPlanCanvas"),
     register: document.getElementById("screenRegister"),
     reworkRegister: document.getElementById("screenReworkRegister"),
+    reworkDetail: document.getElementById("screenReworkDetail"), // (v33)
     joineryItem: document.getElementById("screenJoineryItem")
   };
   function showScreen(name){
@@ -6585,6 +8131,7 @@
   // top of the Edit joinery item dialog.
   function closeAnyOpenOverlay(){
     if (!statusHistoryPop.hidden){ hideStatusHistoryPop(); return true; }
+    if (reworkUi && reworkUi.closeOverlay()) return true; // (v33) a rework photo shown full size
     if (woRoomPickBackdrop && !woRoomPickBackdrop.hidden){ woRoomPickCancelBtn.click(); return true; } // (v32) above everything on the plan
     if (currentScreenName === "planCanvas" && planUnplacedPanel && !planUnplacedPanel.hidden){ planUnplacedPanel.hidden = true; return true; } // (v32)
     var pairs = [
@@ -6616,6 +8163,7 @@
       case "joineryItem": backFromJoineryItemBtn.click(); break;
       case "register": backFromRegisterBtn.click(); break;
       case "reworkRegister": backFromReworkRegisterBtn.click(); break;
+      case "reworkDetail": if (reworkUi) reworkUi.closeDetail(); else showScreen("reworkRegister"); break; // (v33)
       case "roomDetail": backToRoomsBtn.click(); break;
       case "rooms": backToLevelsBtn.click(); break;
       case "levels": backToProjectsBtn.click(); break;
@@ -6732,7 +8280,11 @@
   function resetProjectScopedState(){
     registerAllItems = []; registerStatusList = []; registerScheduleList = [];
     registerRenderedFor = null;
-    reworkRegisterAllRows = [];
+    if (reworkUi){ // (v33) the last project's reworks and logs
+      var rst = reworkUi.state();
+      rst.rows = []; rst.logs = {}; rst.loadedProjects = {};
+    }
+    reworkRegisterShowDelivered = false;
     activeJoineryItem = null;
     levelListRenderedFor = null;
     roomsRenderedFor = null;
@@ -8491,6 +10043,9 @@
     planSavedMarkersForTest: function(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === 'roomlink'; }).map(function(o){ return { roomName: o.roomName, joineryCode: o.joineryCode, x: o.x, y: o.y }; }); },
     refreshUnplacedForTest: function(){ return refreshUnplacedForLevel(); },
     loadDeviceUserNameForTest: function(){ return loadDeviceUserName(); },
+    // (v33) rework register / item card fold the rework event files
+    setPrintDesktopForTest: function(v){ printDesktopForTest = v; },
+    reworkUiForTest: function(){ return reworkUi; },
     // (2026-09-27) the reserved "Schedule Backups" name is never handed out to a project
     createNewProjectForTest: function(no, name){ return createNewProject(no, name); },
     renderPdfPageGrid: renderPdfPageGrid,

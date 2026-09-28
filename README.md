@@ -1,6 +1,23 @@
 # UTZLINE Projects — installable app
 
-**Current version: v32** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v33** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v33 (2026-09-28) — Rework register and item card show every app's rework changes.** Part of the rework round (Andrew: *"also need to fix this rework conflict. rework pdfs should be user datetime stamped. they should also show the entire status log per rework and have larger photos"*, and *"reworks that are delivered to be green border / text and sent to bottom of page (maybe a separate selectable delivered folder)"*). The apps now record each rework change as its own small file in the item's log folder instead of rewriting the shared rework file; Projects now reads those files (UTZLINE Rework Event Standard v1).
+
+- **Rework Register** (Levels → Rework register):
+  - Each rework's **State** comes from the rework file plus its log: Logged, Cut (Machine Schedule), Ready to deliver (Scheduler), Delivered (Delivery ITP, or the file), Closed out (Install ITP).
+  - Outstanding reworks are listed first. **Delivered and closed-out reworks are green, in a separate "Delivered (N)" section at the bottom**, opened with its button.
+  - New columns: State, Latest (the newest log line, e.g. "Comment: Sent to saw — Mark"). Delivered to site shows the date and who; Signed off date shows the close-out.
+  - The State filter (replaces "Delivered to site") offers All (delivered listed at the bottom), Not yet delivered, Logged, Cut, Ready to deliver and Delivered to site. Level filter, search and column sorting work as before.
+  - **Tapping a rework opens its rework page:** its details, photos (tap for full size), the full status log from every app, **Add a comment** (quick picks included; saved with your name, date and time as its own file), and **Print / Share**. Print and Share make that rework's own PDF (named with your name and the date-time), which is also saved beside the item's other rework PDFs.
+  - **Item** on each row opens the joinery item page (Back returns to the register).
+  - Refresh re-reads the reworks. A file still syncing is counted ("couldn't be read — Refresh in a moment"), never shown as empty.
+  - Print / Save PDF and Share of the register itself now include State and Latest, outstanding first, then a green "Delivered / closed out" section.
+- **Joinery item page, Rework card:** each rework with its state pill, latest log line and an **Open rework** button. Delivered ones are last and green. Below them the item's **rework PDFs**: per-rework ones first (newest first), then the older all-in-one file.
+- Projects still never rewrites the shared rework file. A comment or a PDF is a new file of its own.
+- 4 GB tablets: the register keeps no photo pixels. Photos are read only for the rework that is open and let go on Back.
+- Device Back closes a full-size photo first, then the rework page.
+- **Tests:** `pdftest-projects/run_rework_register.js` rewritten for v33 (flat + legacy files, events, filters, comment file, stamped PDF, Item button, item card, device Back, register PDF, shared files untouched). `run_rework_summary_card.js` updated for the new card.
 
 **v32 (2026-09-28) — Import the Work Order Cost Analysis report, and drag the list onto the plan.** Andrew, with the job system's **Work Order Cost Analysis** PDF for 3756 Jones Radiology: *"use this for the work order imports, work order number - joinery code - joinery description, (taken from Work Order) room taken from item (G.01 - Waiting Rooms) etc, sell price is the dollar value"*, then *"the idea is you populate a list for us to drag and drop into position, the same way we do with delivery drop pins, this will be done in projects and set the locations, if the same joinery item is dropped in different rooms, then divide the total value by the number of times it has been dropped."*
 

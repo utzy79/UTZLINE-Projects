@@ -540,7 +540,8 @@ var ICON_VERSION = "v1";
 // v30 (2026-09-27): "Schedule Backups" folder hidden from the project list.
 // v31 (2026-09-28): Import work orders (PDF) + Unplaced pin-drop on the level plan.
 // v32 (2026-09-28): Work Order Cost Analysis import + drag-and-drop list with value split.
-var CACHE_NAME = "utzline-projects-cache-v40";
+// v33 (2026-09-28): rework register + item card fold the rework event files (shared UtzRework module).
+var CACHE_NAME = "utzline-projects-cache-v41";
 
 var PRECACHE_URLS = [
   "./",
