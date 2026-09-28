@@ -1,6 +1,39 @@
 # UTZLINE Projects — installable app
 
-**Current version: v31** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v32** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v32 (2026-09-28) — Import the Work Order Cost Analysis report, and drag the list onto the plan.** Andrew, with the job system's **Work Order Cost Analysis** PDF for 3756 Jones Radiology: *"use this for the work order imports, work order number - joinery code - joinery description, (taken from Work Order) room taken from item (G.01 - Waiting Rooms) etc, sell price is the dollar value"*, then *"the idea is you populate a list for us to drag and drop into position, the same way we do with delivery drop pins, this will be done in projects and set the locations, if the same joinery item is dropped in different rooms, then divide the total value by the number of times it has been dropped."*
+
+- **Reading the Cost Analysis report** (detected by its Work Order / Item / Sell headings; the v31 Work Order List report still imports as before):
+  - **Work Order** `15620-JG.01.1 - Island` + `Planter` gives WO 15620, code JG.01.1 and description "Island Planter". Wrapped lines are joined.
+  - Finish codes read too: `WLLX-1 ( Natural Oak Ravine )` gives WLLX-1 "Natural Oak Ravine", and `WFSW - 2 (...)` gives WFSW-2. A line with no code gets `WO <number>` as its code.
+  - **Item** `1-G.01 - Waiting` + `Room` gives the room "G.01 - Waiting Room" (the "1-" dropped). The zone is the letter before the dot (G), mapped to a level in the dialog as before.
+    - A "/" in a room name becomes "&" (room names end up in file names): "G.18 - Bookings & Admin".
+    - An existing room with the same number is reused, e.g. "G.02 Reception".
+  - **Sell Price** is the item's **dollar value**.
+  - The footer that shares a line with a wrapped row is dropped by its text. The report's own total checks out ($579,999.98 shown in the dialog).
+  - Items that aren't rooms ("38-Wall Applied Finishes", "39-Additional Items") become work orders **with no room**. You drag them onto the plan and pick the room.
+    - A room is suggested where the code says so: JG.01.4 suggests G.01; "G.34 - CT Imaging Control Room - 2 Door Base Cab" suggests G.34.
+  - Lines with no code and no value (Project Management / Administration) are skipped.
+- **Import** (sign-in and PIN, as v31):
+  - Items in rooms are added with their sell price as the dollar value. An existing item gets its WO # and value filled in, logged in its edit history.
+  - Every work order is recorded in the project's new work-order list, `Project Saves/Work Orders/work-orders.json`, including the ones with no room.
+  - The button says e.g. "Import 50 items + 13 to place". A second import of the same report changes nothing. A re-import with new prices updates the values.
+- **"To place (N)" on a level's plan**, the drag list:
+  - Items on this level with no marker yet, grouped by room, each with its WO # and value.
+  - "No room yet": the work orders with no room.
+  - "Already in a room": drag one again to add it to another room.
+  - **Dragging:** with a mouse, drag a row onto the plan. On a tablet, drag it by its ⠿ grip, or slide it sideways (sliding up and down scrolls the list). Letting go over the list does nothing. The v31 tap-a-row, tap-the-plan, Place here way still works.
+  - Dropping an item places its marker at that exact point, in its own room.
+  - Dropping a work order asks **which room**. The room of the nearest marker to the drop is suggested first, then its report room. Rooms it's already in are marked "already here". You can also type a new room.
+  - **Dropped in more than one room, its sell price is shared equally, to the cent.** For example, $65,679.59 across 2 rooms is $32,839.80 + $32,839.79, and across 3 rooms is $21,893.20 / $21,893.20 / $21,893.19. Each change is logged in the item's edit history ("split across 2 rooms").
+  - **Undo** sits in the bar under the plan for 12 seconds after each drop. It takes the marker off, removes the item that drop added, and re-shares the value.
+  - Each drop writes joinery-items.json first, then the level file, so a failure never leaves a marker without its item.
+  - Device Back closes the room picker, then the list.
+- **Known limit:** the value is re-shared when a work order is dropped, undone or re-imported. Deleting one of its items some other way doesn't re-share until the next drop or import.
+- **Tests:**
+  - New: `pdftest-projects/run_projects_wo_cost_import.js` (the real 3756 report, 43 checks).
+  - `run_projects_wo_import.js` (the v31 report) still passes with the new "To place" label. Every Projects test passes except `smoke_projects_v1_e2e.js`, which was already failing before this version.
 
 **v31 (2026-09-28) — Import work orders (PDF) + pin-drop them on the plan:** Andrew: *"would it be possible to create a button in the projects app that can add this data. we would then pindrop these like we pindrop the delivery location"*. "This data" is the job system's **Work Order List** PDF: per room, each work order's WO #, joinery code and description.
 

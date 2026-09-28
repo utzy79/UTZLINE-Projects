@@ -380,7 +380,10 @@
   .wo-group:last-child{ border-bottom: none; }
   .wo-group-head{ font-weight: 700; font-size: 13px; margin-bottom: 4px; }
   .wo-split{ font-weight: 400; color: var(--muted); margin-left: 8px; font-size: 12px; white-space: nowrap; }
-  .wo-row{ display:grid; grid-template-columns: 62px 88px minmax(140px, 1.2fr) minmax(120px, 1.6fr) 150px; gap: 8px; font-size: 12.5px; padding: 3px 0; align-items: baseline; }
+  .wo-row{ display:grid; grid-template-columns: 62px 88px minmax(140px, 1.2fr) minmax(120px, 1.6fr) 92px 150px; gap: 8px; font-size: 12.5px; padding: 3px 0; align-items: baseline; }
+  .wo-row .wo-value{ text-align: right; font-variant-numeric: tabular-nums; color: #4ade80; }
+  .wo-count.drop{ color: #60a5fa; }
+  .wo-drop .wo-action{ color: #60a5fa; }
   .wo-row .wo-wo{ font-variant-numeric: tabular-nums; color: var(--muted); }
   .wo-row .wo-code{ font-weight: 700; }
   .wo-row .wo-desc{ color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -390,7 +393,7 @@
   .wo-same .wo-action, .wo-count.same, .wo-skip-zone .wo-action, .wo-dup .wo-action, .wo-count.skip{ color: var(--muted2); }
   .wo-differs .wo-action, .wo-count.differs{ color: #fbbf24; }
   .wo-skipped summary{ cursor: pointer; color: var(--muted); font-size: 13px; padding: 8px 0; }
-  @media (max-width: 720px){ .wo-row{ grid-template-columns: 56px 80px 1fr; } .wo-row .wo-desc, .wo-row .wo-where{ grid-column: 1 / -1; } }
+  @media (max-width: 720px){ .wo-row{ grid-template-columns: 56px 80px 1fr 80px; } .wo-row .wo-desc, .wo-row .wo-where{ grid-column: 1 / -1; } }
   .plan-unplaced-panel{ position: absolute; top: 10px; right: 10px; width: min(380px, calc(100% - 20px)); max-height: calc(100% - 20px); overflow-y: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; z-index: 5; user-select: text; -webkit-user-select: text; }
   .plan-unplaced-panel[hidden]{ display: none; }
   .plan-unplaced-head{ font-size: 12px; color: var(--muted); margin-bottom: 8px; }
@@ -402,6 +405,29 @@
   .plan-pin-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #2a1414; border-top: 1px solid var(--border); font-size: 14px; }
   .plan-pin-bar[hidden]{ display: none; }
   .plan-pin-bar-btns{ display:flex; gap: 8px; }
+  /* (v32) drag list, room picker, undo */
+  .unplaced-item{ display:flex; align-items:flex-start; gap: 8px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+  .drag-grip{ flex: 0 0 auto; color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 4px 2px 0; cursor: grab; touch-action: none; }
+  .unplaced-main{ flex: 1 1 auto; min-width: 0; }
+  .unplaced-val{ color: #4ade80; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .unplaced-sub{ display:block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .placed-wos{ margin-top: 12px; }
+  .placed-wos summary{ cursor: pointer; font-size: 12px; color: var(--muted); padding: 6px 0; }
+  .plan-unplaced-panel.dragging{ opacity: .35; }
+  .plan-drag-ghost{ position: fixed; z-index: 90; pointer-events: none; transform: translate(-50%, -130%); background: var(--panel); color: var(--text); border: 2px dashed var(--muted); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+  .plan-drag-ghost.over-plan{ border-color: #ff5b5b; background: #2a1414; }
+  .plan-undo-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #142a1b; border-top: 1px solid var(--border); font-size: 14px; }
+  .plan-undo-bar[hidden]{ display: none; }
+  .room-pick-modal{ max-width: 520px; }
+  .room-pick-search, .room-pick-new input{ width: 100%; box-sizing: border-box; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 14px; }
+  .room-pick-list{ max-height: 46vh; overflow-y: auto; margin: 10px 0; display:flex; flex-direction: column; gap: 6px; }
+  .room-pick{ text-align: left; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; cursor: pointer; touch-action: manipulation; }
+  .room-pick:hover{ border-color: var(--accent); }
+  .room-pick.suggested{ border-color: #4ade80; }
+  .room-pick i{ color: var(--muted); font-style: normal; font-size: 12px; }
+  .room-pick[disabled]{ opacity: .45; cursor: default; }
+  .room-pick-new{ display:flex; gap: 8px; margin-bottom: 8px; }
+  .room-pick-new input{ flex: 1 1 auto; }
   .plan-canvas-hint{
     flex: 0 0 auto;
     padding: 8px 14px;
@@ -1042,8 +1068,8 @@
     <div class="plan-canvas-topbar">
       <button class="btn secondary" id="backFromPlanCanvasBtn">&larr; Back</button>
       <span id="planCanvasTitle">Level plan</span>
-      <!-- (v31) imported items not yet on this plan -- pick one, tap the plan, Place here -->
-      <button class="btn" id="planUnplacedBtn" hidden style="margin-left:auto;">Unplaced (0)</button>
+      <!-- (v31) imported items not yet on this plan; (v32) drag them on, work orders with no room too -->
+      <button class="btn" id="planUnplacedBtn" hidden style="margin-left:auto;">To place (0)</button>
     </div>
     <div class="plan-canvas-stage" id="planCanvasStage">
       <svg id="planCanvasSvg" width="100%" height="100%">
@@ -1054,7 +1080,7 @@
         </g>
       </svg>
       <div class="plan-unplaced-panel" id="planUnplacedPanel" hidden>
-        <div class="plan-unplaced-head">Not on the plan yet — tap one, then tap the plan</div>
+        <div class="plan-unplaced-head">Drag onto the plan (⠿ on a tablet) — or tap one, then tap the plan</div>
         <input type="text" id="planUnplacedSearch" placeholder="Search room, code, WO #…" autocomplete="off">
         <div id="planUnplacedList"></div>
       </div>
@@ -1066,6 +1092,11 @@
         <button class="btn secondary" id="planPinSkipBtn">Skip</button>
         <button class="btn secondary" id="planPinStopBtn">Stop</button>
       </span>
+    </div>
+    <!-- (v32) straight after a drop -->
+    <div class="plan-undo-bar" id="planUndoBar" hidden>
+      <span id="planUndoText"></span>
+      <button class="btn secondary" id="planUndoBtn">Undo</button>
     </div>
     <div class="plan-canvas-hint" id="planCanvasHint">Tap anywhere on the plan to add a joinery item &middot; drag to pan &middot; pinch or scroll to zoom &middot; tap a marker to see its details</div>
   </section>
@@ -1082,6 +1113,23 @@
     <div class="modal-actions">
       <button class="btn secondary" id="woImportCancelBtn">Cancel</button>
       <button class="btn" id="woImportConfirmBtn">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- (v32) which room a dropped work order goes in ---- -->
+<div class="modal-backdrop" id="woRoomPickBackdrop" hidden>
+  <div class="modal room-pick-modal">
+    <h2 id="woRoomPickTitle">Which room?</h2>
+    <p class="sub" id="woRoomPickSub"></p>
+    <input type="text" id="woRoomPickSearch" class="room-pick-search" placeholder="Search rooms…" autocomplete="off">
+    <div class="room-pick-list" id="woRoomPickList"></div>
+    <div class="room-pick-new">
+      <input type="text" id="woRoomPickNewInput" placeholder="…or a new room, e.g. G.61 - Store" autocomplete="off">
+      <button class="btn secondary" id="woRoomPickNewBtn">Add room</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="woRoomPickCancelBtn">Cancel</button>
     </div>
   </div>
 </div>
@@ -6537,6 +6585,8 @@
   // top of the Edit joinery item dialog.
   function closeAnyOpenOverlay(){
     if (!statusHistoryPop.hidden){ hideStatusHistoryPop(); return true; }
+    if (woRoomPickBackdrop && !woRoomPickBackdrop.hidden){ woRoomPickCancelBtn.click(); return true; } // (v32) above everything on the plan
+    if (currentScreenName === "planCanvas" && planUnplacedPanel && !planUnplacedPanel.hidden){ planUnplacedPanel.hidden = true; return true; } // (v32)
     var pairs = [
       ["numberpadBackdrop", "numberpadCancel"],
       ["identityAppChecksBackdrop", "identityAppChecksCancel"],
@@ -6546,7 +6596,9 @@
       ["pdfPickerBackdrop", "pdfPickerCancelBtn"],
       ["projectInfoBackdrop", "projectInfoSkip"],
       ["editItemBackdrop", "editItemCancelBtn"],
-      ["addItemBackdrop", "addItemCancelBtn"]
+      ["addItemBackdrop", "addItemCancelBtn"],
+      ["woRoomPickBackdrop", "woRoomPickCancelBtn"], // (v32)
+      ["woImportBackdrop", "woImportCancelBtn"]      // (v31, was missing)
     ];
     for (var i = 0; i < pairs.length; i++){
       var bd = document.getElementById(pairs[i][0]);
@@ -7294,12 +7346,236 @@
     });
     return { rooms: rooms, skipped: skipped };
   }
+  /* ---- (v32) "Work Order Cost Analysis" report (e.g. 3756 Jones Radiology) ----
+     Andrew (2026-09-28): "use this for the work order imports, work order
+     number - joinery code - joinery description, (taken from Work Order)
+     room taken from item (G.01 - Waiting Rooms) etc, sell price is the
+     dollar value". Landscape, one row per work order:
+       Work Order  "15620-JG.01.1 - Island" + "Planter"      -> WO 15620, JG.01.1, "Island Planter"
+       Item        "1-G.01 - Waiting" + "Room"                -> room "G.01 - Waiting Room" (the "1-" dropped)
+       Sell Price  "9277.53"                                   -> dollar value
+     Both text columns wrap onto a 2nd/3rd line; the footer ("Note:
+     Finished Goods ...", "Page n of 4") can share a line's y with a
+     wrapped line, so it's removed by its text, not its position. Items
+     that aren't a room ("38-Wall Applied Finishes", "39-Additional Items")
+     become work orders with NO room: they're dragged onto the plan and the
+     room is picked on each drop. A line with no joinery code gets
+     "WO <number>" as its code; one with no code and no value (Project
+     Management / Administration) is skipped. */
+  var WO_COST_DEFAULT_COLS = { wo: 44.6, item: 118.5, status: 175.9, sell: 235.9, est: 275.5 };
+  var WO_COST_ROOM_RE = /^([A-Z]{1,3})\.(\d+[A-Z]?(?:\.\d+[A-Z]?)*)\s*-\s*(.+)$/i;
+  function woIsCostAnalysisReport(pages){
+    return pages.some(function(rows){
+      return rows.some(function(row){
+        var t = row.items.map(function(i){ return i.str.trim(); });
+        return t.indexOf("Work Order") !== -1 && t.indexOf("Item") !== -1 && t.indexOf("Sell") !== -1;
+      });
+    });
+  }
+  // Pure: rows -> [{ wo, woText, itemText, status, sell }]
+  function woParseCostAnalysisRows(pages){
+    var cols = { wo: WO_COST_DEFAULT_COLS.wo, item: WO_COST_DEFAULT_COLS.item, status: WO_COST_DEFAULT_COLS.status, sell: WO_COST_DEFAULT_COLS.sell, est: WO_COST_DEFAULT_COLS.est };
+    var out = [], cur = null;
+    function isFooter(i){ var t = i.str.trim(); return /^Note:/i.test(t) || /^Page \d+ of \d+$/i.test(t) || /^\*\*/.test(t); }
+    function join(items){ return items.map(function(i){ return i.str; }).join(" ").replace(/\s+/g, " ").trim(); }
+    pages.forEach(function(rows){
+      var headerY = null;
+      rows.forEach(function(row){
+        var t = row.items.map(function(i){ return i.str.trim(); });
+        if (t.indexOf("Work Order") !== -1 && t.indexOf("Sell") !== -1){
+          headerY = row.y;
+          var estSet = false;
+          row.items.forEach(function(i){
+            var s = i.str.trim();
+            if (s === "Work Order") cols.wo = i.x;
+            else if (s === "Item") cols.item = i.x;
+            else if (s === "WO") cols.status = i.x;
+            else if (s === "Sell") cols.sell = i.x;
+            else if (s === "Estimated" && !estSet){ cols.est = i.x; estSet = true; } // the first one (Estimated Labor)
+          });
+        }
+      });
+      rows.forEach(function(row){
+        if (headerY !== null && row.y < headerY + 30) return; // the column-heading block
+        var its = row.items.filter(function(i){ return !isFooter(i); });
+        if (!its.length) return;
+        if (its.some(function(i){ return /^Total for this selection/i.test(i.str.trim()); })){ cur = null; return; }
+        var woIts = its.filter(function(i){ return i.x >= cols.wo - 6 && i.x < cols.item - 4; });
+        var itemIts = its.filter(function(i){ return i.x >= cols.item - 4 && i.x < cols.status - 4; });
+        var m = woIts.length ? /^(\d{3,7})-(.*)$/.exec(woIts[0].str.trim()) : null;
+        if (m){
+          var sellTok = its.filter(function(i){ return i.x >= cols.status + 25 && i.x < cols.est - 4 && /^-?[\d,]*\.?\d+$/.test(i.str.trim()); })[0];
+          var statusTok = its.filter(function(i){ return i.x >= cols.status - 4 && i.x < cols.status + 25 && !/^[\d$.,-]+$/.test(i.str.trim()); })[0];
+          cur = {
+            wo: m[1], woText: (m[2] + " " + join(woIts.slice(1))).replace(/\s+/g, " ").trim(), itemText: join(itemIts),
+            status: statusTok ? statusTok.str.trim() : "", sell: sellTok ? (parseFloat(sellTok.str.replace(/,/g, "")) || 0) : null
+          };
+          out.push(cur);
+          return;
+        }
+        if (!cur) return;
+        if (woIts.length) cur.woText = (cur.woText + " " + join(woIts)).replace(/\s+/g, " ").trim();
+        if (itemIts.length) cur.itemText = (cur.itemText + " " + join(itemIts)).replace(/\s+/g, " ").trim();
+      });
+    });
+    out.forEach(function(r){ if (r.status === "Engineerin") r.status = "Engineering"; });
+    return { rows: out, cols: cols };
+  }
+  // "JG.01.1 - Island Planter" / "WLLX-1 ( Natural Oak Ravine )" / "PRCL- 1 Wall ..." / "Extra for HPL ..."
+  function woSplitCostWoText(text){
+    var t = String(text || "").replace(/\s+/g, " ").trim();
+    var m = /^([A-Z]{1,5}(?:\.[A-Z0-9]+)+)\s*-\s+(.+)$/i.exec(t);
+    if (m && woIsJoineryCode(m[1])) return { code: m[1], desc: m[2].trim() };
+    m = /^([A-Z]{2,5})\s*-\s*(\d{1,3})(?![\d.])\s*(.*)$/i.exec(t);
+    if (m) return { code: m[1].toUpperCase() + "-" + m[2], desc: m[3].replace(/^\(\s*/, "").replace(/\s*\)$/, "").trim() };
+    return { code: "", desc: t };
+  }
+  // Room names can't hold "/" (they end up in file names): "Bookings / Admin" -> "Bookings & Admin".
+  function woCleanRoomName(s){ return String(s || "").replace(/\s*\/\s*/g, " & ").replace(/\s+/g, " ").trim(); }
+  // Pure: rows -> { format:"cost", rooms:[...], roomless:[{itemNo, heading, group, wos}], skipped:[...] }
+  // Room objects carry fixedName/numberKey so woRoomNamesFor/woPlanImport treat them like v31's.
+  function woInterpretCostRows(rows){
+    var rooms = [], roomless = [], skipped = [], byItem = {};
+    var roomCodes = {};
+    rows.forEach(function(r){
+      var im = /^(\d+)\s*-\s*(.*)$/.exec(r.itemText || "");
+      var rest = im ? im[2] : (r.itemText || "");
+      var rm = WO_COST_ROOM_RE.exec(rest);
+      if (rm) roomCodes[(rm[1] + "." + rm[2]).toUpperCase()] = woCleanRoomName(rm[1].toUpperCase() + "." + rm[2] + " - " + rm[3]);
+    });
+    rows.forEach(function(r){
+      var im = /^(\d+)\s*-\s*(.*)$/.exec(r.itemText || "");
+      var itemNo = im ? im[1] : "";
+      var rest = (im ? im[2] : (r.itemText || "")).trim();
+      var parts = woSplitCostWoText(r.woText);
+      var code = parts.code, desc = parts.desc, roomHint = "";
+      var rm = WO_COST_ROOM_RE.exec(rest);
+      // a code that is really a room number ("15680-G.34 - CT Imaging Control Room - 2 Door Base Cab")
+      if (code && roomCodes[code.toUpperCase()] && !rm){
+        roomHint = roomCodes[code.toUpperCase()];
+        var roomOnlyName = roomHint.replace(/^[^-]*-\s*/, "");
+        if (desc.toLowerCase().indexOf(roomOnlyName.toLowerCase()) === 0) desc = desc.slice(roomOnlyName.length).replace(/^\s*-\s*/, "").trim() || desc;
+        code = "";
+      }
+      // "JG.01.4" under Additional Items -> suggest room G.01
+      if (code && !rm){ var jm = /^J([A-Z]{1,2}\.\d+)/i.exec(code); if (jm && roomCodes[jm[1].toUpperCase()]) roomHint = roomCodes[jm[1].toUpperCase()]; }
+      if (!code && !(r.sell > 0)){ skipped.push({ heading: rest, wo: r.wo, desc: r.woText, why: "no joinery code or value" }); return; }
+      var w = { wo: r.wo, code: code || ("WO " + r.wo), codeless: !code, desc: desc, sell: r.sell, status: r.status, roomHint: roomHint };
+      var key = itemNo + "\u0000" + rest;
+      if (rm){
+        var roomCode = (rm[1] + "." + rm[2]).toUpperCase();
+        var g = byItem[key];
+        if (!g){
+          g = { itemNo: itemNo, heading: rest, zone: rm[1].toUpperCase(), fixedName: woCleanRoomName(roomCode + " - " + rm[3]), numberKey: roomCode.toLowerCase(), isList: false, split: false, numbers: [roomCode], wos: [] };
+          byItem[key] = g; rooms.push(g);
+        }
+        g.wos.push(w);
+      } else {
+        var gl = byItem[key];
+        if (!gl){ gl = { itemNo: itemNo, heading: rest, group: rest, wos: [] }; byItem[key] = gl; roomless.push(gl); }
+        gl.wos.push(w);
+      }
+    });
+    return { format: "cost", rooms: rooms, roomless: roomless, skipped: skipped };
+  }
+  // Splits a sell price across n items to the cent (the first items take
+  // the odd cents), so the shares always add back up to the price.
+  function woSplitValue(total, n){
+    var cents = Math.round((Number(total) || 0) * 100);
+    n = Math.max(1, n | 0);
+    var base = Math.floor(cents / n), rem = cents - base * n, out = [];
+    for (var i = 0; i < n; i++) out.push((base + (i < rem ? 1 : 0)) / 100);
+    return out;
+  }
+  function woMoney(v){ return "$" + (Number(v) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+  /* ---- (v32) the project's work-order list ----
+     <Project>/Project Saves/Work Orders/work-orders.json, written only by
+     this app (on import): { schemaVersion, updatedAt, workOrders: [{ wo,
+     code, desc, sellPrice, reportRoom, level, group, roomHint, status,
+     file, importedAt, importedBy }] }. It's what the plan's drag list is
+     built from: a work order with no room yet waits there until it's
+     dropped; one that's placed can be dropped again in another room, and
+     its sell price is then shared equally between all its items (Andrew:
+     "if the same joinery item is dropped in different rooms, then divide
+     the total value by the number of times it has been dropped"). The
+     items themselves live in joinery-items.json as always, tied to their
+     work order by workOrderNo. */
+  function woListDir(projectHandle, create){
+    return projectHandle.getDirectoryHandle(projectSavesDirName(), { create: !!create }).then(function(ps){
+      return ps.getDirectoryHandle("Work Orders", { create: !!create });
+    });
+  }
+  function woListRead(projectHandle){
+    return woListDir(projectHandle, false).then(function(d){
+      return readTextFileStrict(d, "work-orders.json", "work-orders.json", function(text){
+        var v = JSON.parse(text);
+        if (!v || !Array.isArray(v.workOrders)) throw new Error("not a work order list");
+        return v;
+      }).then(function(res){ return res.found ? res.value : { schemaVersion: 1, workOrders: [] }; });
+    }, function(err){
+      if (isNotFoundErr(err)) return { schemaVersion: 1, workOrders: [] };
+      throw readFailedErr("work-orders.json", err);
+    });
+  }
+  function woListWrite(projectHandle, list){
+    list.schemaVersion = 1;
+    list.updatedAt = new Date().toISOString();
+    return woListDir(projectHandle, true).then(function(d){
+      return d.getFileHandle("work-orders.json", { create: true });
+    }).then(function(fh){
+      return fh.createWritable().then(function(w){ return w.write(JSON.stringify(list, null, 1)).then(function(){ return w.close(); }); });
+    });
+  }
+  // Re-shares every priced work order across its items; logs each change in
+  // the item's edit history. Returns the number of items whose value changed.
+  function woResplitValues(items, list, who, note){
+    var changed = 0, at = new Date().toISOString();
+    (list.workOrders || []).forEach(function(w){
+      if (w.sellPrice === null || w.sellPrice === undefined) return;
+      var mine = items.filter(function(it){ return String(it.workOrderNo || "").trim() === w.wo; });
+      if (!mine.length) return;
+      mine.sort(function(a, b){
+        return String(a.level).localeCompare(String(b.level), undefined, { numeric: true }) || String(a.room).localeCompare(String(b.room), undefined, { numeric: true }) ||
+          String(a.joineryId).localeCompare(String(b.joineryId), undefined, { numeric: true });
+      });
+      var shares = woSplitValue(w.sellPrice, mine.length);
+      mine.forEach(function(it, i){
+        var before = Number(it.dollarValue) || 0;
+        it.woShare = { wo: w.wo, total: w.sellPrice, count: mine.length };
+        if (Math.abs(before - shares[i]) < 0.005) return;
+        it.dollarValue = shares[i];
+        it.editHistory = Array.isArray(it.editHistory) ? it.editHistory : [];
+        it.editHistory.push({ at: at, by: who || "", changes: [{ field: "Dollar value", from: before, to: shares[i] }],
+          note: (note ? note + " — " : "") + "WO " + w.wo + " sell price " + woMoney(w.sellPrice) + (mine.length > 1 ? " split across " + mine.length + " rooms" : "") });
+        changed++;
+      });
+    });
+    return changed;
+  }
+  // Merges an import into the list (by WO #), keeping first-import details.
+  function woListMerge(list, records){
+    var byWo = {};
+    list.workOrders.forEach(function(w){ byWo[w.wo] = w; });
+    records.forEach(function(r){
+      var ex = byWo[r.wo];
+      if (!ex){ list.workOrders.push(r); byWo[r.wo] = r; return; }
+      ["code", "desc", "sellPrice", "group", "roomHint", "status", "file"].forEach(function(k){ if (r[k] !== undefined) ex[k] = r[k]; });
+      if (r.reportRoom) ex.reportRoom = r.reportRoom;
+      if (r.level) ex.level = r.level;
+      ex.lastImportedAt = r.importedAt; ex.lastImportedBy = r.importedBy;
+    });
+    return list;
+  }
+
   // One heading -> the room names it becomes (zone dropped).
   function woRoomNamesFor(room){
+    if (room.fixedName) return [room.fixedName]; // (v32) cost-analysis rooms: "G.01 - Waiting Room"
     if (room.isList && room.split) return room.numbers.map(function(n){ return room.dept + "." + n + (room.name ? " " + room.name : ""); });
     return [room.dept + "." + room.numText + (room.name ? " " + room.name : "")];
   }
   function woRoomNumberKeysFor(room){
+    if (room.fixedName) return [room.numberKey];
     if (room.isList && room.split) return room.numbers.map(function(n){ return (room.dept + "." + n).toLowerCase(); });
     return [(room.dept + "." + room.numText).toLowerCase()];
   }
@@ -7327,7 +7603,8 @@
         var existingRoom = level ? woMatchExistingRoom(levelRooms[level] || [], wanted, keys[idx]) : null;
         var roomName = existingRoom || sanitizeFileBase(wanted);
         room.wos.forEach(function(w){
-          var row = { zone: room.zone, level: level, room: roomName, roomIsNew: !existingRoom, heading: room.heading, itemNo: room.itemNo, wo: w.wo, code: w.code, desc: w.desc };
+          var row = { zone: room.zone, level: level, room: roomName, roomIsNew: !existingRoom, heading: room.heading, itemNo: room.itemNo, wo: w.wo, code: w.code, desc: w.desc,
+            sell: (w.sell === undefined ? null : w.sell), status: w.status || "" }; // (v32) sell price from the Cost Analysis report
           if (!level){ row.action = "skip-zone"; rows.push(row); return; }
           // The same code twice in one room is two real items (two work
           // orders, e.g. "J.T.017 ... 6600" and "J.T.017 ... 2300"): the
@@ -7389,26 +7666,29 @@
         });
       });
     }).then(function(pages){
-      var parsed = woParseReportRows(pages);
-      var interp = woInterpretGroups(parsed.groups);
-      var woCount = interp.rooms.reduce(function(n, r){ return n + r.wos.length; }, 0);
-      if (!interp.rooms.length || !woCount){
-        showToast("Couldn't find any rooms with joinery work orders in that PDF — is it the Work Order List report?", 6000);
+      // (v32) two report layouts: "Work Order List" (v31) and "Work Order Cost Analysis" (sell prices)
+      var interp = woIsCostAnalysisReport(pages)
+        ? woInterpretCostRows(woParseCostAnalysisRows(pages).rows)
+        : woInterpretGroups(woParseReportRows(pages).groups);
+      interp.roomless = interp.roomless || [];
+      var woCount = interp.rooms.reduce(function(n, r){ return n + r.wos.length; }, 0) + interp.roomless.reduce(function(n, g){ return n + g.wos.length; }, 0);
+      if (!woCount){
+        showToast("Couldn't find any joinery work orders in that PDF — is it the Work Order List or Work Order Cost Analysis report?", 6000);
         return;
       }
       return woLoadProjectContext().then(function(ctx){
         var saved = woLoadZoneMap();
         var zoneMap = {};
         woZonesOf(interp).forEach(function(z){ zoneMap[z] = (saved[z] && ctx.levels.indexOf(saved[z]) !== -1) ? saved[z] : ""; });
-        woImportState = { fileName: file.name, interp: interp, levels: ctx.levels, levelRooms: ctx.levelRooms, items: ctx.items, zoneMap: zoneMap, plan: [] };
+        woImportState = { fileName: file.name, interp: interp, levels: ctx.levels, levelRooms: ctx.levelRooms, items: ctx.items, woList: ctx.woList, zoneMap: zoneMap, plan: [] };
         woRenderImportDialog();
         woImportBackdrop.hidden = false;
       });
     }).catch(function(err){
       console.error("Reading the work order PDF failed:", err);
       if (err && (err.code === "pdf_import_failed" || err.code === "pdf_import_loading")){ showToast(pdfImportErrorToast(err)); return; }
-      if (isReadFailed(err)){ readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : "a level file"); return; }
-      showToast("Couldn't read that PDF — is it the Work Order List report?", 6000);
+      if (isReadFailed(err)){ readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : /work-orders/.test(err.message) ? "work-orders.json" : "a level file"); return; }
+      showToast("Couldn't read that PDF — is it the Work Order List or Work Order Cost Analysis report?", 6000);
     });
   }
   function woZonesOf(interp){
@@ -7426,17 +7706,41 @@
           return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){ levelRooms[lv] = level ? level.rooms.map(function(r){ return r.name; }) : []; });
         });
       });
-      return p.then(function(){ return readJoineryItems(activeProjectHandle); }).then(function(items){
+      return p.then(function(){ return Promise.all([readJoineryItems(activeProjectHandle), woListRead(activeProjectHandle)]); }).then(function(res){
+        var items = res[0];
         // rooms named only on items (older data) count as existing too
         items.forEach(function(it){
           if (!levelRooms[it.level]) return;
           if (it.room && levelRooms[it.level].indexOf(it.room) === -1) levelRooms[it.level].push(it.room);
         });
-        return { levels: levels, levelRooms: levelRooms, items: items };
+        return { levels: levels, levelRooms: levelRooms, items: items, woList: res[1] };
       });
     });
   }
-  var WO_ACTION_LABELS = { "new": "New — to pin-drop", "fill": "Adds WO #", "same": "Already there", "differs": "WO # differs — kept", "skip-zone": "Zone not mapped" };
+  var WO_ACTION_LABELS = { "new": "New — to place", "fill": "Adds WO #", "same": "Already there", "differs": "WO # differs — kept", "skip-zone": "Zone not mapped" };
+  // (v32) What an import puts in the project's work-order list: every work
+  // order that lands in a room (so it can be dropped again in another room)
+  // and every one with no room (so it can be dragged onto the plan).
+  function woListRecordsFor(st, plan, at, who){
+    var recs = [];
+    plan.forEach(function(r){
+      if (r.action === "skip-zone" || r.action === "differs") return;
+      recs.push({ wo: r.wo, code: r.code, desc: r.desc, sellPrice: r.sell === undefined ? null : r.sell, reportRoom: r.room, level: r.level, group: "", roomHint: "", status: r.status || "", file: st.fileName, importedAt: at, importedBy: who });
+    });
+    (st.interp.roomless || []).forEach(function(g){
+      g.wos.forEach(function(w){
+        recs.push({ wo: w.wo, code: w.code, codeless: !!w.codeless, desc: w.desc, sellPrice: w.sell === undefined ? null : w.sell, reportRoom: "", level: "", group: g.group, roomHint: w.roomHint || "", status: w.status || "", file: st.fileName, importedAt: at, importedBy: who });
+      });
+    });
+    return recs;
+  }
+  // "new" (not listed yet) / "changed" (price, code or description differ) / "same"
+  function woListRecordState(list, rec){
+    var ex = (list.workOrders || []).filter(function(w){ return w.wo === rec.wo; })[0];
+    if (!ex) return "new";
+    if (ex.sellPrice !== rec.sellPrice || ex.code !== rec.code || ex.desc !== rec.desc) return "changed";
+    return "same";
+  }
   function woRenderImportDialog(){
     var st = woImportState;
     st.plan = woPlanImport(st.interp, st.zoneMap, st.levelRooms, st.items);
@@ -7445,15 +7749,30 @@
     var newRooms = {};
     st.plan.forEach(function(r){ if ((r.action === "new") && r.roomIsNew) newRooms[r.level + "\u0000" + r.room] = true; });
     var nNewRooms = Object.keys(newRooms).length;
+    var recs = woListRecordsFor(st, st.plan, "", "");
+    var listNew = 0, listChanged = 0, dropNew = 0, nRoomless = 0, total = 0, anyPrice = false;
+    recs.forEach(function(rec){
+      var stt = woListRecordState(st.woList || { workOrders: [] }, rec);
+      if (stt === "new") listNew++; else if (stt === "changed") listChanged++;
+      if (rec.group !== "" && stt === "new") dropNew++;
+    });
+    (st.interp.roomless || []).forEach(function(g){ nRoomless += g.wos.length; });
+    st.plan.forEach(function(r){ if (r.sell !== null && r.sell !== undefined){ anyPrice = true; total += r.sell; } }); // the whole report, to check against its own total
+    (st.interp.roomless || []).forEach(function(g){ g.wos.forEach(function(w){ if (w.sell !== null && w.sell !== undefined){ anyPrice = true; total += w.sell; } }); });
+    st.listChanges = listNew + listChanged;
     woImportSummaryEl.innerHTML =
       "<b>" + escapeHtml(st.fileName) + "</b> — " + st.interp.rooms.length + " rooms, " + st.plan.length + " joinery work orders" +
-      (st.interp.skipped.length ? ", " + st.interp.skipped.length + " lines skipped (no room or joinery code)" : "") + ".<br>" +
+      (nRoomless ? ", " + nRoomless + " with no room (drag them onto the plan)" : "") +
+      (st.interp.skipped.length ? ", " + st.interp.skipped.length + " lines skipped (no room or joinery code" + (anyPrice ? " or value" : "") + ")" : "") + "." +
+      (anyPrice ? " <b>" + woMoney(total) + "</b> total sell price." : "") + "<br>" +
       "<span class=\"wo-count new\">" + (counts["new"] || 0) + " new</span> · " +
       "<span class=\"wo-count fill\">" + (counts.fill || 0) + " WO # to add</span> · " +
       "<span class=\"wo-count same\">" + (counts.same || 0) + " already there</span>" +
       (counts.differs ? " · <span class=\"wo-count differs\">" + counts.differs + " WO # differs (kept)</span>" : "") +
       (counts["skip-zone"] ? " · <span class=\"wo-count skip\">" + counts["skip-zone"] + " in unmapped zones</span>" : "") +
-      (nNewRooms ? " · " + nNewRooms + " new room" + (nNewRooms === 1 ? "" : "s") : "");
+      (nNewRooms ? " · " + nNewRooms + " new room" + (nNewRooms === 1 ? "" : "s") : "") +
+      (dropNew ? " · <span class=\"wo-count drop\">" + dropNew + " to drag onto the plan</span>" : "") +
+      (listChanged ? " · " + listChanged + " price/description update" + (listChanged === 1 ? "" : "s") : "");
     // zone -> level
     woImportZonesEl.innerHTML = "";
     woZonesOf(st.interp).forEach(function(z){
@@ -7482,7 +7801,21 @@
         html += "<div class=\"wo-row wo-" + r.action + "\"><span class=\"wo-wo\">" + escapeHtml(r.wo) + "</span><span class=\"wo-code\">" + escapeHtml(r.code) + "</span>" +
           "<span class=\"wo-where\">" + (r.level ? escapeHtml(r.level) + " · " : "") + escapeHtml(r.room) + (r.roomIsNew && r.level ? " <i>(new room)</i>" : "") + "</span>" +
           "<span class=\"wo-desc\">" + escapeHtml(r.desc) + "</span>" +
+          "<span class=\"wo-value\">" + (r.sell !== null && r.sell !== undefined ? escapeHtml(woMoney(r.sell)) : "") + "</span>" +
           "<span class=\"wo-action\">" + escapeHtml(WO_ACTION_LABELS[r.action] || r.action) + (r.action === "differs" ? " (has " + escapeHtml(r.existingWo) + ")" : "") + "</span></div>";
+      });
+      html += "</div>";
+    });
+    // (v32) work orders with no room -- they go in the drag list
+    (st.interp.roomless || []).forEach(function(g){
+      html += "<div class=\"wo-group\"><div class=\"wo-group-head\">" + escapeHtml(g.group) + " — no room: drag each onto the plan and pick its room (the value is shared if it goes in more than one)</div>";
+      g.wos.forEach(function(w){
+        var stt = woListRecordState(st.woList || { workOrders: [] }, { wo: w.wo, code: w.code, desc: w.desc, sellPrice: w.sell === undefined ? null : w.sell });
+        html += "<div class=\"wo-row wo-drop\"><span class=\"wo-wo\">" + escapeHtml(w.wo) + "</span><span class=\"wo-code\">" + escapeHtml(w.code) + "</span>" +
+          "<span class=\"wo-where\">" + (w.roomHint ? "suggested: " + escapeHtml(w.roomHint) : "<i>you pick the room</i>") + "</span>" +
+          "<span class=\"wo-desc\">" + escapeHtml(w.desc) + "</span>" +
+          "<span class=\"wo-value\">" + (w.sell !== null && w.sell !== undefined ? escapeHtml(woMoney(w.sell)) : "") + "</span>" +
+          "<span class=\"wo-action\">" + (stt === "new" ? "To drag onto the plan" : stt === "changed" ? "Listed — updated" : "Already listed") + "</span></div>";
       });
       html += "</div>";
     });
@@ -7498,8 +7831,10 @@
       });
     });
     var todo = (counts["new"] || 0) + (counts.fill || 0);
-    woImportConfirmBtn.disabled = !todo;
-    woImportConfirmBtn.textContent = todo ? "Import " + todo + " item" + (todo === 1 ? "" : "s") : "Nothing to import";
+    var anything = todo + (st.listChanges || 0);
+    woImportConfirmBtn.disabled = !anything;
+    woImportConfirmBtn.textContent = todo ? "Import " + todo + " item" + (todo === 1 ? "" : "s") + (dropNew ? " + " + dropNew + " to place" : "")
+      : dropNew ? "Import " + dropNew + " to place" : anything ? "Update " + anything + " work order" + (anything === 1 ? "" : "s") : "Nothing to import";
   }
   function woCloseImportDialog(){ woImportBackdrop.hidden = true; woImportState = null; }
   if (woImportCancelBtn) woImportCancelBtn.addEventListener("click", woCloseImportDialog);
@@ -7525,7 +7860,9 @@
           woCloseImportDialog();
           registerAllItems = [];
           showToast("Imported: " + res.added + " new item" + (res.added === 1 ? "" : "s") + ", " + res.filled + " WO # added" +
-            (res.added ? ". Open a level's plan (Place joinery items) and use “Unplaced” to pin-drop them." : "."), 8000);
+            (res.valued ? ", " + res.valued + " value" + (res.valued === 1 ? "" : "s") + " set from the sell price" : "") +
+            (res.toDrop ? ", " + res.toDrop + " with no room yet" : "") +
+            ((res.added || res.toDrop) ? ". Open a level's plan (Place joinery items) and drag them from “To place” into position." : "."), 9000);
           if (typeof populateLevelList === "function") populateLevelList();
         });
       });
@@ -7547,7 +7884,7 @@
       var newRoomsByLevel = {};
       plan.forEach(function(r){
         if (r.action === "new"){
-          items.push({ joineryId: r.code, description: r.desc, level: r.level, room: r.room, status: "created", workOrderNo: r.wo, dollarValue: 0,
+          items.push({ joineryId: r.code, description: r.desc, level: r.level, room: r.room, status: "created", workOrderNo: r.wo, dollarValue: (r.sell > 0 ? r.sell : 0),
             importedFrom: { file: st.fileName, at: at, by: who } });
           added++;
           if (r.roomIsNew){ (newRoomsByLevel[r.level] = newRoomsByLevel[r.level] || []); if (newRoomsByLevel[r.level].indexOf(r.room) === -1) newRoomsByLevel[r.level].push(r.room); }
@@ -7560,7 +7897,12 @@
           filled++;
         }
       });
-      if (!added && !filled) return { added: 0, filled: 0 };
+      // (v32) the work-order list, and sell prices shared across each work order's rooms
+      var list = woListMerge(ctx.woList || { workOrders: [] }, woListRecordsFor(st, plan, at, who));
+      var listed = 0;
+      woListRecordsFor(st, plan, at, who).forEach(function(rec){ if (woListRecordState(ctx.woList || { workOrders: [] }, rec) !== "same") listed++; });
+      var valued = woResplitValues(items, list, who, "Imported from " + st.fileName);
+      if (!added && !filled && !listed && !valued) return { added: 0, filled: 0, listed: 0, valued: 0 };
       var levels = Object.keys(newRoomsByLevel);
       var p = migrateLegacyLevelsIfNeeded(activeProjectHandle);
       levels.forEach(function(lv){
@@ -7573,11 +7915,36 @@
           });
         });
       });
-      return p.then(function(){ return writeJoineryItems(activeProjectHandle, items); }).then(function(){ return { added: added, filled: filled }; });
+      return p.then(function(){ return writeJoineryItems(activeProjectHandle, items); }).then(function(){
+        return woListWrite(activeProjectHandle, list);
+      }).then(function(){ return { added: added, filled: filled, listed: listed, valued: valued, toDrop: list.workOrders.filter(function(w){ return !items.some(function(it){ return String(it.workOrderNo || "").trim() === w.wo; }); }).length }; });
     });
   }
 
-  // ---------------- UI: Unplaced items + pin-drop on the level plan ----------------
+  // ---------------- UI: the drag list + drop onto the level plan (v31 pin-drop, v32 drag-and-drop) ----------------
+  /* (v32) Andrew: "the idea is you populate a list for us to drag and drop
+     into position, the same way we do with delivery drop pins, this will
+     be done in projects and set the locations, if the same joinery item is
+     dropped in different rooms, then divide the total value by the number
+     of times it has been dropped."
+
+     The "To place (N)" list on a level's plan has three parts:
+       - joinery items on this level with no marker yet (imported ones land
+         here in their report room) -- a drop just places the marker;
+       - work orders with no room yet (Wall Applied Finishes, Additional
+         Items...) -- a drop asks which room, then adds the item there;
+       - "Already placed" work orders -- drag one again to add it to
+         another room; its sell price is then shared equally between all
+         its rooms (woResplitValues, to the cent, logged in each item's
+         edit history).
+     Drag: a mouse drags a row from anywhere; a finger drags it by its
+     ⠿ grip, or by sliding it sideways (sliding up/down scrolls the list).
+     The v31 way still works too: tap a row, tap the plan, Place here.
+     The room picker suggests the room of the nearest marker to the drop,
+     then the work order's report room. Every drop can be undone straight
+     away (Undo in the bar under the plan). Dropping writes
+     joinery-items.json first, then the level file, so a failure can never
+     leave a marker with no item behind it. */
   var planUnplacedBtn = document.getElementById("planUnplacedBtn");
   var planUnplacedPanel = document.getElementById("planUnplacedPanel");
   var planUnplacedList = document.getElementById("planUnplacedList");
@@ -7588,10 +7955,21 @@
   var planPinSkipBtn = document.getElementById("planPinSkipBtn");
   var planPinStopBtn = document.getElementById("planPinStopBtn");
   var planDraftG = document.getElementById("planCanvasDraft");
-  var planUnplacedItems = [];
-  var planPinMode = null; // { item, draft: {x, y} | null, busy }
+  var planUndoBar = document.getElementById("planUndoBar");
+  var planUndoText = document.getElementById("planUndoText");
+  var planUndoBtn = document.getElementById("planUndoBtn");
+  var planUnplacedItems = [];  // entries to place: {kind:"item", item} | {kind:"wo", w}
+  var planPlacedWos = [];      // entries already placed: {kind:"wo", w, items}
+  var planWoList = { workOrders: [] };
+  var planPinMode = null;      // { entry, item (display), draft: {x, y} | null, busy }
   var planPinSkipped = {};
+  var planLastDrop = null;     // for Undo
   function woItemKey(it){ return (it.room + "\u0000" + it.joineryId).toLowerCase(); }
+  function woEntryKey(e){ return e.kind === "item" ? "i\u0000" + woItemKey(e.item) : "w\u0000" + e.w.wo; }
+  function woEntryDisplay(e){ // what the pin bar / draft label show
+    if (e.kind === "item") return e.item;
+    return { room: "", joineryId: e.w.code, workOrderNo: e.w.wo, description: e.w.desc };
+  }
   function woMarkerKeys(){
     var keys = {};
     ((planSaved && planSaved.objects) || []).forEach(function(o){ if (o.type === "roomlink") keys[(String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase()] = true; });
@@ -7600,47 +7978,187 @@
   function refreshUnplacedForLevel(){
     if (!planUnplacedBtn) return Promise.resolve();
     var levelAtCall = activeLevelName;
-    return readJoineryItems(activeProjectHandle).then(function(items){
+    return Promise.all([
+      readJoineryItems(activeProjectHandle),
+      woListRead(activeProjectHandle).catch(function(err){ console.error("Reading work-orders.json failed:", err); return { workOrders: [], unreadable: true }; })
+    ]).then(function(res){
       if (levelAtCall !== activeLevelName) return;
+      var items = res[0], list = res[1];
+      planWoList = list;
       var placed = woMarkerKeys();
-      planUnplacedItems = items.filter(function(it){ return it.level === activeLevelName && !placed[woItemKey(it)]; })
-        .sort(function(a, b){
-          return String(a.room).localeCompare(String(b.room), undefined, { numeric: true, sensitivity: "base" }) ||
-            String(a.joineryId).localeCompare(String(b.joineryId), undefined, { numeric: true, sensitivity: "base" });
-        });
+      var sortItems = function(a, b){
+        return String(a.room).localeCompare(String(b.room), undefined, { numeric: true, sensitivity: "base" }) ||
+          String(a.joineryId).localeCompare(String(b.joineryId), undefined, { numeric: true, sensitivity: "base" });
+      };
+      var unplaced = items.filter(function(it){ return it.level === activeLevelName && !placed[woItemKey(it)]; }).sort(sortItems);
+      var byWo = {};
+      items.forEach(function(it){ var k = String(it.workOrderNo || "").trim(); if (k) (byWo[k] = byWo[k] || []).push(it); });
+      var roomlessTodo = [], placedWos = [];
+      (list.workOrders || []).forEach(function(w){
+        var mine = byWo[w.wo] || [];
+        if (!mine.length){ roomlessTodo.push({ kind: "wo", w: w }); return; }
+        // "already in a room": it has an item that isn't just waiting in this level's own To place list
+        var inRoom = mine.filter(function(it){ return !(it.level === activeLevelName && !placed[woItemKey(it)]); });
+        if (inRoom.length) placedWos.push({ kind: "wo", w: w, items: mine });
+      });
+      var byCode = function(a, b){ return String(a.w.code).localeCompare(String(b.w.code), undefined, { numeric: true, sensitivity: "base" }); };
+      roomlessTodo.sort(byCode); placedWos.sort(byCode);
+      planUnplacedItems = unplaced.map(function(it){ return { kind: "item", item: it }; }).concat(roomlessTodo);
+      planPlacedWos = placedWos;
       renderUnplacedButton();
       if (!planUnplacedPanel.hidden) renderUnplacedList();
-    }).catch(function(err){ console.error("Reading items for the Unplaced list failed:", err); });
+    }).catch(function(err){ console.error("Reading items for the To place list failed:", err); });
   }
   function renderUnplacedButton(){
     var n = planUnplacedItems.length;
-    planUnplacedBtn.hidden = !n || !planSaved || !(planSaved.imageDataURL || (planSaved.imageTiles && planSaved.imageTiles.length));
-    planUnplacedBtn.textContent = "Unplaced (" + n + ")";
+    var hasPlan = !!(planSaved && (planSaved.imageDataURL || (planSaved.imageTiles && planSaved.imageTiles.length)));
+    planUnplacedBtn.hidden = !hasPlan || (!n && !planPlacedWos.length);
+    planUnplacedBtn.textContent = "To place (" + n + ")";
   }
+  function woEntryValueText(e){
+    if (e.kind === "item") return Number(e.item.dollarValue) > 0 ? woMoney(e.item.dollarValue) : "";
+    if (e.items && e.items.length){
+      var w = e.w;
+      return (w.sellPrice !== null && w.sellPrice !== undefined) ? woMoney(w.sellPrice) + (e.items.length > 1 ? " ÷ " + e.items.length : "") : "";
+    }
+    return (e.w.sellPrice !== null && e.w.sellPrice !== undefined) ? woMoney(e.w.sellPrice) : "";
+  }
+  function woEntryRowHtml(e, idx, sub){
+    var d = woEntryDisplay(e);
+    var val = woEntryValueText(e);
+    return "<div class=\"unplaced-item\" data-idx=\"" + idx + "\"><span class=\"drag-grip\" data-grip=\"1\" title=\"Drag onto the plan\">⠿</span>" +
+      "<span class=\"unplaced-main\"><b>" + escapeHtml(d.joineryId || "(no code)") + "</b> " + escapeHtml(d.description || "") +
+      (d.workOrderNo ? " <span class=\"unplaced-wo\">WO " + escapeHtml(d.workOrderNo) + "</span>" : "") +
+      (val ? " <span class=\"unplaced-val\">" + escapeHtml(val) + "</span>" : "") +
+      (sub ? "<span class=\"unplaced-sub\">" + escapeHtml(sub) + "</span>" : "") + "</span></div>";
+  }
+  var planListEntries = []; // index -> entry, for the rendered rows
+  var planPlacedOpen = false;
   function renderUnplacedList(){
     var q = (planUnplacedSearch.value || "").trim().toLowerCase();
+    function hay(e){
+      var d = woEntryDisplay(e);
+      return (String(d.room || "") + " " + (d.joineryId || "") + " " + (d.description || "") + " " + (d.workOrderNo || "") + " " + (e.w ? (e.w.group || "") + " " + (e.w.reportRoom || "") : "")).toLowerCase();
+    }
+    planListEntries = [];
     var html = "", lastRoom = null;
-    planUnplacedItems.forEach(function(it, i){
-      var hay = (it.room + " " + it.joineryId + " " + (it.description || "") + " " + (it.workOrderNo || "")).toLowerCase();
-      if (q && hay.indexOf(q) === -1) return;
-      if (it.room !== lastRoom){ html += "<div class=\"unplaced-room\">" + escapeHtml(it.room) + "</div>"; lastRoom = it.room; }
-      html += "<button type=\"button\" class=\"unplaced-item\" data-idx=\"" + i + "\"><b>" + escapeHtml(it.joineryId || "(no code)") + "</b> " +
-        escapeHtml(it.description || "") + (it.workOrderNo ? " <span class=\"unplaced-wo\">WO " + escapeHtml(it.workOrderNo) + "</span>" : "") + "</button>";
+    planUnplacedItems.forEach(function(e){
+      if (q && hay(e).indexOf(q) === -1) return;
+      var idx = planListEntries.push(e) - 1;
+      var head = e.kind === "item" ? e.item.room : "No room yet — pick the room when you drop it";
+      if (head !== lastRoom){ html += "<div class=\"unplaced-room\">" + escapeHtml(head) + "</div>"; lastRoom = head; }
+      html += woEntryRowHtml(e, idx, e.kind === "wo" ? [e.w.group, e.w.roomHint ? "suggested: " + e.w.roomHint : ""].filter(Boolean).join(" · ") : "");
     });
-    planUnplacedList.innerHTML = html || "<p class=\"sub\" style=\"margin:8px 0;\">" + (planUnplacedItems.length ? "Nothing matches." : "Everything on this level is placed.") + "</p>";
-    Array.prototype.forEach.call(planUnplacedList.querySelectorAll(".unplaced-item"), function(b){
-      b.addEventListener("click", function(){ startPinMode(planUnplacedItems[+b.getAttribute("data-idx")]); });
+    if (!planListEntries.length) html += "<p class=\"sub\" style=\"margin:8px 0;\">" + (planUnplacedItems.length ? "Nothing to place matches." : "Everything on this level is placed.") + "</p>";
+    var placedRows = "", nPlaced = 0;
+    planPlacedWos.forEach(function(e){
+      if (q && hay(e).indexOf(q) === -1) return;
+      var idx = planListEntries.push(e) - 1;
+      nPlaced++;
+      placedRows += woEntryRowHtml(e, idx, "In " + e.items.map(function(it){ return it.room + (it.level !== activeLevelName ? " (" + it.level + ")" : ""); }).join(", "));
     });
+    if (planPlacedWos.length){
+      html += "<details class=\"placed-wos\"" + (planPlacedOpen || q ? " open" : "") + "><summary>Already in a room — drag one again to add it to another room (" + nPlaced + ")</summary>" + placedRows + "</details>";
+    }
+    if (planWoList.unreadable) html += "<p class=\"sub\" style=\"margin:8px 0;\">Couldn't read the work order list (still syncing?) — close and reopen this list in a moment.</p>";
+    planUnplacedList.innerHTML = html;
+    var det = planUnplacedList.querySelector("details.placed-wos");
+    if (det) det.addEventListener("toggle", function(){ if (!q) planPlacedOpen = det.open; });
   }
   if (planUnplacedBtn) planUnplacedBtn.addEventListener("click", function(){
     planUnplacedPanel.hidden = !planUnplacedPanel.hidden;
     if (!planUnplacedPanel.hidden){ planUnplacedSearch.value = ""; renderUnplacedList(); }
   });
   if (planUnplacedSearch) planUnplacedSearch.addEventListener("input", renderUnplacedList);
-  function startPinMode(item){
-    if (!item){ stopPinMode(); return; }
+
+  /* ---- dragging a row onto the plan ---- */
+  var planDrag = null; // { entry, pointerId, startX, startY, grip, mouse, active, ghost }
+  var planDragSuppressClick = false;
+  function planPointOverPlan(clientX, clientY){
+    var sr = planCanvasStage.getBoundingClientRect();
+    if (clientX < sr.left || clientX > sr.right || clientY < sr.top || clientY > sr.bottom) return false;
+    if (!planUnplacedPanel.hidden){
+      var pr = planUnplacedPanel.getBoundingClientRect();
+      if (clientX >= pr.left && clientX <= pr.right && clientY >= pr.top && clientY <= pr.bottom) return false;
+    }
+    return true;
+  }
+  if (planUnplacedList) planUnplacedList.addEventListener("pointerdown", function(e){
+    var row = e.target.closest ? e.target.closest(".unplaced-item") : null;
+    if (!row || (e.button !== undefined && e.button !== 0)) return;
+    var entry = planListEntries[+row.getAttribute("data-idx")];
+    if (!entry) return;
+    var grip = !!(e.target.closest && e.target.closest("[data-grip]"));
+    planDrag = { entry: entry, row: row, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, grip: grip, mouse: e.pointerType === "mouse", active: false, ghost: null };
+    if (grip){ e.preventDefault(); try{ row.setPointerCapture(e.pointerId); }catch(err){} }
+  });
+  function planDragBegin(e){
+    planDrag.active = true;
+    try{ planDrag.row.setPointerCapture(planDrag.pointerId); }catch(err){}
+    var d = woEntryDisplay(planDrag.entry);
+    var g = document.createElement("div");
+    g.className = "plan-drag-ghost";
+    g.textContent = (d.joineryId || "(no code)") + (d.room ? " · " + d.room : "");
+    document.body.appendChild(g);
+    planDrag.ghost = g;
+    planUnplacedPanel.classList.add("dragging");
+    planDragMove(e);
+  }
+  function planDragMove(e){
+    if (!planDrag || !planDrag.ghost) return;
+    planDrag.ghost.style.left = e.clientX + "px";
+    planDrag.ghost.style.top = e.clientY + "px";
+    planDrag.ghost.classList.toggle("over-plan", planPointOverPlan(e.clientX, e.clientY));
+  }
+  function planDragEnd(){
+    if (planDrag && planDrag.ghost) planDrag.ghost.remove();
+    planUnplacedPanel.classList.remove("dragging");
+    planDrag = null;
+  }
+  document.addEventListener("pointermove", function(e){
+    if (!planDrag || e.pointerId !== planDrag.pointerId) return;
+    if (!planDrag.active){
+      var dx = e.clientX - planDrag.startX, dy = e.clientY - planDrag.startY;
+      if (planDrag.grip || planDrag.mouse){
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) planDragBegin(e);
+      } else if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2){
+        planDragBegin(e); // a sideways slide on a touch screen
+      } else if (Math.abs(dy) > 12){
+        planDrag = null; // scrolling the list
+      }
+      return;
+    }
+    e.preventDefault();
+    planDragMove(e);
+  }, { passive: false });
+  document.addEventListener("pointerup", function(e){
+    if (!planDrag || e.pointerId !== planDrag.pointerId) return;
+    var d = planDrag;
+    if (!d.active){ planDrag = null; return; } // a tap -- the click handler starts tap-to-place
+    planDragSuppressClick = true;
+    setTimeout(function(){ planDragSuppressClick = false; }, 400);
+    var over = planPointOverPlan(e.clientX, e.clientY);
+    planDragEnd();
+    if (!over){ showToast("Drop it on the plan (not on the list)."); return; }
+    var world = planClientToWorld(e.clientX, e.clientY);
+    stopPinMode();
+    dropEntryAt(d.entry, world);
+  });
+  document.addEventListener("pointercancel", function(e){ if (planDrag && e.pointerId === planDrag.pointerId) planDragEnd(); });
+  if (planUnplacedList) planUnplacedList.addEventListener("click", function(e){
+    if (planDragSuppressClick) return;
+    var row = e.target.closest ? e.target.closest(".unplaced-item") : null;
+    if (!row) return;
+    var entry = planListEntries[+row.getAttribute("data-idx")];
+    if (entry) startPinMode(entry);
+  });
+
+  /* ---- tap-to-place (v31) ---- */
+  function startPinMode(entry){
+    if (!entry){ stopPinMode(); return; }
+    if (entry.room !== undefined && entry.joineryId !== undefined && !entry.kind) entry = { kind: "item", item: entry }; // (tests / old callers pass an item)
     planUnplacedPanel.hidden = true;
-    planPinMode = { item: item, draft: null, busy: false };
+    planPinMode = { entry: entry, item: woEntryDisplay(entry), draft: null, busy: false };
     renderPinDraft();
     renderPinBar();
   }
@@ -7659,7 +8177,7 @@
     if (!planPinMode){ planPinBar.hidden = true; return; }
     var it = planPinMode.item;
     planPinBar.hidden = false;
-    planPinBarText.innerHTML = (prefix ? escapeHtml(prefix) + " " : "") + "Placing <b>" + escapeHtml(it.joineryId || "(no code)") + "</b> — " + escapeHtml(it.room) +
+    planPinBarText.innerHTML = (prefix ? escapeHtml(prefix) + " " : "") + "Placing <b>" + escapeHtml(it.joineryId || "(no code)") + "</b>" + (it.room ? " — " + escapeHtml(it.room) : " (you'll pick the room)") +
       (it.workOrderNo ? " · WO " + escapeHtml(it.workOrderNo) : "") + ". " + (planPinMode.draft ? "Tap again to move it, or Place here." : "Tap the plan where it goes.");
     planPinPlaceBtn.hidden = !planPinMode.draft;
   }
@@ -7685,69 +8203,267 @@
     renderPinDraft();
     renderPinBar();
   }
-  function nextUnplacedAfter(item){
-    var remaining = planUnplacedItems.filter(function(it){ return it !== item && !planPinSkipped[woItemKey(it)]; });
+  function nextUnplacedAfter(entry){
+    var key = woEntryKey(entry);
+    var remaining = planUnplacedItems.filter(function(e){ return woEntryKey(e) !== key && !planPinSkipped[woEntryKey(e)]; });
     if (!remaining.length) return null;
-    // same room first, then list order after this one
-    var sameRoom = remaining.filter(function(it){ return it.room === item.room; });
-    if (sameRoom.length) return sameRoom[0];
-    var idx = planUnplacedItems.indexOf(item);
-    var after = remaining.filter(function(it){ return planUnplacedItems.indexOf(it) > idx; });
+    if (entry.kind === "item"){
+      var sameRoom = remaining.filter(function(e){ return e.kind === "item" && e.item.room === entry.item.room; });
+      if (sameRoom.length) return sameRoom[0];
+    }
+    var idx = -1;
+    planUnplacedItems.forEach(function(e, i){ if (woEntryKey(e) === key) idx = i; });
+    var after = remaining.filter(function(e){ return planUnplacedItems.indexOf(e) > idx; });
     return after[0] || remaining[0];
   }
   if (planPinSkipBtn) planPinSkipBtn.addEventListener("click", function(){
     if (!planPinMode) return;
-    var cur = planPinMode.item;
-    planPinSkipped[woItemKey(cur)] = true;
+    var cur = planPinMode.entry;
+    planPinSkipped[woEntryKey(cur)] = true;
     var next = nextUnplacedAfter(cur);
-    if (!next){ stopPinMode("That's the last unplaced item on this level."); return; }
+    if (!next){ stopPinMode("That's the last one to place on this level."); return; }
     startPinMode(next);
   });
   if (planPinStopBtn) planPinStopBtn.addEventListener("click", function(){ stopPinMode(); });
   if (planPinPlaceBtn) planPinPlaceBtn.addEventListener("click", function(){ placePinnedItem(); });
   function placePinnedItem(){
     if (!planPinMode || !planPinMode.draft || planPinMode.busy) return Promise.resolve();
-    var item = planPinMode.item, pt = planPinMode.draft;
+    var entry = planPinMode.entry, pt = planPinMode.draft;
     planPinMode.busy = true;
     planPinPlaceBtn.disabled = true;
-    var levelName = activeLevelName;
+    var next = nextUnplacedAfter(entry);
+    return dropEntryAt(entry, pt).then(function(done){
+      planPinPlaceBtn.disabled = false;
+      if (!planPinMode) return;
+      if (!done){ planPinMode.busy = false; return; }
+      var label = woEntryDisplay(entry).joineryId || "";
+      next = next && planUnplacedItems.filter(function(e){ return woEntryKey(e) === woEntryKey(next); })[0];
+      if (!next){ stopPinMode("Placed " + label + " — everything on this level is placed."); return; }
+      planPinMode = { entry: next, item: woEntryDisplay(next), draft: null, busy: false };
+      renderPinDraft();
+      renderPinBar("Placed " + label + ".");
+    });
+  }
+
+  /* ---- the drop itself ---- */
+  // Resolves true when something was placed.
+  function dropEntryAt(entry, pt){
+    if (entry.kind === "item") return placeItemMarker(entry.item, pt);
+    return chooseDropRoom(entry, pt).then(function(room){
+      if (!room) return false;
+      return dropWorkOrderInRoom(entry.w, room, pt);
+    });
+  }
+  function markerExistsIn(level, room, code){
+    return (level.markers || []).some(function(o){ return o.type === "roomlink" && String(o.roomName || "").toLowerCase() === String(room).toLowerCase() && String(o.joineryCode || "").toLowerCase() === String(code || "").toLowerCase(); });
+  }
+  function addMarkerToLevel(levelName, room, code, pt){
     return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){
       return readLevelFile(activeProjectHandle, activeProjectName, levelName);
     }).then(function(level){
       if (!level){ var e = new Error("This level has no plan file yet"); e.code = "no_level"; throw e; }
-      var already = (level.markers || []).some(function(o){ return o.type === "roomlink" && String(o.roomName || "").toLowerCase() === String(item.room).toLowerCase() && String(o.joineryCode || "").toLowerCase() === String(item.joineryId || "").toLowerCase(); });
-      if (already) return { already: true };
-      if (!level.rooms.some(function(r){ return r.name.toLowerCase() === String(item.room).toLowerCase(); })) level.rooms.push({ name: item.room });
+      if (markerExistsIn(level, room, code)) return { already: true };
+      if (!level.rooms.some(function(r){ return r.name.toLowerCase() === String(room).toLowerCase(); })) level.rooms.push({ name: room });
       var existingMaxId = (level.markers || []).reduce(function(m, o){ return Math.max(m, parseInt((o.id || "o0").slice(1), 10) || 0); }, 0);
       if (existingMaxId >= planNextId) planNextId = existingMaxId + 1;
-      var marker = makeRoomLinkObject(pt.x, pt.y, item.room, item.joineryId || "");
+      var marker = makeRoomLinkObject(pt.x, pt.y, room, code || "");
       level.markers = level.markers || [];
       level.markers.push(marker);
-      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){ return { marker: marker, level: level }; });
+      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){ return { marker: marker }; });
+    });
+  }
+  function showPlacedMarker(levelName, marker){
+    if (levelName !== activeLevelName || !planSaved) return;
+    planSaved.objects = planSaved.objects || [];
+    planSaved.objects.push(marker);
+    planRenderMarkers();
+  }
+  function dropFailed(err){
+    console.error("Placing on the plan failed:", err);
+    if (isReadFailed(err)) readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : "this level's file");
+    else showToast("Couldn't place it — nothing was changed. Try again.");
+    return false;
+  }
+  // An item that already exists: just its marker.
+  function placeItemMarker(item, pt){
+    var levelName = activeLevelName;
+    return addMarkerToLevel(levelName, item.room, item.joineryId, pt).then(function(res){
+      if (res.already){ showToast((item.joineryId || item.room) + " is already on the plan (placed elsewhere meanwhile)."); refreshUnplacedForLevel(); return false; }
+      showPlacedMarker(levelName, res.marker);
+      registerAllItems = [];
+      planUnplacedItems = planUnplacedItems.filter(function(e){ return !(e.kind === "item" && e.item === item); });
+      renderUnplacedButton();
+      if (!planUnplacedPanel.hidden) renderUnplacedList();
+      offerUndo("Placed " + (item.joineryId || item.room) + " in " + item.room + ".", { level: levelName, markerId: res.marker.id, room: item.room, code: item.joineryId, createdItem: null, wo: null });
+      return true;
+    }).catch(dropFailed);
+  }
+  // A work order dropped in a room: adds its item there (or places an
+  // existing unplaced one), then re-shares the sell price.
+  function dropWorkOrderInRoom(w, room, pt){
+    if (!deviceUserName){ showToast("Sign in with your name on the Projects screen first — every drop is logged under your name.", 4500); return Promise.resolve(false); }
+    var who = deviceUserName, levelName = activeLevelName, at = new Date().toISOString();
+    var created = null, count = 0, share = 0, code = w.code;
+    return readJoineryItems(activeProjectHandle).then(function(items){
+      var here = items.filter(function(it){ return it.level === levelName && String(it.room || "").toLowerCase() === room.toLowerCase(); });
+      var mine = here.filter(function(it){ return String(it.workOrderNo || "").trim() === w.wo; })[0];
+      var target = mine;
+      if (!target){
+        // the code is taken in this room by a different work order: numbered suffix, same rule as Add item
+        var taken = here.map(function(it){ return String(it.joineryId || "").toLowerCase(); });
+        var n = 1;
+        while (taken.indexOf(code.toLowerCase()) !== -1){ n++; code = w.code + " " + n; }
+        created = { joineryId: code, description: w.desc || "", level: levelName, room: room, status: "created", workOrderNo: w.wo, dollarValue: 0,
+          importedFrom: { file: w.file || "", at: at, by: who, droppedOnPlan: true } };
+        items.push(created);
+        target = created;
+      }
+      woResplitValues(items, { workOrders: [w] }, who, "Placed in " + room);
+      var all = items.filter(function(it){ return String(it.workOrderNo || "").trim() === w.wo; });
+      count = all.length; share = Number(target.dollarValue) || 0;
+      code = target.joineryId;
+      return writeJoineryItems(activeProjectHandle, items);
+    }).then(function(){
+      return addMarkerToLevel(levelName, room, code, pt);
     }).then(function(res){
-      if (levelName !== activeLevelName) return;
-      if (res.already){
-        showToast((item.joineryId || item.room) + " is already on the plan (placed elsewhere meanwhile).");
-      } else if (planSaved){
-        planSaved.objects = planSaved.objects || [];
-        planSaved.objects.push(res.marker);
+      if (res.already){ showToast(code + " is already on the plan in " + room + "."); refreshUnplacedForLevel(); return false; }
+      showPlacedMarker(levelName, res.marker);
+      registerAllItems = [];
+      offerUndo("Placed " + code + " in " + room + (w.sellPrice !== null && w.sellPrice !== undefined ? " — " + woMoney(share) + (count > 1 ? " each across " + count + " rooms" : "") : "") + ".",
+        { level: levelName, markerId: res.marker.id, room: room, code: code, createdItem: created ? { level: levelName, room: room, joineryId: code } : null, wo: w });
+      refreshUnplacedForLevel();
+      return true;
+    }).catch(dropFailed);
+  }
+
+  /* ---- which room? ---- */
+  var woRoomPickBackdrop = document.getElementById("woRoomPickBackdrop");
+  var woRoomPickTitle = document.getElementById("woRoomPickTitle");
+  var woRoomPickSub = document.getElementById("woRoomPickSub");
+  var woRoomPickSearch = document.getElementById("woRoomPickSearch");
+  var woRoomPickList = document.getElementById("woRoomPickList");
+  var woRoomPickNewInput = document.getElementById("woRoomPickNewInput");
+  var woRoomPickNewBtn = document.getElementById("woRoomPickNewBtn");
+  var woRoomPickCancelBtn = document.getElementById("woRoomPickCancelBtn");
+  var woRoomPickState = null; // { resolve, rooms[], taken{}, suggested[] }
+  function chooseDropRoom(entry, pt){
+    var w = entry.w, levelName = activeLevelName;
+    return Promise.all([listExistingRoomsInLevel(activeProjectHandle, activeProjectName, levelName), readJoineryItems(activeProjectHandle)]).then(function(res){
+      var rooms = res[0].slice(), items = res[1];
+      items.forEach(function(it){ if (it.level === levelName && it.room && rooms.indexOf(it.room) === -1) rooms.push(it.room); });
+      rooms.sort(function(a, b){ return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }); });
+      var taken = {};
+      items.forEach(function(it){ if (it.level === levelName && String(it.workOrderNo || "").trim() === w.wo) taken[String(it.room).toLowerCase()] = true; });
+      // suggestions: the nearest marker's room, then the report room / hint
+      var suggested = [];
+      var best = null, bestD = Infinity;
+      ((planSaved && planSaved.objects) || []).forEach(function(o){
+        if (o.type !== "roomlink" || !o.roomName) return;
+        var d = Math.hypot(o.x - pt.x, o.y - pt.y);
+        if (d < bestD){ bestD = d; best = o.roomName; }
+      });
+      if (best) suggested.push(best);
+      [w.reportRoom, w.roomHint].forEach(function(r){
+        if (!r) return;
+        var match = rooms.filter(function(x){ return x.toLowerCase() === r.toLowerCase(); })[0];
+        if (match && suggested.indexOf(match) === -1) suggested.push(match);
+      });
+      var mineCount = items.filter(function(it){ return String(it.workOrderNo || "").trim() === w.wo; }).length;
+      woRoomPickTitle.textContent = "Which room is " + (w.code || "this") + " in?";
+      woRoomPickSub.textContent = [w.desc, "WO " + w.wo, (w.sellPrice !== null && w.sellPrice !== undefined) ? woMoney(w.sellPrice) : ""].filter(Boolean).join(" · ") +
+        (mineCount ? " — already in " + mineCount + " room" + (mineCount === 1 ? "" : "s") + "; its value will be split across " + (mineCount + 1) + "." : "");
+      woRoomPickSearch.value = ""; woRoomPickNewInput.value = "";
+      return new Promise(function(resolve){
+        woRoomPickState = { resolve: resolve, rooms: rooms, taken: taken, suggested: suggested };
+        renderRoomPick();
+        woRoomPickBackdrop.hidden = false;
+      });
+    });
+  }
+  function renderRoomPick(){
+    var st = woRoomPickState;
+    if (!st) return;
+    var q = (woRoomPickSearch.value || "").trim().toLowerCase();
+    var html = "";
+    function btn(r, sug){
+      var taken = st.taken[r.toLowerCase()];
+      return "<button type=\"button\" class=\"room-pick" + (sug ? " suggested" : "") + "\" data-room=\"" + escapeHtml(r) + "\"" + (taken ? " disabled" : "") + ">" + escapeHtml(r) +
+        (taken ? " <i>(already here)</i>" : sug ? " <i>(" + (st.suggested[0] === r ? "nearest" : "suggested") + ")</i>" : "") + "</button>";
+    }
+    if (!q) st.suggested.forEach(function(r){ html += btn(r, true); });
+    st.rooms.forEach(function(r){
+      if (!q && st.suggested.indexOf(r) !== -1) return;
+      if (q && r.toLowerCase().indexOf(q) === -1) return;
+      html += btn(r, false);
+    });
+    woRoomPickList.innerHTML = html || "<p class=\"sub\" style=\"margin:6px 0;\">No room matches — add it as a new room below.</p>";
+  }
+  function closeRoomPick(value){
+    var st = woRoomPickState;
+    woRoomPickState = null;
+    woRoomPickBackdrop.hidden = true;
+    if (st) st.resolve(value || null);
+  }
+  if (woRoomPickSearch) woRoomPickSearch.addEventListener("input", renderRoomPick);
+  if (woRoomPickList) woRoomPickList.addEventListener("click", function(e){
+    var b = e.target.closest ? e.target.closest("button[data-room]") : null;
+    if (b && !b.disabled) closeRoomPick(b.getAttribute("data-room"));
+  });
+  if (woRoomPickNewBtn) woRoomPickNewBtn.addEventListener("click", function(){
+    var name = sanitizeFileBase(woCleanRoomName(woRoomPickNewInput.value || ""));
+    if (!woRoomPickNewInput.value.trim() || name === "plan"){ showToast("Type the new room's name first."); return; }
+    var st = woRoomPickState;
+    var existing = st && st.rooms.filter(function(r){ return r.toLowerCase() === name.toLowerCase(); })[0];
+    if (existing && st.taken[existing.toLowerCase()]){ showToast("It's already in " + existing + "."); return; }
+    closeRoomPick(existing || name);
+  });
+  if (woRoomPickCancelBtn) woRoomPickCancelBtn.addEventListener("click", function(){ closeRoomPick(null); });
+
+  /* ---- Undo the last drop ---- */
+  var planUndoTimer = null;
+  function offerUndo(text, info){
+    planLastDrop = info;
+    if (!planUndoBar){ showToast(text); return; }
+    planUndoText.textContent = text;
+    planUndoBar.hidden = false;
+    clearTimeout(planUndoTimer);
+    planUndoTimer = setTimeout(function(){ planUndoBar.hidden = true; planLastDrop = null; }, 12000);
+  }
+  if (planUndoBtn) planUndoBtn.addEventListener("click", function(){ undoLastDrop(); });
+  function undoLastDrop(){
+    var d = planLastDrop;
+    planUndoBar.hidden = true;
+    clearTimeout(planUndoTimer);
+    planLastDrop = null;
+    if (!d) return Promise.resolve(false);
+    var who = deviceUserName || "";
+    return readLevelFile(activeProjectHandle, activeProjectName, d.level).then(function(level){
+      if (!level) return;
+      level.markers = (level.markers || []).filter(function(o){ return o.id !== d.markerId; });
+      return writeLevelFile(activeProjectHandle, activeProjectName, d.level, level);
+    }).then(function(){
+      if (!d.createdItem) return;
+      return readJoineryItems(activeProjectHandle).then(function(items){
+        var c = d.createdItem;
+        var kept = items.filter(function(it){ return !(it.level === c.level && it.room === c.room && it.joineryId === c.joineryId && String(it.workOrderNo || "").trim() === d.wo.wo); });
+        if (d.wo) woResplitValues(kept, { workOrders: [d.wo] }, who, "Undo: taken out of " + c.room);
+        return writeJoineryItems(activeProjectHandle, kept);
+      });
+    }).then(function(){
+      if (d.level === activeLevelName && planSaved){
+        planSaved.objects = (planSaved.objects || []).filter(function(o){ return o.id !== d.markerId; });
         planRenderMarkers();
       }
-      var placedItem = item;
-      var next = nextUnplacedAfter(placedItem);
-      planUnplacedItems = planUnplacedItems.filter(function(it){ return it !== placedItem; });
-      renderUnplacedButton();
       registerAllItems = [];
-      if (!next){ stopPinMode("Placed " + (placedItem.joineryId || placedItem.room) + " — everything on this level is placed."); return; }
-      planPinMode = { item: next, draft: null, busy: false };
-      renderPinDraft();
-      renderPinBar("Placed " + (placedItem.joineryId || placedItem.room) + ".");
+      showToast("Undone — " + d.code + " taken off the plan" + (d.createdItem ? " and out of " + d.room : "") + ".");
+      refreshUnplacedForLevel();
+      return true;
     }).catch(function(err){
-      console.error("Placing the pin failed:", err);
-      if (planPinMode) planPinMode.busy = false;
-      if (isReadFailed(err)) readFailedToast("this level's file");
-      else showToast("Couldn't place it — nothing was changed. Try again.");
-    }).then(function(){ planPinPlaceBtn.disabled = false; });
+      console.error("Undo failed:", err);
+      if (isReadFailed(err)) readFailedToast("the project's files");
+      else showToast("Couldn't undo — try again, or delete it from the item's page.");
+      return false;
+    });
   }
 
   window.__testHooks = {
@@ -7756,8 +8472,21 @@
     woInterpretGroupsForTest: function(groups){ return woInterpretGroups(groups); },
     woImportStateForTest: function(){ return woImportState; },
     woStartImportFromFileForTest: function(file){ return woStartImportFromFile(file); },
-    unplacedItemsForTest: function(){ return planUnplacedItems.map(function(it){ return { room: it.room, joineryId: it.joineryId, workOrderNo: it.workOrderNo }; }); },
+    unplacedItemsForTest: function(){ return planUnplacedItems.map(function(e){ var d = woEntryDisplay(e); return { kind: e.kind, room: d.room, joineryId: d.joineryId, workOrderNo: d.workOrderNo }; }); },
+    placedWosForTest: function(){ return planPlacedWos.map(function(e){ return { wo: e.w.wo, code: e.w.code, rooms: e.items.map(function(it){ return it.room; }) }; }); },
     pinModeForTest: function(){ return planPinMode ? { item: { room: planPinMode.item.room, joineryId: planPinMode.item.joineryId }, draft: planPinMode.draft } : null; },
+    // (v32) Work Order Cost Analysis import + drag-and-drop
+    woParseCostAnalysisRowsForTest: function(pages){ return woParseCostAnalysisRows(pages); },
+    woInterpretCostRowsForTest: function(rows){ return woInterpretCostRows(rows); },
+    woSplitValueForTest: function(t, n){ return woSplitValue(t, n); },
+    woListReadForTest: function(){ return woListRead(activeProjectHandle); },
+    dropEntryAtForTest: function(kind, key, x, y){
+      var e = planUnplacedItems.concat(planPlacedWos).filter(function(en){ return en.kind === kind && (kind === "wo" ? en.w.wo === key : (en.item.room + "|" + en.item.joineryId) === key); })[0];
+      return e ? dropEntryAt(e, { x: x, y: y }) : Promise.resolve("no-entry");
+    },
+    roomPickStateForTest: function(){ return woRoomPickState ? { rooms: woRoomPickState.rooms.slice(), suggested: woRoomPickState.suggested.slice(), taken: Object.keys(woRoomPickState.taken) } : null; },
+    undoLastDropForTest: function(){ return undoLastDrop(); },
+    planClientToWorldForTest: function(x, y){ return planClientToWorld(x, y); },
     planTapForTest: function(x, y){ onPlanTap(x, y); },
     planSavedMarkersForTest: function(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === 'roomlink'; }).map(function(o){ return { roomName: o.roomName, joineryCode: o.joineryCode, x: o.x, y: o.y }; }); },
     refreshUnplacedForTest: function(){ return refreshUnplacedForLevel(); },
