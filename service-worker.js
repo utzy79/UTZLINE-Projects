@@ -541,7 +541,8 @@ var ICON_VERSION = "v1";
 // v31 (2026-09-28): Import work orders (PDF) + Unplaced pin-drop on the level plan.
 // v32 (2026-09-28): Work Order Cost Analysis import + drag-and-drop list with value split.
 // v33 (2026-09-28): rework register + item card fold the rework event files (shared UtzRework module).
-var CACHE_NAME = "utzline-projects-cache-v41";
+// v34 (2026-09-28): floor plan PDF labels place the joinery items; Move markers mode with check flags.
+var CACHE_NAME = "utzline-projects-cache-v42";
 
 var PRECACHE_URLS = [
   "./",

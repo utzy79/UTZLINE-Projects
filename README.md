@@ -1,6 +1,25 @@
 # UTZLINE Projects — installable app
 
-**Current version: v33** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v34** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v34 (2026-09-28) — The floor plan's own labels place the joinery items.** Andrew: *"do you think that the import could scan the floor plans and place the joinery items directly (with option to move if incorrect)"*, with the Jones Radiology plan A-104. A CAD-exported plan PDF keeps its labels as real text. On A-104, 49 of the 51 JG codes in the work order report are on the plan in a tag beside the joinery, and every room number (G.01–G.60) sits in the middle of its room.
+
+- **Importing a floor plan PDF also reads its labels.**
+  - Every short code-like word on the page (e.g. JG.31.2 or G.31) is read. Its position is worked out in the plan's own pixels, with rotation taken into account. On A-104 every one lands within 3 px of where it's printed.
+  - The labels are saved in `Project Saves/Plan Labels/<Project> - <Level>.json`, not in the level file, so Site Measure's level saves can't drop them.
+  - Replacing the plan replaces its labels, and a plan with no text (a scan or a picture) stores none. There's no OCR, so it stays light on 4 GB tablets.
+- **Items are placed straight away, whichever order you import in.**
+  - Importing a work order report places the new items on levels whose plan has labels.
+  - Importing a plan places the items already waiting on that level.
+  - Each item goes on its code's tag. If the plan doesn't show its code, it goes on its room number's label, stacked just under it. Anything neither can place stays in "To place".
+  - A code shown more than once goes to the copy nearest its room. The work orders with no room still wait for you to drag them in.
+  - Jones Radiology: 48 items on their tags, 1 (JG.31.1) on room G.31's label, and the 13 with no room left to place.
+- **Checking them.**
+  - Anything placed this way has a dashed **amber ring** until someone checks it, and the plan shows **Check placed (N)**.
+  - That opens **Move markers** mode. **Drag** a marker if it's in the wrong place (its label moves with it; Undo is offered), **tap** it if it's right, or press **All look right**.
+  - Move markers is also a button on every plan, for moving any marker. In Move mode a tap never adds an item, and the device Back button leaves Move mode first.
+- **To place** shows **Place from the plan's labels** when there are unplaced items and the plan has labels. If the plan was imported before v34, it says to import the plan PDF again.
+- New test: `pdftest-projects/run_projects_plan_labels_autoplace.js`. It uses the real A-104 plan and the 3756 report, checks every label against pdftotext's positions, and covers both import orders, Move mode, check, Undo, and Place from the plan's labels. Every Projects test passes (23/23).
 
 **v33 (2026-09-28) — Rework register and item card show every app's rework changes.** Part of the rework round (Andrew: *"also need to fix this rework conflict. rework pdfs should be user datetime stamped. they should also show the entire status log per rework and have larger photos"*, and *"reworks that are delivered to be green border / text and sent to bottom of page (maybe a separate selectable delivered folder)"*). The apps now record each rework change as its own small file in the item's log folder instead of rewriting the shared rework file; Projects now reads those files (UTZLINE Rework Event Standard v1).
 

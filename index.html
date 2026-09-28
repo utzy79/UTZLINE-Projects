@@ -418,6 +418,16 @@
   .plan-drag-ghost.over-plan{ border-color: #ff5b5b; background: #2a1414; }
   .plan-undo-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #142a1b; border-top: 1px solid var(--border); font-size: 14px; }
   .plan-undo-bar[hidden]{ display: none; }
+  /* (v34) placed from the plan's labels: amber ring until someone's checked it; Move mode */
+  .marker-check-ring{ fill: none; stroke: #f0b23e; stroke-dasharray: 7 5; pointer-events: none; }
+  .plan-move-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #2a2210; border-top: 1px solid var(--border); font-size: 14px; }
+  .plan-move-bar[hidden]{ display: none; }
+  .plan-move-bar-btns{ display:flex; gap: 8px; flex-wrap: wrap; }
+  .plan-canvas-screen.moving .plan-canvas-stage svg{ cursor: move; }
+  #planCheckBtn{ background: #f0b23e; color: #1a1205; }
+  .unplaced-auto{ margin: 0 0 8px; }
+  .unplaced-auto .btn{ width: 100%; }
+  .unplaced-auto .sub{ font-size: 12px; margin: 6px 0 0; }
   .room-pick-modal{ max-width: 520px; }
   .room-pick-search, .room-pick-new input{ width: 100%; box-sizing: border-box; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 14px; }
   .room-pick-list{ max-height: 46vh; overflow-y: auto; margin: 10px 0; display:flex; flex-direction: column; gap: 6px; }
@@ -1055,7 +1065,12 @@
       <button class="btn secondary" id="backFromPlanCanvasBtn">&larr; Back</button>
       <span id="planCanvasTitle">Level plan</span>
       <!-- (v31) imported items not yet on this plan; (v32) drag them on, work orders with no room too -->
-      <button class="btn" id="planUnplacedBtn" hidden style="margin-left:auto;">To place (0)</button>
+      <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+        <!-- (v34) markers placed from the plan's own labels, not yet checked -->
+        <button class="btn" id="planCheckBtn" hidden>Check placed (0)</button>
+        <button class="btn secondary" id="planMoveBtn">Move markers</button>
+        <button class="btn" id="planUnplacedBtn" hidden>To place (0)</button>
+      </span>
     </div>
     <div class="plan-canvas-stage" id="planCanvasStage">
       <svg id="planCanvasSvg" width="100%" height="100%">
@@ -1077,6 +1092,14 @@
         <button class="btn" id="planPinPlaceBtn" hidden>Place here</button>
         <button class="btn secondary" id="planPinSkipBtn">Skip</button>
         <button class="btn secondary" id="planPinStopBtn">Stop</button>
+      </span>
+    </div>
+    <!-- (v34) Move mode: drag markers; tap an amber one to say it's right -->
+    <div class="plan-move-bar" id="planMoveBar" hidden>
+      <span id="planMoveBarText">Drag a marker to move it.</span>
+      <span class="plan-move-bar-btns">
+        <button class="btn secondary" id="planCheckAllBtn" hidden>All look right</button>
+        <button class="btn" id="planMoveDoneBtn">Done</button>
       </span>
     </div>
     <!-- (v32) straight after a drop -->
@@ -3635,6 +3658,40 @@
   // "job/project name repeated in the filename" convention Andrew's own
   // diagram uses for Progress Viewer's Level-scoped file, so this file
   // still identifies itself if it's ever copied out of its folder.
+  /* (v34) A level's plan labels (read from its plan PDF at import -- see
+     pdfPageLabels) live in their own file, Project Saves/Plan Labels/
+     <same name as the level file>, not in the level file itself: Site
+     Measure rewrites the level file from its own field list, and every app
+     reads the level file on every plan open (4 GB tablets). Only this app
+     reads or writes Plan Labels. Replaced with the plan; removed when the
+     new plan has none. */
+  function planLabelsDirSegments(){ return [projectSavesDirName(), "Plan Labels"]; }
+  function readPlanLabels(projectHandle, projectName, levelName){
+    if (!projectHandle) return Promise.resolve(null);
+    return projectDir(projectHandle, planLabelsDirSegments(), false).then(function(dirH){
+      return readTextFileStrict(dirH, levelFileName(projectName, levelName), "plan labels for " + levelName, function(t){
+        var v = JSON.parse(t);
+        if (!v || typeof v !== "object" || !Array.isArray(v.labels)) throw new Error("not a plan labels file");
+        return v;
+      }).then(function(res){ return res.found ? res.value : null; });
+    }, function(err){
+      if (isNotFoundErr(err)) return null;
+      return Promise.reject(readFailedErr("Plan Labels folder", err));
+    });
+  }
+  function writePlanLabels(projectHandle, projectName, levelName, data){
+    var fname = levelFileName(projectName, levelName);
+    if (!data || !Array.isArray(data.labels) || !data.labels.length){
+      return projectDir(projectHandle, planLabelsDirSegments(), false).then(function(dirH){
+        return dirH.removeEntry(fname).catch(function(){});
+      }, function(){});
+    }
+    return projectDir(projectHandle, planLabelsDirSegments(), true).then(function(dirH){
+      return dirH.getFileHandle(fname, { create: true });
+    }).then(function(fh){ return fh.createWritable(); }).then(function(w){
+      return w.write(JSON.stringify(data)).then(function(){ return w.close(); });
+    });
+  }
   function levelFileName(projectName, levelName){
     return sanitizeFileBase(projectName) + " - " + sanitizeFileBase(levelName) + ".json";
   }
@@ -4544,11 +4601,67 @@
       });
     });
   }
+  /* (v34) Andrew: "do you think that the import could scan the floor plans
+     and place the joinery items directly (with option to move if
+     incorrect)". A CAD-exported plan PDF keeps its labels as real text --
+     on Jones Radiology's A-104, 49 of the 51 JG codes in the work order
+     report and every room number (G.01-G.60) -- each sitting in its tag
+     beside the joinery, or in the middle of its room. So while the plan is
+     imported (the PDF is in hand; nothing to re-pick later), every short
+     code-like word on the page is read with pdf.js's getTextContent and its
+     centre mapped through the SAME viewport the page is rendered with --
+     rotation included -- into plan-image pixels, i.e. marker coordinates.
+     Stored as { from, page, at, labels: [[text, x, y], ...] } in Project
+     Saves/Plan Labels/ (readPlanLabels / writePlanLabels).
+     Placement from them: autoPlaceFromPlanLabels. A scanned (picture)
+     plan has no text layer and simply stores none -- no OCR on a 4 GB
+     tablet. */
+  var PLAN_LABEL_RE = /^(?=.*\d)(?=.*[A-Za-z])[A-Za-z0-9][A-Za-z0-9.\-]{0,22}[A-Za-z0-9]$/;
+  function pdfPageLabels(pdfDoc, pageNum, scale){
+    return pdfDoc.getPage(pageNum).then(function(page){
+      var vp = page.getViewport({ scale: scale });
+      var longest = Math.max(vp.width, vp.height);
+      if (longest > PDF_IMPORT_MAX_DIM) vp = page.getViewport({ scale: scale * (PDF_IMPORT_MAX_DIM / longest) });
+      return page.getTextContent().then(function(tc){
+        var out = [];
+        (tc.items || []).forEach(function(it){
+          var str = String(it.str || "");
+          if (!str.trim() || !/\d/.test(str)) return;
+          var t = it.transform || [1, 0, 0, 1, 0, 0];
+          var dl = Math.hypot(t[0], t[1]) || 1, ul = Math.hypot(t[2], t[3]) || 1;
+          var dx = t[0] / dl, dy = t[1] / dl, ux = t[2] / ul, uy = t[3] / ul;
+          var width = Number(it.width) || 0, height = Number(it.height) || ul;
+          var re = /\S+/g, m;
+          while ((m = re.exec(str))){
+            var tok = m[0].replace(/^[(\[{"']+|[)\]}"',;:]+$/g, "");
+            if (!PLAN_LABEL_RE.test(tok)) continue;
+            var frac = (m.index + m[0].length / 2) / str.length;
+            var px = t[4] + dx * width * frac + ux * height * 0.35;
+            var py = t[5] + dy * width * frac + uy * height * 0.35;
+            var p = vp.convertToViewportPoint(px, py);
+            out.push([tok, Math.round(p[0]), Math.round(p[1])]);
+          }
+        });
+        if (page.cleanup) page.cleanup();
+        return out;
+      });
+    }).catch(function(err){
+      console.error("Reading the plan's labels failed (the plan still imports):", err);
+      return [];
+    });
+  }
   function pdfFileToImage(file){
     return withPdfImportLibsReady(function(){
       ensurePdfWorker();
       var importScale = 1 / PX_TO_PT;
-      function renderOnePage(pdfDoc, pageNum){ return renderPdfPageMaybeTiled(pdfDoc, pageNum, importScale); }
+      function renderOnePage(pdfDoc, pageNum){
+        return renderPdfPageMaybeTiled(pdfDoc, pageNum, importScale).then(function(res){
+          return pdfPageLabels(pdfDoc, pageNum, importScale).then(function(labels){
+            res.planLabels = { from: file.name || "", page: pageNum, at: new Date().toISOString(), labels: labels };
+            return res;
+          });
+        });
+      }
       return file.arrayBuffer().then(function(buf){
         return window.pdfjsLib.getDocument({ data: buf }).promise;
       }).then(function(pdfDoc){
@@ -4658,7 +4771,7 @@
     if (isPdfFile(file)){
       showToast("Importing PDF…");
       return pdfFileToImage(file).then(function(res){
-        return { imageDataURL: res.tiles ? null : res.dataUrl, imageTiles: res.tiles || null, imageW: res.w, imageH: res.h };
+        return { imageDataURL: res.tiles ? null : res.dataUrl, imageTiles: res.tiles || null, imageW: res.w, imageH: res.h, planLabels: res.planLabels || null };
       });
     }
     return readImageFile(file).then(function(res){
@@ -4704,10 +4817,26 @@
         data.imageH = res.imageH;
         return writeLevelFile(activeProjectHandle, activeProjectName, activeLevelName, data);
       }).then(function(){
+        // (v34) the plan's own labels (a PDF with a text layer), or none --
+        // a replaced plan never keeps the old plan's label positions
+        return writePlanLabels(activeProjectHandle, activeProjectName, activeLevelName, res.planLabels).catch(function(err){
+          console.error("Saving the plan's labels failed:", err);
+          res.planLabels = null;
+        });
+      }).then(function(){
         renderPlanStatus(levelPlanStatus, true, "This level");
         renderPlanPreview(levelPlanPreview, res.imageDataURL, res.imageTiles, res.imageW, res.imageH);
         openPlanCanvasBtn.hidden = false;
-        showToast("Floor plan saved.");
+        var nLabels = res.planLabels && res.planLabels.labels ? res.planLabels.labels.length : 0;
+        if (!nLabels){ showToast("Floor plan saved." + (isPdfFile(file) ? " (No text labels in this PDF, so items can't be placed from it.)" : "")); return; }
+        // Items already imported for this level go straight onto their tags.
+        var levelName = activeLevelName;
+        return autoPlaceFromPlanLabels(levelName).then(function(r){
+          showToast("Floor plan saved — " + nLabels + " labels read." + autoPlaceSummary(r), 8000);
+        }, function(err){
+          console.error("Placing from the plan's labels failed:", err);
+          showToast("Floor plan saved. (Couldn't place items from its labels just now — use To place → Place from the plan's labels.)", 7000);
+        });
       });
     }).catch(function(err){
       if (err && err.code === "pdf_import_cancelled") return;
@@ -6044,6 +6173,7 @@
   var planView = { tx: 0, ty: 0, scale: 1 };
   var planImageW = 0, planImageH = 0;
   var planSaved = null; // the full parsed save file currently loaded into the canvas
+  var planHasLabels = false; // (v34) this level's plan PDF had code/room labels
 
   function planApplyTransform(){
     planTransformRaf = 0;
@@ -6102,6 +6232,7 @@
   }
   function planRenderMarkers(){
     while (planCanvasMarkersG.firstChild) planCanvasMarkersG.removeChild(planCanvasMarkersG.firstChild);
+    if (typeof renderPlanCheckUi === "function") renderPlanCheckUi(); // (v34)
     if (!planSaved || !planSaved.objects) return;
     planSaved.objects.forEach(function(obj){
       if (obj.type !== "roomlink") return;
@@ -6112,6 +6243,13 @@
       dot.setAttribute("stroke", "#fff"); dot.setAttribute("stroke-width", Math.max(1, obj.r * 0.08));
       dot.setAttribute("data-marker-id", obj.id);
       planCanvasMarkersG.appendChild(dot);
+      if (obj.autoPlaced){ // (v34) placed from the plan's labels, not checked yet
+        var ring = document.createElementNS(SVG_NS, "circle");
+        ring.setAttribute("class", "marker-check-ring");
+        ring.setAttribute("cx", obj.x); ring.setAttribute("cy", obj.y); ring.setAttribute("r", obj.r * 1.55);
+        ring.setAttribute("stroke-width", Math.max(2, obj.r * 0.18));
+        planCanvasMarkersG.appendChild(ring);
+      }
       if (obj.label && obj.label.text){
         var text = document.createElementNS(SVG_NS, "text");
         text.setAttribute("class", "marker-label");
@@ -6148,11 +6286,12 @@
     planPointers[e.pointerId] = { x: e.clientX, y: e.clientY };
     try{ planCanvasSvg.setPointerCapture(e.pointerId); }catch(err){}
     var n = Object.keys(planPointers).length;
-    if (n === 1){ planDownPoint = { x: e.clientX, y: e.clientY }; planDragMoved = false; }
-    else { planPinchLastDist = null; }
+    if (n === 1){ planDownPoint = { x: e.clientX, y: e.clientY }; planDragMoved = false; planMarkerDragStart(e); } // (v34) Move mode grabs a marker
+    else { planPinchLastDist = null; if (planMarkerDrag){ applyMarkerLocally(planMarkerDrag.obj, planMarkerDrag.orig.x, planMarkerDrag.orig.y); planMarkerDrag = null; planRenderMarkers(); } }
   });
   planCanvasSvg.addEventListener("pointermove", function(e){
     if (!planPointers[e.pointerId]) return;
+    if (planMarkerDrag && planMarkerDrag.pointerId === e.pointerId){ planPointers[e.pointerId] = { x: e.clientX, y: e.clientY }; planDragMoved = true; planMarkerDragMove(e); return; } // (v34)
     var prev = planPointers[e.pointerId];
     var dx = e.clientX - prev.x, dy = e.clientY - prev.y;
     planPointers[e.pointerId] = { x: e.clientX, y: e.clientY };
@@ -6173,6 +6312,7 @@
     }
   });
   function planPointerEnd(e){
+    if (planMarkerDrag && planMarkerDrag.pointerId === e.pointerId){ delete planPointers[e.pointerId]; planMarkerDragEnd(); return; } // (v34)
     var wasSingleTap = Object.keys(planPointers).length === 1 && !planDragMoved;
     var tapClient = planDownPoint;
     delete planPointers[e.pointerId];
@@ -6183,7 +6323,10 @@
     }
   }
   planCanvasSvg.addEventListener("pointerup", planPointerEnd);
-  planCanvasSvg.addEventListener("pointercancel", function(e){ delete planPointers[e.pointerId]; planPinchLastDist = null; });
+  planCanvasSvg.addEventListener("pointercancel", function(e){
+    delete planPointers[e.pointerId]; planPinchLastDist = null;
+    if (planMarkerDrag && planMarkerDrag.pointerId === e.pointerId){ applyMarkerLocally(planMarkerDrag.obj, planMarkerDrag.orig.x, planMarkerDrag.orig.y); planMarkerDrag = null; planRenderMarkers(); } // (v34)
+  });
   // (v23 sweep -- Android robustness) A long press on the plan used to pop
   // Chrome's image/"save image" menu or start a text selection over the
   // marker labels; the plan canvas swallows the context menu (it has no
@@ -6197,6 +6340,7 @@
 
   function onPlanTap(worldX, worldY){
     if (!planSaved) return; // this level's plan hasn't read yet -- nothing to add onto
+    if (planMoveMode){ showToast("Moving markers — tap Done to add items again."); return; } // (v34)
     if (planPinMode){ pinModeTap(worldX, worldY); return; } // (v31) placing an imported item -- see startPinMode
     var hit = planMarkerAt(worldX, worldY);
     if (hit){
@@ -6413,6 +6557,7 @@
     planRenderTiles();
     planRenderMarkers();
     if (planUnplacedBtn) planUnplacedBtn.hidden = true; // (v31) until this level's items are read
+    if (planMoveMode) setPlanMoveMode(false); // (v34)
     showScreen("planCanvas");
     // planSaved keeps EXACTLY the shape the rendering/hit-testing code
     // below already expects (imageDataURL/imageTiles/imageW/imageH +
@@ -6426,6 +6571,7 @@
       return readLevelFile(activeProjectHandle, activeProjectName, activeLevelName);
     }).then(function(level){
       var markers = level ? level.markers || [] : [];
+      planHasLabels = false; // (v34) read just below
       planSaved = {
         utzlineProject: 1,
         imageDataURL: level ? level.imageDataURL : null,
@@ -6441,6 +6587,13 @@
       planRenderTiles();
       planRenderMarkers();
       stopPinMode(); planUnplacedPanel.hidden = true; // (v31)
+      setPlanMoveMode(false); // (v34)
+      var lvAtOpen = activeLevelName;
+      readPlanLabels(activeProjectHandle, activeProjectName, lvAtOpen).then(function(pl){
+        if (lvAtOpen !== activeLevelName) return;
+        planHasLabels = levelHasPlanLabels(pl);
+        if (planUnplacedPanel && !planUnplacedPanel.hidden) renderUnplacedList();
+      }, function(){ planHasLabels = false; });
       refreshUnplacedForLevel();
       requestAnimationFrame(function(){
         planFitToView();
@@ -8134,6 +8287,7 @@
     if (reworkUi && reworkUi.closeOverlay()) return true; // (v33) a rework photo shown full size
     if (woRoomPickBackdrop && !woRoomPickBackdrop.hidden){ woRoomPickCancelBtn.click(); return true; } // (v32) above everything on the plan
     if (currentScreenName === "planCanvas" && planUnplacedPanel && !planUnplacedPanel.hidden){ planUnplacedPanel.hidden = true; return true; } // (v32)
+    if (currentScreenName === "planCanvas" && planMoveMode){ setPlanMoveMode(false); return true; } // (v34)
     var pairs = [
       ["numberpadBackdrop", "numberpadCancel"],
       ["identityAppChecksBackdrop", "identityAppChecksCancel"],
@@ -9414,7 +9568,8 @@
           showToast("Imported: " + res.added + " new item" + (res.added === 1 ? "" : "s") + ", " + res.filled + " WO # added" +
             (res.valued ? ", " + res.valued + " value" + (res.valued === 1 ? "" : "s") + " set from the sell price" : "") +
             (res.toDrop ? ", " + res.toDrop + " with no room yet" : "") +
-            ((res.added || res.toDrop) ? ". Open a level's plan (Place joinery items) and drag them from “To place” into position." : "."), 9000);
+            (res.autoPlaced ? ", " + res.autoPlaced + " placed from the plan's labels (" + (res.autoByRoom ? res.autoByRoom + " on the room label; " : "") + "check them — amber on the plan)" : "") +
+            ((res.added || res.toDrop) ? ". Open a level's plan (Place joinery items) and drag the rest from “To place” into position." : "."), 11000);
           if (typeof populateLevelList === "function") populateLevelList();
         });
       });
@@ -9469,7 +9624,19 @@
       });
       return p.then(function(){ return writeJoineryItems(activeProjectHandle, items); }).then(function(){
         return woListWrite(activeProjectHandle, list);
-      }).then(function(){ return { added: added, filled: filled, listed: listed, valued: valued, toDrop: list.workOrders.filter(function(w){ return !items.some(function(it){ return String(it.workOrderNo || "").trim() === w.wo; }); }).length }; });
+      }).then(function(){
+        var out = { added: added, filled: filled, listed: listed, valued: valued, toDrop: list.workOrders.filter(function(w){ return !items.some(function(it){ return String(it.workOrderNo || "").trim() === w.wo; }); }).length, autoPlaced: 0, autoByRoom: 0 };
+        // (v34) each level whose plan has labels: its new items go straight onto them
+        var lvls = [];
+        plan.forEach(function(r){ if (r.level && lvls.indexOf(r.level) === -1) lvls.push(r.level); });
+        var q = Promise.resolve();
+        lvls.forEach(function(lv){
+          q = q.then(function(){ return autoPlaceFromPlanLabels(lv); }).then(function(ar){
+            out.autoPlaced += ar.placed; out.autoByRoom += ar.byRoom;
+          }, function(err){ console.error("Placing from " + lv + "'s plan labels failed:", err); });
+        });
+        return q.then(function(){ return out; });
+      });
     });
   }
 
@@ -9594,6 +9761,13 @@
     }
     planListEntries = [];
     var html = "", lastRoom = null;
+    // (v34) items waiting on this level + a plan with labels -> one tap places them
+    var nItems = planUnplacedItems.filter(function(e){ return e.kind === "item"; }).length;
+    if (nItems && !q){
+      html += planHasLabels
+        ? "<div class=\"unplaced-auto\"><button type=\"button\" class=\"btn\" id=\"planAutoPlaceBtn\">Place from the plan's labels</button><p class=\"sub\">Puts each item on its code's tag (or its room number) — you check them after.</p></div>"
+        : "<div class=\"unplaced-auto\"><p class=\"sub\">To place these automatically, import this level's plan PDF again (Levels → Import floor plan): Projects then reads its code and room labels.</p></div>";
+    }
     planUnplacedItems.forEach(function(e){
       if (q && hay(e).indexOf(q) === -1) return;
       var idx = planListEntries.push(e) - 1;
@@ -9614,6 +9788,17 @@
     }
     if (planWoList.unreadable) html += "<p class=\"sub\" style=\"margin:8px 0;\">Couldn't read the work order list (still syncing?) — close and reopen this list in a moment.</p>";
     planUnplacedList.innerHTML = html;
+    var autoBtn = document.getElementById("planAutoPlaceBtn");
+    if (autoBtn) autoBtn.addEventListener("click", function(){
+      autoBtn.disabled = true;
+      var levelName = activeLevelName;
+      autoPlaceFromPlanLabels(levelName).then(function(r){
+        if (levelName !== activeLevelName) return;
+        showToast(r.placed ? "Placed from the plan's labels:" + autoPlaceSummary(r) : "None of these could be found on the plan's labels — drag them into place.", 7000);
+        if (r.placed){ planUnplacedPanel.hidden = true; setPlanMoveMode(true); }
+        else autoBtn.disabled = false;
+      }).catch(function(err){ autoBtn.disabled = false; dropFailed(err); });
+    });
     var det = planUnplacedList.querySelector("details.placed-wos");
     if (det) det.addEventListener("toggle", function(){ if (!q) planPlacedOpen = det.open; });
   }
@@ -9972,6 +10157,249 @@
   if (woRoomPickCancelBtn) woRoomPickCancelBtn.addEventListener("click", function(){ closeRoomPick(null); });
 
   /* ---- Undo the last drop ---- */
+  /* ============================== (v34) place items from the plan's own labels ==============================
+     For every joinery item on a level with no marker yet: its code's label
+     on the plan (e.g. "JG.31.2" in its tag), else its room number's label
+     (the part of the room name before " - ", e.g. "G.31" -- markers put
+     there are stacked just under it), else it stays in "To place". A code
+     that appears more than once goes to the copy nearest its room's label;
+     two items sharing one code tag (a work order split across rooms) --
+     the one whose room is nearest gets the tag, the other its room label.
+     Every marker placed this way carries autoPlaced ("code" | "room")
+     until someone checks it: it's drawn with a dashed amber ring and
+     counted on the "Check placed" button (Move mode: drag it if it's
+     wrong, tap it if it's right, or "All look right"). One read of
+     joinery-items.json and the level, one write of the level file. */
+  function planLabelIndex(pl){
+    var idx = {};
+    var labels = pl && Array.isArray(pl.labels) ? pl.labels : [];
+    labels.forEach(function(l){
+      if (!Array.isArray(l) || l.length < 3) return;
+      var k = String(l[0]).toUpperCase();
+      (idx[k] = idx[k] || []).push({ x: +l[1], y: +l[2] });
+    });
+    return idx;
+  }
+  function planRoomNumber(room){
+    var m = /^\s*(\S+?)(?:\s+-\s+|\s+|$)/.exec(String(room || ""));
+    return m ? m[1].toUpperCase() : "";
+  }
+  function levelHasPlanLabels(pl){ return !!(pl && Array.isArray(pl.labels) && pl.labels.length); }
+  function autoPlaceSummary(r){
+    if (!r) return "";
+    if (!r.placed) return r.candidates ? " None of this level's " + r.candidates + " unplaced item" + (r.candidates === 1 ? "" : "s") + " could be found on it." : "";
+    return " " + r.placed + " item" + (r.placed === 1 ? "" : "s") + " placed from it" + (r.byRoom ? " (" + r.byRoom + " on the room label)" : "") +
+      " — check them (amber)." + (r.left ? " " + r.left + " still to place." : "");
+  }
+  // Resolves { placed, byCode, byRoom, left, candidates, noLabels }.
+  function autoPlaceFromPlanLabels(levelName){
+    return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){
+      return Promise.all([readJoineryItems(activeProjectHandle), readLevelFile(activeProjectHandle, activeProjectName, levelName), readPlanLabels(activeProjectHandle, activeProjectName, levelName)]);
+    }).then(function(res){
+      var items = res[0], level = res[1], labels = res[2];
+      if (!level || !levelHasPlanLabels(labels)) return { placed: 0, byCode: 0, byRoom: 0, left: 0, candidates: 0, noLabels: true };
+      var idx = planLabelIndex(labels);
+      level.markers = level.markers || [];
+      var have = {};
+      level.markers.forEach(function(o){ if (o.type === "roomlink") have[(String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase()] = true; });
+      var todo = items.filter(function(it){ return it.level === levelName && it.joineryId && !have[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()]; });
+      var existingMaxId = level.markers.reduce(function(m, o){ return Math.max(m, parseInt(String(o.id || "o0").slice(1), 10) || 0); }, 0);
+      if (existingMaxId >= planNextId) planNextId = existingMaxId + 1;
+      function roomPos(it){ var r = idx[planRoomNumber(it.room)]; return r ? r[0] : null; }
+      function dist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+      // code tags: each copy of a code goes to the item whose room label is nearest
+      var byCode = {};
+      todo.forEach(function(it){ (byCode[String(it.joineryId).toUpperCase()] = byCode[String(it.joineryId).toUpperCase()] || []).push(it); });
+      var pos = new Map(), how = new Map();
+      Object.keys(byCode).forEach(function(code){
+        var spots = (idx[code] || []).slice();
+        if (!spots.length) return;
+        var pairs = [];
+        byCode[code].forEach(function(it){
+          var rp = roomPos(it);
+          spots.forEach(function(sp, si){ pairs.push({ it: it, si: si, d: rp ? dist(rp, sp) : si }); });
+        });
+        pairs.sort(function(a, b){ return a.d - b.d; });
+        var usedSpot = {};
+        pairs.forEach(function(p){
+          if (pos.has(p.it) || usedSpot[p.si]) return;
+          usedSpot[p.si] = true;
+          pos.set(p.it, spots[p.si]); how.set(p.it, "code");
+        });
+      });
+      // then the room label, stacked just under it
+      var stack = {};
+      todo.forEach(function(it){
+        if (pos.has(it)) return;
+        var rn = planRoomNumber(it.room), rp = roomPos(it);
+        if (!rp) return;
+        var k = stack[rn] = (stack[rn] || 0) + 1;
+        pos.set(it, { x: rp.x, y: rp.y + k * 62 }); how.set(it, "room");
+      });
+      var placed = 0, nCode = 0, nRoom = 0, at = new Date().toISOString();
+      todo.forEach(function(it){
+        if (!pos.has(it)) return;
+        var p = pos.get(it);
+        if (!level.rooms.some(function(r){ return String(r.name).toLowerCase() === String(it.room).toLowerCase(); })) level.rooms.push({ name: it.room });
+        var marker = makeRoomLinkObject(p.x, p.y, it.room, it.joineryId);
+        marker.autoPlaced = how.get(it);
+        marker.autoPlacedAt = at;
+        level.markers.push(marker);
+        placed++; if (how.get(it) === "code") nCode++; else nRoom++;
+      });
+      var result = { placed: placed, byCode: nCode, byRoom: nRoom, left: todo.length - placed, candidates: todo.length, noLabels: false };
+      if (!placed) return result;
+      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){
+        registerAllItems = [];
+        if (levelName === activeLevelName && planSaved && !planCanvasScreenHidden()){
+          planSaved.objects = level.markers.slice();
+          planRenderMarkers();
+          refreshUnplacedForLevel();
+        }
+        return result;
+      });
+    });
+  }
+  function planCanvasScreenHidden(){ var el = document.getElementById("screenPlanCanvas"); return !el || el.hidden; }
+
+  /* ---- Move mode: drag markers; check the ones placed from the labels ---- */
+  var planCheckBtn = document.getElementById("planCheckBtn");
+  var planMoveBtn = document.getElementById("planMoveBtn");
+  var planMoveBar = document.getElementById("planMoveBar");
+  var planMoveBarText = document.getElementById("planMoveBarText");
+  var planCheckAllBtn = document.getElementById("planCheckAllBtn");
+  var planMoveDoneBtn = document.getElementById("planMoveDoneBtn");
+  var planMoveMode = false;
+  var planMarkerDrag = null; // { obj, startWorld, orig: {x, y, lx, ly}, moved }
+  function planUncheckedCount(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === "roomlink" && o.autoPlaced; }).length; }
+  function renderPlanCheckUi(){
+    var n = planUncheckedCount();
+    if (planCheckBtn){ planCheckBtn.hidden = !n; planCheckBtn.textContent = "Check placed (" + n + ")"; }
+    if (planCheckAllBtn) planCheckAllBtn.hidden = !n;
+    if (planMoveBarText) planMoveBarText.textContent = n
+      ? "Amber = placed from the plan's labels, not checked yet (" + n + "). Drag one if it's in the wrong place; tap it if it's right."
+      : "Drag a marker to move it.";
+  }
+  function setPlanMoveMode(on){
+    planMoveMode = !!on;
+    if (planMoveMode){ stopPinMode(); if (planUnplacedPanel) planUnplacedPanel.hidden = true; }
+    planMoveBar.hidden = !planMoveMode;
+    planMoveBtn.textContent = planMoveMode ? "Moving…" : "Move markers";
+    var scr = document.getElementById("screenPlanCanvas");
+    if (scr) scr.classList.toggle("moving", planMoveMode);
+    var hint = document.getElementById("planCanvasHint");
+    if (hint) hint.hidden = planMoveMode;
+    renderPlanCheckUi();
+  }
+  if (planMoveBtn) planMoveBtn.addEventListener("click", function(){ setPlanMoveMode(!planMoveMode); });
+  if (planCheckBtn) planCheckBtn.addEventListener("click", function(){ setPlanMoveMode(true); });
+  if (planMoveDoneBtn) planMoveDoneBtn.addEventListener("click", function(){ setPlanMoveMode(false); });
+  // Rewrites one marker's position (and label) and/or clears its check
+  // flag in the level file, read fresh. change: { x, y } | null.
+  function saveMarkerChange(levelName, markerId, change, clearCheck){
+    return readLevelFile(activeProjectHandle, activeProjectName, levelName).then(function(level){
+      if (!level) return Promise.reject(new Error("This level's file isn't there"));
+      var m = (level.markers || []).filter(function(o){ return o.id === markerId; })[0];
+      if (!m){ var e = new Error("That marker isn't on the plan any more"); e.code = "marker_gone"; return Promise.reject(e); }
+      if (change){
+        var dx = change.x - m.x, dy = change.y - m.y;
+        m.x = change.x; m.y = change.y;
+        if (m.label){ m.label.x = (Number(m.label.x) || 0) + dx; m.label.y = (Number(m.label.y) || 0) + dy; }
+      }
+      if (clearCheck){ delete m.autoPlaced; delete m.autoPlacedAt; }
+      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){ return m; });
+    });
+  }
+  function applyMarkerLocally(obj, x, y){
+    var dx = x - obj.x, dy = y - obj.y;
+    obj.x = x; obj.y = y;
+    if (obj.label){ obj.label.x = (Number(obj.label.x) || 0) + dx; obj.label.y = (Number(obj.label.y) || 0) + dy; }
+  }
+  var planMarkerDragRaf = 0;
+  function planMarkerDragStart(e){
+    if (!planMoveMode || !planSaved) return false;
+    var w = planClientToWorld(e.clientX, e.clientY);
+    var hit = planMarkerAt(w.x, w.y);
+    if (!hit) return false;
+    planMarkerDrag = { obj: hit, startWorld: w, orig: { x: hit.x, y: hit.y }, moved: false, pointerId: e.pointerId };
+    return true;
+  }
+  function planMarkerDragMove(e){
+    var d = planMarkerDrag;
+    var w = planClientToWorld(e.clientX, e.clientY);
+    var nx = d.orig.x + (w.x - d.startWorld.x), ny = d.orig.y + (w.y - d.startWorld.y);
+    if (!d.moved && Math.hypot(nx - d.orig.x, ny - d.orig.y) * planView.scale < 5) return;
+    d.moved = true;
+    applyMarkerLocally(d.obj, nx, ny);
+    if (!planMarkerDragRaf) planMarkerDragRaf = requestAnimationFrame(function(){ planMarkerDragRaf = 0; planRenderMarkers(); });
+  }
+  function planMarkerDragEnd(){
+    var d = planMarkerDrag;
+    planMarkerDrag = null;
+    if (!d) return;
+    var obj = d.obj, levelName = activeLevelName;
+    var what = (obj.joineryCode || obj.roomName || "Marker");
+    if (!d.moved){
+      if (!obj.autoPlaced){ showToast(what + " — drag it to move it (Done when finished)."); return; }
+      saveMarkerChange(levelName, obj.id, null, true).then(function(){
+        delete obj.autoPlaced; delete obj.autoPlacedAt;
+        planRenderMarkers(); renderPlanCheckUi();
+        showToast(what + " checked.");
+      }).catch(markerSaveFailed);
+      return;
+    }
+    var to = { x: Math.round(obj.x), y: Math.round(obj.y) }, wasAuto = obj.autoPlaced, wasAt = obj.autoPlacedAt;
+    saveMarkerChange(levelName, obj.id, to, true).then(function(){
+      delete obj.autoPlaced; delete obj.autoPlacedAt;
+      planRenderMarkers(); renderPlanCheckUi();
+      offerUndo("Moved " + what + ".", { kind: "move", level: levelName, markerId: obj.id, from: d.orig, to: to, autoPlaced: wasAuto || null, autoPlacedAt: wasAt || null, code: what });
+    }).catch(function(err){
+      applyMarkerLocally(obj, d.orig.x, d.orig.y);
+      planRenderMarkers();
+      markerSaveFailed(err);
+    });
+  }
+  function markerSaveFailed(err){
+    console.error("Saving the marker failed:", err);
+    if (err && err.code === "marker_gone") showToast("That marker isn't on the plan any more (changed on another device?) — reopen the plan.");
+    else if (isReadFailed(err)) readFailedToast("this level's file");
+    else showToast("Couldn't save that — nothing was changed. Try again.");
+  }
+  function undoMarkerMove(d){
+    return readLevelFile(activeProjectHandle, activeProjectName, d.level).then(function(level){
+      if (!level) return;
+      var m = (level.markers || []).filter(function(o){ return o.id === d.markerId; })[0];
+      if (!m) return;
+      applyMarkerLocally(m, d.from.x, d.from.y);
+      if (d.autoPlaced){ m.autoPlaced = d.autoPlaced; m.autoPlacedAt = d.autoPlacedAt; }
+      return writeLevelFile(activeProjectHandle, activeProjectName, d.level, level).then(function(){
+        if (d.level === activeLevelName && planSaved){
+          var o = (planSaved.objects || []).filter(function(x){ return x.id === d.markerId; })[0];
+          if (o){ applyMarkerLocally(o, d.from.x, d.from.y); if (d.autoPlaced){ o.autoPlaced = d.autoPlaced; o.autoPlacedAt = d.autoPlacedAt; } }
+          planRenderMarkers(); renderPlanCheckUi();
+        }
+        showToast("Undone — " + d.code + " is back where it was.");
+        return true;
+      });
+    }).catch(function(err){ markerSaveFailed(err); return false; });
+  }
+  if (planCheckAllBtn) planCheckAllBtn.addEventListener("click", function(){
+    var levelName = activeLevelName;
+    planCheckAllBtn.disabled = true;
+    readLevelFile(activeProjectHandle, activeProjectName, levelName).then(function(level){
+      if (!level) return 0;
+      var n = 0;
+      (level.markers || []).forEach(function(o){ if (o.autoPlaced){ delete o.autoPlaced; delete o.autoPlacedAt; n++; } });
+      if (!n) return 0;
+      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){ return n; });
+    }).then(function(n){
+      ((planSaved && planSaved.objects) || []).forEach(function(o){ delete o.autoPlaced; delete o.autoPlacedAt; });
+      planRenderMarkers(); renderPlanCheckUi();
+      showToast(n ? n + " marker" + (n === 1 ? "" : "s") + " marked as checked." : "Nothing left to check.");
+      setPlanMoveMode(false);
+    }).catch(markerSaveFailed).then(function(){ planCheckAllBtn.disabled = false; });
+  });
+
   var planUndoTimer = null;
   function offerUndo(text, info){
     planLastDrop = info;
@@ -9988,6 +10416,7 @@
     clearTimeout(planUndoTimer);
     planLastDrop = null;
     if (!d) return Promise.resolve(false);
+    if (d.kind === "move") return undoMarkerMove(d); // (v34)
     var who = deviceUserName || "";
     return readLevelFile(activeProjectHandle, activeProjectName, d.level).then(function(level){
       if (!level) return;
@@ -10038,6 +10467,12 @@
     },
     roomPickStateForTest: function(){ return woRoomPickState ? { rooms: woRoomPickState.rooms.slice(), suggested: woRoomPickState.suggested.slice(), taken: Object.keys(woRoomPickState.taken) } : null; },
     undoLastDropForTest: function(){ return undoLastDrop(); },
+    // (v34) plan labels -> auto-place; Move mode
+    pdfFileToImageForTest: function(file){ return pdfFileToImage(file).then(function(r){ return { w: r.w, h: r.h, tiled: !!r.tiles, planLabels: r.planLabels }; }); },
+    autoPlaceFromPlanLabelsForTest: function(level){ return autoPlaceFromPlanLabels(level || activeLevelName); },
+    planMoveModeForTest: function(){ return planMoveMode; },
+    planMarkersForTest: function(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === "roomlink"; }).map(function(o){ return { id: o.id, room: o.roomName, code: o.joineryCode, x: o.x, y: o.y, autoPlaced: o.autoPlaced || null }; }); },
+    planWorldToClientForTest: function(x, y){ var r = planCanvasSvg.getBoundingClientRect(); return { x: r.left + planView.tx + x * planView.scale, y: r.top + planView.ty + y * planView.scale }; },
     planClientToWorldForTest: function(x, y){ return planClientToWorld(x, y); },
     planTapForTest: function(x, y){ onPlanTap(x, y); },
     planSavedMarkersForTest: function(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === 'roomlink'; }).map(function(o){ return { roomName: o.roomName, joineryCode: o.joineryCode, x: o.x, y: o.y }; }); },
