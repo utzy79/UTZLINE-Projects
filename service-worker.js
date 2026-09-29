@@ -545,7 +545,10 @@ var ICON_VERSION = "v1";
 // v35 (2026-09-28): PC date as the default required delivery date ("PC Date"); job #/project/builder from the WO report; PM picked from a list;
 //   markers placed beside the plan's labels (text drawn twice the size); shop drawings Sent / Returned with REV A, B, C.
 // v36 (2026-09-29): History card on the joinery item page (every edit and step, with who and when); new items record who added them.
-var CACHE_NAME = "utzline-projects-cache-v44";
+// v37 (2026-09-29): Import work orders -- "How to read this report": the first line's parts, each with a selector for what it
+//   means (zone / zone kept in the room number / part of the room number / ignore; joinery code rule); any room-code shape
+//   ("2-C1.EQ.002 Dropoff - Cleanup", lists, ranges); remembered per project.
+var CACHE_NAME = "utzline-projects-cache-v45";
 
 var PRECACHE_URLS = [
   "./",

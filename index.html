@@ -258,6 +258,24 @@
   .field .pi-pm-add input[type=text]{ flex: 1 1 auto; min-width: 0; width: auto; }
   .pi-pm-add .btn{ flex: 0 0 auto; padding: 8px 12px; }
   /* (v35) the report's Job # / Project / Builder in the import dialog */
+  /* (v37) How to read this report */
+  .wo-format{ border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px 10px; margin: 0 0 12px; font-size: 13px; }
+  .wo-format[hidden]{ display: none; }
+  .wo-format-head{ font-weight: 700; }
+  .wo-format-head span{ font-weight: 400; color: var(--muted); }
+  .wo-format-line{ margin: 8px 0 4px; color: var(--muted); font-size: 12.5px; }
+  .wo-format-line code{ color: var(--text); background: rgba(255,255,255,.05); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+  .wo-format-chips{ display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
+  .wf-chip{ display: inline-flex; flex-direction: column; gap: 3px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; background: #140d0d; min-width: 64px; }
+  .wf-chip b{ font-weight: 700; font-size: 13.5px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .wf-chip small{ color: var(--muted); font-size: 11px; }
+  .wf-chip select{ background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+  .wf-chip.zone{ border-color: #f0b23e; }
+  .wf-chip.code{ border-color: #4ade80; }
+  .wf-chip.dim b{ color: var(--muted2); text-decoration: line-through; }
+  .wo-format-result{ margin-top: 8px; font-size: 12.5px; }
+  .wo-format-result b{ color: var(--text); }
+  .wo-format-note{ color: var(--muted); font-size: 12px; margin-top: 4px; }
   .wo-jobinfo{ border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin: 0 0 12px; font-size: 13px; }
   .wo-jobinfo[hidden]{ display: none; }
   .wo-jobinfo-head{ font-weight: 700; margin-bottom: 4px; }
@@ -1184,6 +1202,7 @@
     <h2>Import work orders</h2>
     <p class="sub" id="woImportSummary"></p>
     <div class="wo-jobinfo" id="woImportJobInfo" hidden></div>
+    <div class="wo-format" id="woImportFormat" hidden></div>
     <div class="wo-zones" id="woImportZones"></div>
     <div class="wo-preview" id="woImportPreview"></div>
     <div class="modal-actions">
@@ -9998,41 +10017,148 @@
   }
   // Room names can't hold "/" (they end up in file names): "Bookings / Admin" -> "Bookings & Admin".
   function woCleanRoomName(s){ return String(s || "").replace(/\s*\/\s*/g, " & ").replace(/\s+/g, " ").trim(); }
-  // Pure: rows -> { format:"cost", rooms:[...], roomless:[{itemNo, heading, group, wos}], skipped:[...] }
-  // Room objects carry fixedName/numberKey so woRoomNamesFor/woPlanImport treat them like v31's.
-  function woInterpretCostRows(rows){
+  /* ---- (v37) Rooms and codes of any shape, and "How to read this report" ----
+     Andrew: "on the import page, we need a way to map out the zones , wo
+     numbers, etc. im thing you give me a selector for the first one where
+     we can tell the app what the codes mean. as some of my imports dont
+     work." (His 3749 Mt Barker Cost Analysis read as 0 rooms: its items are
+     "2-C1.EQ.002 Dropoff - Cleanup" and its work orders "15345-J.001
+     Stainless Steel ...", neither of the 3756 shapes.)
+     A room code is now any dotted code whose last part is a number --
+     G.01, C1.EQ.002, H1.BH.001, 002 (a list), H1.PH.005-011 (a range),
+     H1.MH.036,04 0,044 (a list the PDF wrapped mid-number) -- then the
+     room's name. The format says which part of it is the zone (the
+     level), whether the zone stays in the room number, which parts to
+     ignore, and how the joinery code sits in the Work Order column. It's
+     worked out from the report (2 parts, G.01: zone kept -> "G.01 -
+     Waiting Room", exactly as v32; 3+ parts, C1.EQ.002: zone C1 dropped
+     -> "EQ.002 Dropoff - Cleanup", exactly as the Work Order List import
+     names them) and can be changed on the first line's own parts in the
+     import dialog; the choice is remembered for the project.
+       fmt = { zonePart: -1|0|1.., keepZone, ignore: {i: true}, code: "auto"|"firstWord"|"beforeDash"|"none", parts } */
+  var WO_ROOM_CODE_RE = /^([A-Z0-9]{1,4}(?:\.[A-Z0-9]{1,5}){1,3})(?![A-Z0-9.])(.*)$/i;
+  function woParseRoomCode(text){
+    var m = WO_ROOM_CODE_RE.exec(String(text || "").trim());
+    if (!m || !/[A-Z]/i.test(m[1])) return null;
+    var parts = m[1].split(".");
+    var last = parts[parts.length - 1];
+    if (!/^\d+[A-Z]?$/i.test(last)) return null; // the room number ends the code
+    var width = (/^\d+/.exec(last) || [""])[0].length;
+    var tail = m[2], numbers = [last], isRange = false;
+    var rg = /^\s*-\s*(\d{1,4}[A-Z]?)(?![\w.])/i.exec(tail);
+    if (rg){ numbers = [last + "-" + rg[1]]; isRange = true; tail = tail.slice(rg[0].length); }
+    else {
+      for (;;){
+        var sp = /^\s*(?:,|&|\band\b)\s*(\d+[A-Z]?)/i.exec(tail);
+        if (!sp) break;
+        var num = sp[1]; tail = tail.slice(sp[0].length);
+        // a number the PDF wrapped onto the next line: "04" + " 0" -> "040"
+        var more;
+        while (num.length < width && (more = /^ (\d+)(?![\w.])/.exec(tail)) && (num + more[1]).length <= width){ num += more[1]; tail = tail.slice(more[0].length); }
+        numbers.push(num);
+      }
+    }
+    var dash = /^\s*-\s+/.test(tail);
+    var name = tail.replace(/^\s*-\s+/, "").trim();
+    return { code: m[1], parts: parts, numbers: numbers, isRange: isRange, isList: numbers.length > 1, dashSep: dash, name: name };
+  }
+  function woItemRest(itemText){ var im = /^(\d+)\s*-\s*(.*)$/.exec(itemText || ""); return { itemNo: im ? im[1] : "", rest: (im ? im[2] : (itemText || "")).trim() }; }
+  // The report's first line with a room code -- what "How to read this report" shows.
+  function woFormatSample(rows){
+    for (var i = 0; i < rows.length; i++){
+      var ir = woItemRest(rows[i].itemText), rc = woParseRoomCode(ir.rest);
+      if (rc) return { row: rows[i], itemNo: ir.itemNo, rest: ir.rest, rc: rc };
+    }
+    return null;
+  }
+  function woAutoFormat(rows){
+    var smp = woFormatSample(rows);
+    var n = smp ? smp.rc.parts.length : 0;
+    // G.01 (2 parts): zone G, kept -- "G.01 - Waiting Room"; C1.EQ.002 (3+): zone C1, dropped -- "EQ.002 Dropoff - Cleanup"
+    return { zonePart: n >= 2 ? 0 : -1, keepZone: n <= 2, ignore: {}, code: "auto", parts: n };
+  }
+  function woFormatKey(){ return "utzline-projects:woFormat:" + (activeProjectName || ""); }
+  // The project's saved choice when it fits this report's shape, else worked out from the report.
+  function woLoadFormat(rows){
+    var auto = woAutoFormat(rows), saved = null;
+    try{ saved = JSON.parse(localStorage.getItem(woFormatKey()) || "null"); }catch(e){}
+    if (saved && saved.parts === auto.parts && typeof saved.zonePart === "number") return { zonePart: saved.zonePart, keepZone: !!saved.keepZone, ignore: saved.ignore || {}, code: saved.code || "auto", parts: auto.parts, saved: true };
+    return auto;
+  }
+  function woSaveFormat(fmt){ try{ localStorage.setItem(woFormatKey(), JSON.stringify({ zonePart: fmt.zonePart, keepZone: fmt.keepZone, ignore: fmt.ignore, code: fmt.code, parts: fmt.parts })); }catch(e){} }
+  // A room code through the format -> the zone, and the room name(s) / number key(s).
+  function woRoomFromCode(rc, fmt){
+    var lastI = rc.parts.length - 1;
+    var zi = (fmt.zonePart >= 0 && fmt.zonePart < lastI) ? fmt.zonePart : -1; // the room number itself is never the zone
+    var keep = [];
+    rc.parts.forEach(function(p, i){
+      if (i === lastI) return;
+      if (fmt.ignore && fmt.ignore[i]) return;
+      if (i === zi && !fmt.keepZone) return;
+      keep.push(i === zi ? p.toUpperCase() : p);
+    });
+    var prefix = keep.join(".");
+    var sep = rc.dashSep ? " - " : " ";
+    function one(num){ var n = (prefix ? prefix + "." : "") + num; return { name: woCleanRoomName(n + (rc.name ? sep + rc.name : "")), key: n.toLowerCase(), number: n }; }
+    var each = rc.numbers.map(one);
+    var joined = one(rc.numbers.join(", "));
+    return { zone: zi >= 0 ? rc.parts[zi].toUpperCase() : "", names: each.map(function(x){ return x.name; }), keys: each.map(function(x){ return x.key; }),
+      numbers: each.map(function(x){ return x.number; }), joinedName: joined.name, joinedKey: each[0].key };
+  }
+  // The Work Order column after "<WO #>-": the joinery code and the description.
+  function woSplitCodeByFormat(text, rule){
+    var t = String(text || "").replace(/\s+/g, " ").trim();
+    if (rule === "none") return { code: "", desc: t };
+    if (rule === "beforeDash"){
+      var i = t.indexOf(" - ");
+      return i > 0 ? { code: t.slice(0, i).trim(), desc: t.slice(i + 3).trim() } : { code: "", desc: t };
+    }
+    var fw = /^(\S+?)(?:\s*-\s+|\s+|$)(.*)$/.exec(t);
+    if (rule === "firstWord") return (fw && /\d/.test(fw[1])) ? { code: fw[1], desc: fw[2].trim() } : { code: "", desc: t };
+    // auto: v32's shapes first ("JG.01.1 - Island Planter", "WLLX-1 ( ... )"), then a first word that's a
+    // joinery code ("J.001 Stainless Steel ...", "J.T.011 Bedhead - 1200w"), "J.923 & J.924" kept together
+    var r = woSplitCostWoText(t);
+    if (r.code) return r;
+    var m = /^([A-Z][A-Z0-9.\/\-]*\d[A-Z0-9.\/\-]*(?:\s*&\s*[A-Z][A-Z0-9.\/\-]*\d[A-Z0-9.\/\-]*)*)(?:\s*-\s+|\s+|$)(.*)$/i.exec(t);
+    if (m && m[1].split(/\s*&\s*/).every(woIsJoineryCode)) return { code: m[1].replace(/\s*&\s*/g, " & "), desc: m[2].trim() };
+    return { code: "", desc: t };
+  }
+  // Pure: rows (+ format) -> { format:"cost", fmt, sample, rooms:[...], roomless:[{itemNo, heading, group, wos}], skipped:[...] }
+  // Room objects carry names/keys (one per room) and joinedName/joinedKey (a list kept as one room).
+  function woInterpretCostRows(rows, fmt){
+    fmt = fmt || woAutoFormat(rows);
     var rooms = [], roomless = [], skipped = [], byItem = {};
     var roomCodes = {};
     rows.forEach(function(r){
-      var im = /^(\d+)\s*-\s*(.*)$/.exec(r.itemText || "");
-      var rest = im ? im[2] : (r.itemText || "");
-      var rm = WO_COST_ROOM_RE.exec(rest);
-      if (rm) roomCodes[(rm[1] + "." + rm[2]).toUpperCase()] = woCleanRoomName(rm[1].toUpperCase() + "." + rm[2] + " - " + rm[3]);
+      var rc = woParseRoomCode(woItemRest(r.itemText).rest);
+      if (!rc) return;
+      var rr = woRoomFromCode(rc, fmt);
+      roomCodes[rc.parts.slice(0, -1).concat([rc.numbers[0]]).join(".").toUpperCase()] = rr.names[0];
+      roomCodes[rr.numbers[0].toUpperCase()] = roomCodes[rr.numbers[0].toUpperCase()] || rr.names[0];
     });
     rows.forEach(function(r){
-      var im = /^(\d+)\s*-\s*(.*)$/.exec(r.itemText || "");
-      var itemNo = im ? im[1] : "";
-      var rest = (im ? im[2] : (r.itemText || "")).trim();
-      var parts = woSplitCostWoText(r.woText);
+      var ir = woItemRest(r.itemText), itemNo = ir.itemNo, rest = ir.rest;
+      var parts = woSplitCodeByFormat(r.woText, fmt.code);
       var code = parts.code, desc = parts.desc, roomHint = "";
-      var rm = WO_COST_ROOM_RE.exec(rest);
+      var rc = woParseRoomCode(rest);
       // a code that is really a room number ("15680-G.34 - CT Imaging Control Room - 2 Door Base Cab")
-      if (code && roomCodes[code.toUpperCase()] && !rm){
+      if (code && roomCodes[code.toUpperCase()] && !rc){
         roomHint = roomCodes[code.toUpperCase()];
         var roomOnlyName = roomHint.replace(/^[^-]*-\s*/, "");
         if (desc.toLowerCase().indexOf(roomOnlyName.toLowerCase()) === 0) desc = desc.slice(roomOnlyName.length).replace(/^\s*-\s*/, "").trim() || desc;
         code = "";
       }
       // "JG.01.4" under Additional Items -> suggest room G.01
-      if (code && !rm){ var jm = /^J([A-Z]{1,2}\.\d+)/i.exec(code); if (jm && roomCodes[jm[1].toUpperCase()]) roomHint = roomCodes[jm[1].toUpperCase()]; }
+      if (code && !rc){ var jm = /^J([A-Z]{1,2}\.\d+)/i.exec(code); if (jm && roomCodes[jm[1].toUpperCase()]) roomHint = roomCodes[jm[1].toUpperCase()]; }
       if (!code && !(r.sell > 0)){ skipped.push({ heading: rest, wo: r.wo, desc: r.woText, why: "no joinery code or value" }); return; }
       var w = { wo: r.wo, code: code || ("WO " + r.wo), codeless: !code, desc: desc, sell: r.sell, status: r.status, roomHint: roomHint };
       var key = itemNo + "\u0000" + rest;
-      if (rm){
-        var roomCode = (rm[1] + "." + rm[2]).toUpperCase();
+      if (rc){
         var g = byItem[key];
         if (!g){
-          g = { itemNo: itemNo, heading: rest, zone: rm[1].toUpperCase(), fixedName: woCleanRoomName(roomCode + " - " + rm[3]), numberKey: roomCode.toLowerCase(), isList: false, split: false, numbers: [roomCode], wos: [] };
+          var rr = woRoomFromCode(rc, fmt);
+          g = { itemNo: itemNo, heading: rest, zone: rr.zone, names: rr.names, keys: rr.keys, joinedName: rr.joinedName, joinedKey: rr.joinedKey,
+            isList: rc.isList, split: rc.isList, numbers: rr.numbers, wos: [] };
           byItem[key] = g; rooms.push(g);
         }
         g.wos.push(w);
@@ -10042,7 +10168,7 @@
         gl.wos.push(w);
       }
     });
-    return { format: "cost", rooms: rooms, roomless: roomless, skipped: skipped };
+    return { format: "cost", fmt: fmt, sample: woFormatSample(rows), rooms: rooms, roomless: roomless, skipped: skipped };
   }
   // Splits a sell price across n items to the cent (the first items take
   // the odd cents), so the shares always add back up to the price.
@@ -10136,11 +10262,13 @@
 
   // One heading -> the room names it becomes (zone dropped).
   function woRoomNamesFor(room){
+    if (room.names) return (room.isList && room.split) ? room.names : [room.joinedName]; // (v37) cost rooms of any shape
     if (room.fixedName) return [room.fixedName]; // (v32) cost-analysis rooms: "G.01 - Waiting Room"
     if (room.isList && room.split) return room.numbers.map(function(n){ return room.dept + "." + n + (room.name ? " " + room.name : ""); });
     return [room.dept + "." + room.numText + (room.name ? " " + room.name : "")];
   }
   function woRoomNumberKeysFor(room){
+    if (room.keys) return (room.isList && room.split) ? room.keys : [room.joinedKey]; // (v37)
     if (room.fixedName) return [room.numberKey];
     if (room.isList && room.split) return room.numbers.map(function(n){ return (room.dept + "." + n).toLowerCase(); });
     return [(room.dept + "." + room.numText).toLowerCase()];
@@ -10234,8 +10362,11 @@
       });
     }).then(function(pages){
       // (v32) two report layouts: "Work Order List" (v31) and "Work Order Cost Analysis" (sell prices)
-      var interp = woIsCostAnalysisReport(pages)
-        ? woInterpretCostRows(woParseCostAnalysisRows(pages).rows)
+      // (v37) a Cost Analysis report's rows are kept, so "How to read this report" can re-read them
+      var costRows = woIsCostAnalysisReport(pages) ? woParseCostAnalysisRows(pages).rows : null;
+      var costFmt = costRows ? woLoadFormat(costRows) : null;
+      var interp = costRows
+        ? woInterpretCostRows(costRows, costFmt)
         : woInterpretGroups(woParseReportRows(pages).groups);
       interp.roomless = interp.roomless || [];
       var woCount = interp.rooms.reduce(function(n, r){ return n + r.wos.length; }, 0) + interp.roomless.reduce(function(n, g){ return n + g.wos.length; }, 0);
@@ -10257,6 +10388,7 @@
         var jobInfoUse = {};
         woJobInfoRows(header, mr.meta).forEach(function(r){ jobInfoUse[r.key] = (r.state === "fill"); });
         woImportState = { fileName: file.name, interp: interp, levels: ctx.levels, levelRooms: ctx.levelRooms, items: ctx.items, woList: ctx.woList, zoneMap: zoneMap, plan: [],
+          costRows: costRows, fmt: costFmt, // (v37)
           header: header, meta: mr.meta, metaFailed: mr.failed, jobInfoUse: jobInfoUse };
         woRenderImportDialog();
         woImportBackdrop.hidden = false;
@@ -10319,6 +10451,66 @@
     return "same";
   }
 
+
+  // (v37) "How to read this report": the first line's parts, each with what it means
+  var woImportFormatEl = document.getElementById("woImportFormat");
+  function woRenderFormat(st){
+    var smp = st.costRows && st.interp && st.interp.sample;
+    if (!smp){ woImportFormatEl.hidden = true; woImportFormatEl.innerHTML = ""; return; }
+    var fmt = st.fmt, rc = smp.rc, row = smp.row;
+    var wp = woSplitCodeByFormat(row.woText, fmt.code);
+    var firstWord = (/^(\S+)/.exec(String(row.woText || "").trim()) || ["", ""])[1];
+    var rr = woRoomFromCode(rc, fmt);
+    var lastI = rc.parts.length - 1;
+    function opt(v, label, cur){ return "<option value=\"" + v + "\"" + (v === cur ? " selected" : "") + ">" + escapeHtml(label) + "</option>"; }
+    var html = "<div class=\"wo-format-head\">How to read this report <span>— worked out from the report" + (fmt.saved ? " (your saved choice for this project)" : "") + ". If a line reads wrong, tell the app what each part of the first one means.</span></div>";
+    html += "<div class=\"wo-format-line\">First work order: <code>" + escapeHtml(row.wo + "-" + row.woText) + "</code></div><div class=\"wo-format-chips\">" +
+      "<span class=\"wf-chip\"><b>" + escapeHtml(row.wo) + "</b><small>Work order #</small></span>" +
+      "<label class=\"wf-chip" + (wp.code ? " code" : "") + "\"><b>" + escapeHtml(wp.code || firstWord || "—") + "</b><select data-wf=\"code\">" +
+        opt("auto", "Joinery code (automatic)", fmt.code) + opt("firstWord", "Joinery code = the first word", fmt.code) +
+        opt("beforeDash", "Joinery code = before “ - ”", fmt.code) + opt("none", "No joinery codes (use the WO #)", fmt.code) + "</select></label>" +
+      "<span class=\"wf-chip\"><b>" + escapeHtml(wp.desc || "—") + "</b><small>Description</small></span></div>";
+    html += "<div class=\"wo-format-line\">Its item: <code>" + escapeHtml(row.itemText) + "</code></div><div class=\"wo-format-chips\">" +
+      (smp.itemNo ? "<span class=\"wf-chip dim\"><b>" + escapeHtml(smp.itemNo) + "</b><small>Item no. (not used)</small></span>" : "");
+    rc.parts.forEach(function(p, i){
+      if (i === lastI) return;
+      var role = (fmt.ignore && fmt.ignore[i]) ? "ignore" : (i === fmt.zonePart ? (fmt.keepZone ? "zoneRoom" : "zone") : "room");
+      html += "<label class=\"wf-chip" + (role === "zone" || role === "zoneRoom" ? " zone" : role === "ignore" ? " dim" : "") + "\"><b>" + escapeHtml(p) + "</b><select data-wf-part=\"" + i + "\">" +
+        opt("zone", "Zone (the level)", role) + opt("zoneRoom", "Zone, and in the room number", role) + opt("room", "Part of the room number", role) + opt("ignore", "Ignore", role) + "</select></label>";
+    });
+    html += "<span class=\"wf-chip\"><b>" + escapeHtml(rc.numbers.join(", ")) + "</b><small>Room number" + (rc.isList ? "s" : "") + "</small></span>" +
+      (rc.name ? "<span class=\"wf-chip\"><b>" + escapeHtml(rc.name) + "</b><small>Room name</small></span>" : "") + "</div>";
+    html += "<div class=\"wo-format-result\">Reads as: WO " + escapeHtml(row.wo) + " · <b>" + escapeHtml(wp.code || ("WO " + row.wo)) + "</b> “" + escapeHtml(wp.desc) + "” → " +
+      (rr.zone ? "zone <b>" + escapeHtml(rr.zone) + "</b>, " : "no zone, ") + "room <b>" + escapeHtml(rc.isList ? rr.names.join("</b>, <b>") : rr.names[0]) + "</b></div>";
+    html += "<div class=\"wo-format-note\">The same is used for every line of this report, and remembered for this project.</div>";
+    woImportFormatEl.innerHTML = html;
+    woImportFormatEl.hidden = false;
+    function reread(){
+      st.fmt.saved = false;
+      woSaveFormat(st.fmt);
+      st.interp = woInterpretCostRows(st.costRows, st.fmt);
+      st.interp.roomless = st.interp.roomless || [];
+      var saved = woLoadZoneMap(), zm = {};
+      woZonesOf(st.interp).forEach(function(z){ zm[z] = st.zoneMap[z] || ((saved[z] && st.levels.indexOf(saved[z]) !== -1) ? saved[z] : ""); });
+      st.zoneMap = zm;
+      woRenderImportDialog();
+    }
+    var codeSel = woImportFormatEl.querySelector("select[data-wf=code]");
+    codeSel.addEventListener("change", function(){ st.fmt.code = codeSel.value; reread(); });
+    Array.prototype.forEach.call(woImportFormatEl.querySelectorAll("select[data-wf-part]"), function(sel){
+      sel.addEventListener("change", function(){
+        var i = +sel.getAttribute("data-wf-part"), v = sel.value;
+        st.fmt.ignore = st.fmt.ignore || {};
+        delete st.fmt.ignore[i];
+        if (v === "zone" || v === "zoneRoom"){ st.fmt.zonePart = i; st.fmt.keepZone = (v === "zoneRoom"); }
+        else {
+          if (st.fmt.zonePart === i) st.fmt.zonePart = -1; // no zone now: every room goes on one level
+          if (v === "ignore") st.fmt.ignore[i] = true;
+        }
+        reread();
+      });
+    });
+  }
   // (v35) the report's Job # / Project / Builder against the project's own info
   function woRenderJobInfo(st){
     var rows = woJobInfoRows(st.header, st.meta);
@@ -10377,13 +10569,14 @@
       (dropNew ? " · <span class=\"wo-count drop\">" + dropNew + " to drag onto the plan</span>" : "") +
       (listChanged ? " · " + listChanged + " price/description update" + (listChanged === 1 ? "" : "s") : "");
     woRenderJobInfo(st); // (v35)
+    woRenderFormat(st); // (v37)
     // zone -> level
     woImportZonesEl.innerHTML = "";
     woZonesOf(st.interp).forEach(function(z){
       var n = st.interp.rooms.filter(function(r){ return r.zone === z; }).length;
       var row = document.createElement("div"); row.className = "wo-zone-row";
       var lab = document.createElement("span"); lab.className = "wo-zone-label";
-      lab.textContent = "Zone " + z + " (" + n + " room" + (n === 1 ? "" : "s") + ") goes on";
+      lab.textContent = (z ? "Zone " + z : "All rooms (no zone)") + " (" + n + " room" + (n === 1 ? "" : "s") + ") goes on"; // (v37) no zone
       var sel = document.createElement("select"); sel.setAttribute("data-zone", z);
       sel.innerHTML = "<option value=\"\">— don't import —</option>" + st.levels.map(function(lv){ return "<option value=\"" + escapeHtml(lv) + "\">" + escapeHtml(lv) + "</option>"; }).join("");
       sel.value = st.zoneMap[z] || "";
@@ -11476,6 +11669,8 @@
     woInterpretGroupsForTest: function(groups){ return woInterpretGroups(groups); },
     woImportStateForTest: function(){ return woImportState; },
     woParseReportHeaderForTest: function(pages){ return woParseReportHeader(pages); },
+    woParseRoomCodeForTest: function(t){ return woParseRoomCode(t); }, // (v37)
+    woSplitCodeByFormatForTest: function(t, rule){ return woSplitCodeByFormat(t, rule); },
     pmNamesForTest: function(){ return pmNames.slice(); },
     woStartImportFromFileForTest: function(file){ return woStartImportFromFile(file); },
     unplacedItemsForTest: function(){ return planUnplacedItems.map(function(e){ var d = woEntryDisplay(e); return { kind: e.kind, room: d.room, joineryId: d.joineryId, workOrderNo: d.workOrderNo }; }); },

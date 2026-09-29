@@ -1,6 +1,25 @@
 # UTZLINE Projects — installable app
 
-**Current version: v36** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v37** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v37 (2026-09-29) — Import work orders: "How to read this report".** Andrew: *"on the import page, we need a way to map out the zones , wo numbers, etc. im thing you give me a selector for the first one where we can tell the app what the codes mean. as some of my imports dont work."* — with the 3749 New Mount Barker Hospital Work Order Cost Analysis, which v36 read as 0 rooms (all 246 work orders "with no room").
+
+- **Why it failed.** v32's Cost Analysis reader only knew one room shape, "1-G.01 - Waiting Room" (a letters-only zone, then " - " before the name), and one joinery-code shape ("code - description"). The 3749 report's items are "2-C1.EQ.002 Dropoff - Cleanup" (zone C1, room EQ.002, no dash) and its work orders "15345-J.001 Stainless Steel Cleanup Bench…" (no dash).
+- **Any room code now.** The item's code is read part by part: `C1.EQ.002` → parts C1, EQ and the room number 002; the name is the rest. Also read:
+  - lists: "BH.001, 002 CHS" → one room each, the value shared, as before;
+  - a list the PDF wrapped mid-number: "MH.036,04 0,044" → MH.036, MH.040, MH.044;
+  - ranges, which stay one room: "PH.005-011 Receiving & Dispensing";
+  - a number that starts the name ("IA.032 1 Bed Room Typical") stays in the name.
+- **Joinery codes.** Read automatically: the v32 "code - description" shapes first, then a first word that looks like a joinery code (J.001, J.T.012/009, LW-01), keeping "J.923 & J.924" together.
+- **The new "How to read this report" panel** (between Project info and the zone list) shows the report's first work order split into its parts:
+  - The work order's parts: WO #, joinery code, description. The code has a selector: automatic / the first word / before " - " / no joinery codes (use the WO #).
+  - The item's parts: item no. (not used), then each code part with a selector — **Zone (the level)**, **Zone, and in the room number**, **Part of the room number** or **Ignore** — then the room number(s) and the room name.
+  - A "Reads as:" line: what that first line becomes, e.g. *WO 15345 · J.001 "Stainless Steel Cleanup Bench…" → zone C1, room EQ.002 Dropoff - Cleanup*.
+  - Changing a selector re-reads every line of the report straight away (rooms, zones, the preview and the counts). No zone at all puts every room on one level ("All rooms (no zone)").
+  - The choice is remembered for the project and used on the next import of a report with the same shape ("your saved choice for this project"); a report of another shape is worked out afresh.
+- **How it reads by default.** A two-part code (3756's "G.01") keeps the zone in the room number ("G.01 - Waiting Room", unchanged from v32). A three-part code (3749's "C1.EQ.002") takes the first part as the zone and names the room from the rest ("EQ.002 Dropoff - Cleanup", the Work Order List import's naming). An existing item is still matched by room number.
+- **3749 now reads as** 154 room lines holding 240 work orders over zones C1, F1, H1, H2, H3, H4. Only Travel and Allowances have no room (6, to drag onto the plan). 4 $0 Management lines are skipped.
+- Test: `run_projects_v37_wo_format.js` (the real 3749 report). The 3756 test is unchanged and passes.
 
 **v36 (2026-09-29) — History card: every edit and every step, with who and when.** Andrew: *"joinery summary page needs to list all edits an progress in date order. with edits show date time and user. we have edit history but that card needs to show all changes , by who and when"*.
 
