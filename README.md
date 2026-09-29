@@ -1,6 +1,28 @@
 # UTZLINE Projects — installable app
 
-**Current version: v41 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v42 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v42 (2026-09-29) — RC 1.0: ready for the SharePoint test.** Andrew: *"ok lets do it, make a test run (maybe projects) thats a seperate installable that wont wipe my current setup. add in all the failsafes you need"*.
+
+- **Plan markers 20% smaller.** Andrew: *"on he next projects update, make the indicator dots about 20% smaller (and the icons)"*. Every dot on the plan is drawn at 0.8 × its saved size: the amber check ring, a copy's dashed pin and the pin being placed too. Each code moves up with its dot's edge. Nothing saved changes, and tapping still uses the full size. Site Measure / Viewer v69 and the ITPs draw the same markers, with their status icons, at the same 0.8.
+- **Tables: titles always visible, and zoomable.** Andrew: *"these title bars need to be always visable, and the tables need to be zoomable"*. This covers the Joinery Register and the Rework Register (outstanding and delivered).
+  - Each table scrolls inside its own card, up to the screen's height. Its column titles stay pinned at the top while the rows scroll under them, across and down.
+  - **Text size − 100% +** above each table zooms it from 60% to 200%. Tap the % to go back to 100%. A two-finger pinch on the table, or Ctrl + mouse wheel, zooms too.
+  - The size is kept per table on this device.
+  - The schedule apps' tables (the screenshot was the Scheduler's) get the same treatment on their own next updates.
+- **New names leave out # and %.** A new project folder, level or room made here drops them ("Unit #4" → "Unit 4"). SharePoint takes them now, but links, some sync apps and older tools still trip on them. Existing names are unchanged, and so is every lookup of them.
+- **UTZLINE Projects SharePoint Test** is a separate Windows install of this same v42, with the SharePoint test guard (`sharepoint-pilot.js`, kept in `/home/claude/sharepoint-pilot/`) loaded before the app. It has its own name, app ID, install folder, shortcuts, uninstall entry and settings folder (`%APPDATA%\UTZLINE Projects SharePoint Test`), so it never touches this app or its folder. The TEST badge is on its icon. What the guard does:
+  - **Folder:** it only uses a folder carrying the marker `UTZLINE SharePoint test folder.txt`. The first time, you type TEST before the marker is written. Dropbox folders are refused.
+  - **Saves:** saves, new files and deletes only happen inside that folder.
+  - **Look-only switch:** turns off all saving and deleting.
+  - **Changed by someone else:** if a list file changed on disk after the app read it, you're asked before it's replaced.
+  - **Local backups:** before the first replace of a file each session, and before every delete, a copy is kept on this computer.
+  - **Save checks:** every save is read back to check it landed. If not, it's written again once, then reported.
+  - **Conflict copies:** OneDrive conflict copies are spotted within minutes.
+  - **Check folder:** lists names SharePoint won't take, long paths, the item count, conflict copies, # / % names and Dropbox leftovers.
+  - **Check files open:** opens every file in one job, which also downloads online-only files.
+  - **Log:** a log you can save.
+- Tests: `pdftest-projects/run_sharepoint_pilot_guard.js` (the real pilot build on a real browser file system) and `run_projects_v42_names.js`.
 
 **v41 (2026-09-29) — RC 1.0: more than one in a room (with a double-up warning); the room is editable.** Andrew: *"when importing / dupliccating, we still need the option to drag into the same room, (may be multiples in a room) but warn that this is a double up"* and *"edit joinery item needs the room editable"*.
 

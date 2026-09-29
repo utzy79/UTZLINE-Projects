@@ -552,7 +552,8 @@ var ICON_VERSION = "v1";
 // v39 (2026-09-29): RC 1.0 -- the version is shown as RC 1.0, with a small "RC 1.0" tag on the logo.
 // v40 (2026-09-29): RC 1.0 -- right-click / press and hold a placed item: multiples, move level, remove from plan, delete a double-up; import lines can be left out.
 // v41 (2026-09-29): RC 1.0 -- the same room again (with a double-up warning); the room is editable in Edit joinery item.
-var CACHE_NAME = "utzline-projects-cache-v49";
+// v42 (2026-09-29): new names without # or % (SharePoint); the SharePoint Test build is this app + sharepoint-pilot.js.
+var CACHE_NAME = "utzline-projects-cache-v50";
 
 var PRECACHE_URLS = [
   "./",

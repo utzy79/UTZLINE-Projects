@@ -523,6 +523,25 @@
   .marker-dot{ cursor: pointer; }
   .marker-label{ font-weight: 600; pointer-events: none; user-select: none; } /* (v35) no font-size here: a CSS font-size overrides the SVG font-size attribute planRenderMarkers sets */
 
+
+  /* ---- (v42) Tables: the column titles always visible, and zoomable.
+     Andrew: "these title bars need to be always visable, and the tables
+     need to be zoomable". Each register table scrolls inside its own card
+     (up to the screen's height), so its title row can stay pinned at the
+     top while the rows scroll under it -- across and down. The text size
+     is --tz x the normal 13px: the "Text size" − / + buttons, a two-finger
+     pinch on the table, or Ctrl + mouse wheel; kept per table on this
+     device. ---- */
+  .tv-scroll{ overflow: auto; max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; padding-top: 0; }
+  .tv-scroll > table{ font-size: calc(13px * var(--tz, 1)); }
+  .tv-scroll > table thead th{ position: sticky; top: 0; z-index: 3; background: var(--panel); box-shadow: inset 0 -1px 0 var(--border); padding: calc(10px * var(--tz, 1)) calc(10px * var(--tz, 1)) calc(8px * var(--tz, 1)); }
+  .tv-scroll > table td{ padding: calc(9px * var(--tz, 1)) calc(10px * var(--tz, 1)); }
+  .tv-scroll .status-label .status-icon{ font-size: 1em; }
+  .tv-zoom{ display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin: -4px 0 8px; font-size: 12px; color: var(--muted); }
+  .tv-zoom[hidden]{ display: none; }
+  .tv-zoom button{ min-width: 34px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: 600 15px/1 inherit; cursor: pointer; touch-action: manipulation; }
+  .tv-zoom .tv-pct{ min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+
   /* ---- Joinery Register ---- */
   .register-table{ width: 100%; border-collapse: collapse; font-size: 13px; }
   .register-table th{
@@ -4770,7 +4789,14 @@
   // Same "collides -> numbered suffix" dedupe loop as Site Measure's own
   // createNewProject, so this never silently reopens (or silently
   // shadows) an existing project folder.
+  /* (v42) SharePoint / OneDrive: # and % are allowed in SharePoint now,
+     but links, some sync clients and older tools still trip on them -- so a
+     NEW project folder, level or room made here leaves them out ("Unit #4"
+     -> "Unit 4"). Only new names: existing folders and files keep their
+     names, and every lookup of them is unchanged. */
+  function withoutHashPercent(s){ return String(s == null ? "" : s).replace(/[#%]+/g, " ").replace(/\s{2,}/g, " ").trim(); }
   function projectFolderBaseName(no, name){
+    no = withoutHashPercent(no); name = withoutHashPercent(name); // (v42)
     var hasNo = String(no || "").trim().length > 0;
     var hasName = String(name || "").trim().length > 0;
     if (hasNo && hasName) return sanitizeFileBase(no) + " - " + sanitizeFileBase(name);
@@ -6779,18 +6805,27 @@
      0.75 x the saved 32 = 24. Placement uses the same size, so new markers
      sit a little closer to their labels; nothing saved changes. */
   var PLAN_TEXT_SCALE = 0.75; // (v35) was 1 (32: v34 really drew 14, so that was the "about twice")
+  /* (v42) Andrew: "on he next projects update, make the indicator dots about
+     20% smaller (and the icons)": every marker's dot (and its amber check
+     ring, a copy's dashed pin, the pin being placed) is drawn at 0.8 x its
+     saved size. Nothing saved changes -- Site Measure / Viewer and the ITPs
+     draw the same markers at the same 0.8, with their status icons. The
+     code under a dot moves up with the dot's edge. Tapping still uses the
+     full saved size (easier to hit). */
+  var PLAN_DOT_SCALE = 0.8;
+  function planDotR(obj){ return (Number(obj && obj.r) || 27) * PLAN_DOT_SCALE; }
   function planMarkerTextSize(obj){ return (Number(obj.label && obj.label.fontSize) || 32) * PLAN_TEXT_SCALE; }
   function planMarkerTextPos(obj){
     var lx = Number(obj.label.x) || 0, ly = Number(obj.label.y) || 0;
     var dx = lx - obj.x, dy = ly - obj.y, len = Math.hypot(dx, dy), r = Number(obj.r) || 27;
     if (!(len > r)) return { x: lx, y: ly };
-    var nl = r + (len - r) * PLAN_TEXT_SCALE;
+    var nl = r * PLAN_DOT_SCALE + (len - r) * PLAN_TEXT_SCALE; // (v42) from the smaller dot's edge
     return { x: obj.x + dx / len * nl, y: obj.y + dy / len * nl };
   }
   // What a marker covers as drawn here: its dot, and its code's text.
   function planMarkerRingR(r){ return r * 1.55 + Math.max(2, r * 0.18) / 2; } // the amber "check" ring's outer edge (planRenderMarkers)
   function planMarkerBoxes(obj){
-    var r = Number(obj.r) || 27, rr = obj.autoPlaced ? planMarkerRingR(r) : r; // an unchecked marker's ring covers more than its dot
+    var r = planDotR(obj), rr = obj.autoPlaced ? planMarkerRingR(r) : r; // an unchecked marker's ring covers more than its dot; (v42) as drawn
     var out = [{ x0: obj.x - rr, y0: obj.y - rr, x1: obj.x + rr, y1: obj.y + rr }];
     var text = roomlinkDisplayText(obj);
     if (obj.label && text){
@@ -6891,16 +6926,17 @@
       if (obj.type !== "roomlink") return;
       var dot = document.createElementNS(SVG_NS, "circle");
       dot.setAttribute("class", "marker-dot");
-      dot.setAttribute("cx", obj.x); dot.setAttribute("cy", obj.y); dot.setAttribute("r", obj.r);
+      var dr = planDotR(obj); // (v42) 20% smaller
+      dot.setAttribute("cx", obj.x); dot.setAttribute("cy", obj.y); dot.setAttribute("r", dr);
       dot.setAttribute("fill", obj.color || "#c8391c");
-      dot.setAttribute("stroke", "#fff"); dot.setAttribute("stroke-width", Math.max(1, obj.r * 0.08));
+      dot.setAttribute("stroke", "#fff"); dot.setAttribute("stroke-width", Math.max(1, dr * 0.08));
       dot.setAttribute("data-marker-id", obj.id);
       planCanvasMarkersG.appendChild(dot);
       if (obj.autoPlaced){ // (v34) placed from the plan's labels, not checked yet
         var ring = document.createElementNS(SVG_NS, "circle");
         ring.setAttribute("class", "marker-check-ring");
-        ring.setAttribute("cx", obj.x); ring.setAttribute("cy", obj.y); ring.setAttribute("r", obj.r * 1.55);
-        ring.setAttribute("stroke-width", Math.max(2, obj.r * 0.18));
+        ring.setAttribute("cx", obj.x); ring.setAttribute("cy", obj.y); ring.setAttribute("r", dr * 1.55);
+        ring.setAttribute("stroke-width", Math.max(2, dr * 0.18));
         planCanvasMarkersG.appendChild(ring);
       }
       if (obj.label && obj.label.text){
@@ -9700,7 +9736,7 @@
   // as free and openLevel({create:true}) would find... the unreadable one.
   var newLevelBtn = document.getElementById("newLevelBtn");
   function createNewLevel(rawName){
-    var name = sanitizeFileBase(rawName);
+    var name = sanitizeFileBase(withoutHashPercent(rawName)); // (v42) no # or %
     return listExistingLevelsStrict(activeProjectHandle).then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
       var finalName = name, n = 2;
@@ -9810,7 +9846,7 @@
   // existing room of THIS level gets a numbered suffix.
   var newRoomBtn = document.getElementById("newRoomBtn");
   function createNewRoom(rawName){
-    var name = sanitizeFileBase(rawName);
+    var name = sanitizeFileBase(withoutHashPercent(rawName)); // (v42) no # or %
     return listExistingRoomsInLevel(activeProjectHandle, activeProjectName, activeLevelName).then(function(existing){
       var existingLower = existing.map(function(n){ return n.toLowerCase(); });
       var finalName = name, n = 2;
@@ -9837,6 +9873,58 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
     });
   }
+
+
+  /* ============================== (v42) tables: pinned titles + zoom ==============================
+     See the .tv-scroll CSS. tableView(card, key): the card becomes the
+     table's own scroll box (titles pinned at its top) and gets a "Text
+     size − 100% +" bar just above it; a two-finger pinch on the table or
+     Ctrl + wheel zooms too. 60%-200%, kept per table (localStorage). */
+  var TV_MIN = 0.6, TV_MAX = 2, TV_KEY = "utzline-projects-table-zoom";
+  function tvLoad(){ try{ var v = JSON.parse(localStorage.getItem(TV_KEY) || "{}"); return (v && typeof v === "object") ? v : {}; }catch(e){ return {}; } }
+  function tableView(card, key){
+    if (!card || card.__tv) return null;
+    var bar = document.createElement("div");
+    bar.className = "tv-zoom";
+    bar.innerHTML = '<span>Text size</span><button type="button" class="tv-out" aria-label="Smaller">−</button><span class="tv-pct">100%</span><button type="button" class="tv-in" aria-label="Bigger">+</button>';
+    card.parentNode.insertBefore(bar, card);
+    card.classList.add("tv-scroll");
+    var z = Number(tvLoad()[key]) || 1, raf = 0;
+    function apply(save){
+      z = Math.round(clamp(z, TV_MIN, TV_MAX) * 100) / 100;
+      card.style.setProperty("--tz", String(z));
+      bar.querySelector(".tv-pct").textContent = Math.round(z * 100) + "%";
+      if (save){ var all = tvLoad(); all[key] = z; try{ localStorage.setItem(TV_KEY, JSON.stringify(all)); }catch(e){} }
+    }
+    function zoomTo(nz, save){ z = nz; if (!raf) raf = requestAnimationFrame(function(){ raf = 0; apply(save); }); if (save) apply(true); }
+    bar.querySelector(".tv-out").addEventListener("click", function(){ zoomTo(Math.round((z - 0.1) * 10) / 10, true); });
+    bar.querySelector(".tv-in").addEventListener("click", function(){ zoomTo(Math.round((z + 0.1) * 10) / 10, true); });
+    bar.querySelector(".tv-pct").addEventListener("click", function(){ zoomTo(1, true); });
+    card.addEventListener("wheel", function(e){
+      if (!e.ctrlKey) return; // a trackpad pinch arrives as Ctrl + wheel too
+      e.preventDefault();
+      zoomTo(z * Math.exp(-e.deltaY / 600), false);
+      clearTimeout(card.__tvT); card.__tvT = setTimeout(function(){ apply(true); }, 300);
+    }, { passive: false });
+    var pinch = null;
+    function dist(t){ return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+    card.addEventListener("touchstart", function(e){ if (e.touches.length === 2) pinch = { d: dist(e.touches), z: z }; }, { passive: true });
+    card.addEventListener("touchmove", function(e){
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      zoomTo(pinch.z * dist(e.touches) / pinch.d, false);
+    }, { passive: false });
+    card.addEventListener("touchend", function(e){ if (pinch && e.touches.length < 2){ pinch = null; apply(true); } });
+    apply(false);
+    card.__tv = { bar: bar, get: function(){ return z; }, set: function(v){ z = v; apply(true); } };
+    // the bar follows the card (e.g. the Delivered card shown on a tap)
+    new MutationObserver(function(){ bar.hidden = card.hidden; }).observe(card, { attributes: true, attributeFilter: ["hidden"] });
+    bar.hidden = card.hidden;
+    return card.__tv;
+  }
+  tableView(document.getElementById("registerTableCard"), "joinery-register");
+  tableView(document.getElementById("reworkRegisterTableCard"), "rework-register");
+  tableView(document.getElementById("reworkRegisterDelivCard"), "rework-register-delivered");
 
   /* ============================== boot ============================== */
   function boot(){
@@ -11275,7 +11363,7 @@
     if (!planDraftG) return;
     while (planDraftG.firstChild) planDraftG.removeChild(planDraftG.firstChild);
     if (!planPinMode || !planPinMode.draft) return;
-    var d = planPinMode.draft, r = 26;
+    var d = planPinMode.draft, r = 26 * PLAN_DOT_SCALE; // (v42)
     var ring = document.createElementNS(SVG_NS, "circle");
     ring.setAttribute("cx", d.x); ring.setAttribute("cy", d.y); ring.setAttribute("r", r);
     ring.setAttribute("fill", "rgba(255,59,59,0.35)"); ring.setAttribute("stroke", "#ffffff"); ring.setAttribute("stroke-width", 4); ring.setAttribute("stroke-dasharray", "8 6");
@@ -11597,7 +11685,7 @@
      dot; everywhere else under it. Pure. */
   var AUTO_PLACE_V = 2; // markers placed this way; a v34 one (on the label) has none
   function autoPlaceSpot(anchor, text, obstacles, bounds){
-    var fs = 32, r = fs * 0.85, T = fs * PLAN_TEXT_SCALE, g = 10, tw = planTextWidth(text, T);
+    var fs = 32, r = fs * 0.85 * PLAN_DOT_SCALE, T = fs * PLAN_TEXT_SCALE, g = 10, tw = planTextWidth(text, T); // (v42) the dot as drawn
     var rr = planMarkerRingR(r); // it's placed amber: its ring, not just its dot, stays off the text
     var stepX = Math.max(2 * rr, tw) + g, stepY = 2 * rr + T + g;
     var sides = ["left", "right", "above", "below"];
@@ -12181,7 +12269,7 @@
       });
       if (!anchor) return;
       // a column to its right, each with room for its code under it
-      var r = Number(anchor.r) || 27, tsz = 32 * PLAN_TEXT_SCALE;
+      var r = planDotR(anchor), tsz = 32 * PLAN_TEXT_SCALE; // (v42) as drawn
       var dx = Math.max(r * 2.9, planTextWidth((w.code || "") + " +", tsz) / 2 + planTextWidth(String(anchor.joineryCode || ""), tsz) / 2 + 16);
       for (var i = 0; i < Math.min(n, 12); i++) out.push({ w: w, have: mine.length, x: anchor.x + dx, y: anchor.y + i * (2 * r + tsz + 16), r: r, i: i });
     });
@@ -12503,6 +12591,9 @@
     reworkUiForTest: function(){ return reworkUi; },
     // (2026-09-27) the reserved "Schedule Backups" name is never handed out to a project
     createNewProjectForTest: function(no, name){ return createNewProject(no, name); },
+    createNewLevelForTest: function(name){ return createNewLevel(name); }, // (v42)
+    tableViewForTest: function(id){ var c = document.getElementById(id); return c && c.__tv ? { zoom: c.__tv.get(), set: c.__tv.set } : null; }, // (v42)
+    createNewRoomForTest: function(name){ return createNewRoom(name); }, // (v42)
     renderPdfPageGrid: renderPdfPageGrid,
     renderPdfPageMaybeTiled: renderPdfPageMaybeTiled,
     makeRoomLinkObject: makeRoomLinkObject,
