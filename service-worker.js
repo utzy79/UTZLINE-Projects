@@ -542,7 +542,10 @@ var ICON_VERSION = "v1";
 // v32 (2026-09-28): Work Order Cost Analysis import + drag-and-drop list with value split.
 // v33 (2026-09-28): rework register + item card fold the rework event files (shared UtzRework module).
 // v34 (2026-09-28): floor plan PDF labels place the joinery items; Move markers mode with check flags.
-var CACHE_NAME = "utzline-projects-cache-v42";
+// v35 (2026-09-28): PC date as the default required delivery date ("PC Date"); job #/project/builder from the WO report; PM picked from a list;
+//   markers placed beside the plan's labels (text drawn twice the size); shop drawings Sent / Returned with REV A, B, C.
+// v36 (2026-09-29): History card on the joinery item page (every edit and step, with who and when); new items record who added them.
+var CACHE_NAME = "utzline-projects-cache-v44";
 
 var PRECACHE_URLS = [
   "./",

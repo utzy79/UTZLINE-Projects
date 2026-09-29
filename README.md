@@ -1,6 +1,54 @@
 # UTZLINE Projects — installable app
 
-**Current version: v34** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v36** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v36 (2026-09-29) — History card: every edit and every step, with who and when.** Andrew: *"joinery summary page needs to list all edits an progress in date order. with edits show date time and user. we have edit history but that card needs to show all changes , by who and when"*.
+
+- **What replaced it.** The joinery item page's **Edit history** card is now **History**. It lists, oldest first, each with its date and time and who did it:
+  - **Created:** how the item was created (imported from the report, dropped on the plan from a work order, or added in Projects).
+  - **Edits:** every edit, with each field's old and new value and the note.
+  - **Status and job notes:** every status step, and every job note with its file's name.
+  - **Schedule:** every schedule change, including the PC date, a date set in the Scheduler, and clearing it.
+  - **Machining:** every cut (carcase, colour board, solid surface).
+  - **Solid surface:** completion and the solid surface schedule.
+  - **Shop drawings:** each sent and returned drawing. Who added it comes from the note the Scheduler v33 keeps beside each one; older drawings say "not recorded".
+  - **Orders:** each order attached and received.
+  - **Reworks:** every step and comment.
+  - **Site measures:** each Site Measure save.
+- **Newest first** flips the order, and this device remembers it.
+- **Unreadable files.** A file that's still syncing only leaves that part out, and a note says what couldn't be read.
+- **New items.** An item added in Projects now records who added it and when.
+- The card reads only this one item's folders when the page opens (nothing project-wide), so it stays quick on a 4 GB tablet.
+- Tests: `pdftest-projects/run_projects_v36_history.js` is new. `run_edit_joinery_item_pin_traceability.js` is updated for the new card.
+
+**v35 (2026-09-28) — PC date, job details from the report, project manager list, markers beside the labels, Sent / Returned shop drawings.**
+
+- **PC date.** Andrew: *"when setting up a project, ask what the pc date is for the project, then set that as the required delivery date with a comment of 'PC Date'"*.
+  - Project info (and New Project) asks for the **PC date (practical completion)**, saved as `pcDate` in `project-meta.json`.
+  - Every joinery item with no schedule of its own gets a schedule event in `Project Saves/Joinery Schedule/<item>/` with that date as its required delivery date and the note **"PC Date"**. It uses a 30 business-day lead, so every schedule app shows the date and works out delays with no change of its own.
+  - Changing the PC date moves only the items still on "PC Date", keeping any lead time the Scheduler gave them. Items with a date set in the Scheduler are never touched. Clearing the PC date clears only those items, and setting it again brings them back.
+  - Items added later get it too: WO import, Add item, and a work order dropped on the plan.
+  - An item whose schedule file is mid-sync is skipped, and the toast says so. The next save of Project info catches it up.
+  - The register and the item page show a small **PC Date** tag beside the date.
+- **Job details from the work order report.** Andrew: *"the import can also give you the job #, (Job Id) Project (Job Description) and Builder (Customer) ignore project manage that will need to be picked from a list"*.
+  - **Fill from work order report…** in the Project info / New Project dialog reads the report's first page: Job Id → Job number, Job Description → Project name, Customer → Builder. Both report layouts (Cost Analysis and Work Order List) work.
+  - The WO import dialog shows the same three. A blank field is filled in; one that already says something else is only replaced if you tick it. A different Job # gets a warning ("Is it the right report?").
+  - The report's Project Manager is never used.
+- **Project manager is picked from a list.** It's one company-wide list in `utzline-project-managers.json` in the main folder.
+  - It starts off with the PMs already on your projects.
+  - **+ Add a project manager…** adds a name; **Remove from list** takes one off (projects that already have it keep it).
+  - A project whose PM isn't on the list keeps it, shown as "(not on the list)".
+- **Markers beside the plan's labels, not on them.** Andrew: *"the placement worked fantastic, only issue is it placews them directly over the labels, the labels are then unreadable, also the text is a bit small, need it about twice the size"*.
+  - Importing a plan PDF now also stores the size of each label and the box of every piece of text on the plan.
+  - Each marker goes left, right, above or below its tag (then a step further out). It takes the first spot where the marker, its amber ring and its code cover no text and no other marker. On A-104: 48 on their code tags, 1 by its room label, and none covering any text.
+  - The amber markers v34 put on top of the labels move beside them the first time that level's plan is opened; a checked marker is never moved.
+  - Marker codes were being drawn at 14 px (a style rule overrode their size). They're now drawn at their saved 32 px, about 2.3 times bigger. The saved markers are unchanged, so the other apps draw them as before.
+- **Shop drawings: Sent and Returned.** Andrew: *"shop drawings need a sent and a returned section"*, *"we need the option to open all revisions, not just the latest one"*, *"we call them REV A REV B and so on"*.
+  - The item page's Shop drawings card has **Sent** and **Returned** parts. Each shows its latest, with **All revisions (n)** / **All returned (n)** to open any earlier one.
+  - Revisions read as REV A, B, C…; files saved as REV 0/1/2 show as A/B/C. Returned copies are kept in the drawing's own `Returned` folder (the Scheduler adds them).
+- Tests (all in `pdftest-projects`):
+  - New: `run_projects_v35_pc_date.js`, `run_projects_v35_pc_date_new_items.js`, `run_projects_v35_report_header.js`, `run_projects_v35_wo_job_info.js`, `run_projects_v35_pm_list.js`, `run_projects_v35_placement.js`, `run_projects_v35_placement_v34.js`, `run_projects_v35_shop_drawings.js`.
+  - Updated: `run_projects_plan_labels_autoplace.js`, `run_project_create_naming.js`, `run_projects_wo_import.js`.
 
 **v34 (2026-09-28) — The floor plan's own labels place the joinery items.** Andrew: *"do you think that the import could scan the floor plans and place the joinery items directly (with option to move if incorrect)"*, with the Jones Radiology plan A-104. A CAD-exported plan PDF keeps its labels as real text. On A-104, 49 of the 51 JG codes in the work order report are on the plan in a tag beside the joinery, and every room number (G.01–G.60) sits in the middle of its room.
 

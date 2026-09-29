@@ -241,6 +241,35 @@
     font-size: 14px;
   }
   .field input[type=text]:focus{ outline: none; border-color: var(--accent); }
+  /* (v35) the PC date and the Project manager list look like the other fields */
+  .field input[type=date], .field select{
+    width: 100%; background: #140d0d; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 9px 12px; font-size: 14px; color-scheme: dark; font-family: inherit;
+  }
+  .field input[type=date]:focus, .field select:focus{ outline: none; border-color: var(--accent); }
+  .pi-fill-row{ margin: -6px 0 12px; }
+  .pi-fill-note{ font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; line-height: 1.45; }
+  .pi-fill-note b{ color: var(--text); }
+  .pi-pm-row{ display: flex; gap: 8px; align-items: center; }
+  .pi-pm-row select{ flex: 1 1 auto; min-width: 0; }
+  .pi-pm-row .btn{ flex: 0 0 auto; padding: 8px 10px; font-size: 12.5px; }
+  .pi-pm-add{ display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .pi-pm-add[hidden]{ display: none; }
+  .field .pi-pm-add input[type=text]{ flex: 1 1 auto; min-width: 0; width: auto; }
+  .pi-pm-add .btn{ flex: 0 0 auto; padding: 8px 12px; }
+  /* (v35) the report's Job # / Project / Builder in the import dialog */
+  .wo-jobinfo{ border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin: 0 0 12px; font-size: 13px; }
+  .wo-jobinfo[hidden]{ display: none; }
+  .wo-jobinfo-head{ font-weight: 700; margin-bottom: 4px; }
+  .wo-jobinfo-row{ display: grid; grid-template-columns: 80px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 3px 0; }
+  .wo-jobinfo-row .wji-label{ color: var(--muted); }
+  .wo-jobinfo-row .wji-val{ font-weight: 600; overflow-wrap: anywhere; }
+  .wo-jobinfo-row .wji-state{ font-size: 12.5px; white-space: nowrap; }
+  .wo-jobinfo-row .wji-state.same{ color: var(--muted2); }
+  .wo-jobinfo-row .wji-state.fill{ color: #4ade80; }
+  .wo-jobinfo-row label.wji-state{ color: #fbbf24; cursor: pointer; white-space: normal; }
+  .wo-jobinfo-warn{ color: #fbbf24; font-weight: 600; margin-top: 4px; }
+  .wo-jobinfo-note{ color: var(--muted); font-size: 12px; margin-top: 4px; }
   .modal-backdrop{
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.6);
@@ -418,6 +447,7 @@
   .plan-drag-ghost.over-plan{ border-color: #ff5b5b; background: #2a1414; }
   .plan-undo-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #142a1b; border-top: 1px solid var(--border); font-size: 14px; }
   .plan-undo-bar[hidden]{ display: none; }
+  .pc-note{ display:inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(240,178,62,.16); color: #f0b23e; vertical-align: 1px; } /* (v35) */
   /* (v34) placed from the plan's labels: amber ring until someone's checked it; Move mode */
   .marker-check-ring{ fill: none; stroke: #f0b23e; stroke-dasharray: 7 5; pointer-events: none; }
   .plan-move-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #2a2210; border-top: 1px solid var(--border); font-size: 14px; }
@@ -448,7 +478,7 @@
     border-top: 1px solid var(--border);
   }
   .marker-dot{ cursor: pointer; }
-  .marker-label{ font-size: 14px; font-weight: 600; pointer-events: none; user-select: none; }
+  .marker-label{ font-weight: 600; pointer-events: none; user-select: none; } /* (v35) no font-size here: a CSS font-size overrides the SVG font-size attribute planRenderMarkers sets */
 
   /* ---- Joinery Register ---- */
   .register-table{ width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -507,6 +537,25 @@
      sibling file in this family is keyed off that exact triple). Edit
      history rows reuse this page's existing .doc-row list convention. */
   .meta-grid.readonly-fields{ opacity: 0.6; margin-bottom: 14px; }
+  /* (v36) History: every edit and every step, in date order */
+  .hist-head{ display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .hist-head .section-title{ margin: 0; }
+  .hist-sub{ margin: 4px 0 8px; font-size: 12.5px; }
+  .hist-row{ display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .hist-row:first-child{ border-top: none; }
+  .hist-when{ color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  .hist-cat{ display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; margin-right: 6px; background: rgba(255,255,255,.07); color: var(--muted); vertical-align: 1px; }
+  .hist-cat.c-status{ background: rgba(31,143,191,.18); color: #5fb8e0; }
+  .hist-cat.c-edit{ background: rgba(240,178,62,.16); color: #f0b23e; }
+  .hist-cat.c-schedule{ background: rgba(74,144,255,.16); color: #7fb0ff; }
+  .hist-cat.c-rework{ background: rgba(255,93,93,.16); color: #ff8a8a; }
+  .hist-cat.c-created{ background: rgba(51,196,106,.16); color: #4ade80; }
+  .hist-who{ color: var(--muted); }
+  .hist-who b{ color: var(--text); font-weight: 600; }
+  .hist-detail{ margin-top: 3px; color: var(--muted); font-size: 12.5px; }
+  .hist-detail div{ margin: 1px 0; }
+  .hist-note{ margin-top: 8px; font-size: 12px; color: #f0b23e; }
+  @media (max-width: 560px){ .hist-row{ grid-template-columns: minmax(0, 1fr); gap: 2px; } }
   .edit-history-entry{ padding: 9px 0; border-top: 1px solid var(--border); font-size: 13px; }
   .edit-history-entry:first-child{ border-top: none; }
   .edit-history-who{ font-size: 12px; color: var(--muted); margin-bottom: 4px; }
@@ -534,6 +583,12 @@
 
   /* ---- Joinery item page: linked-document lists (Shop drawings, Job
        notes, Manufacture + Install ITP) -- 2026-09-23 ---- */
+  /* (v35) Shop drawings: Sent / Returned */
+  .sd-part-title{ font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 10px 0 4px; }
+  .sd-part-title:first-of-type{ margin-top: 2px; }
+  .sd-revs-btn{ margin-top: 8px; }
+  .sd-revs{ margin-top: 8px; border-left: 3px solid var(--border); padding-left: 10px; }
+  .sd-revs[hidden]{ display: none; }
   .doc-row{
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 8px 0; border-top: 1px solid var(--border);
@@ -950,9 +1005,16 @@
          comment block below for the full rationale. Every past edit made
          through the Edit joinery item dialog, newest first; "No edits yet"
          for an item nobody has ever edited. ---- -->
-    <div class="card">
-      <h2 class="section-title">Edit history</h2>
-      <div id="itemEditHistoryList"></div>
+    <!-- (v36) Andrew: "joinery summary page needs to list all edits an
+         progress in date order. with edits show date time and user. we
+         have edit history but that card needs to show all changes , by
+         who and when". One card: edits, status steps, schedule changes,
+         job notes, shop drawings, machining, solid surface, orders,
+         reworks and site measures -- each with when and who. -->
+    <div class="card" id="itemHistoryCard">
+      <div class="hist-head"><h2 class="section-title">History</h2><button class="btn secondary sm" id="itemHistoryOrderBtn" type="button">Newest first</button></div>
+      <p class="sub hist-sub">Every edit and every step for this item, with when and who.</p>
+      <div id="itemHistoryList"></div>
     </div>
     <!-- ---- Site Measure overlays (2026-09-24) -- Andrew, verbatim: "the
          joinery status page needs finishing... it currently does not show
@@ -988,7 +1050,11 @@
     </div>
     <div class="card">
       <h2 class="section-title">Shop drawings</h2>
+      <!-- (v35) Andrew: "shop drawings need a sent and a returned section" -->
+      <h3 class="sd-part-title">Sent</h3>
       <div id="itemShopDrawingsList"></div>
+      <h3 class="sd-part-title">Returned</h3>
+      <div id="itemShopReturnedList"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Job notes</h2>
@@ -1117,6 +1183,7 @@
   <div class="modal wo-import-modal">
     <h2>Import work orders</h2>
     <p class="sub" id="woImportSummary"></p>
+    <div class="wo-jobinfo" id="woImportJobInfo" hidden></div>
     <div class="wo-zones" id="woImportZones"></div>
     <div class="wo-preview" id="woImportPreview"></div>
     <div class="modal-actions">
@@ -1280,11 +1347,24 @@
   <div class="modal">
     <h2>Project info</h2>
     <p class="sub">Shown to Site Measure, Viewer, and both ITP apps.</p>
+    <!-- (v35) Andrew: "the import can also give you the job #, (Job Id) Project (Job Description) and Builder (Customer)" -->
+    <div class="pi-fill-row"><button class="btn secondary" id="piFillFromReportBtn" type="button">Fill from work order report…</button>
+      <input type="file" id="piReportFileInput" accept="application/pdf,.pdf" hidden></div>
+    <p class="pi-fill-note" id="piFillNote" hidden></p>
     <div class="field"><label for="piNoInput">Job number</label><input type="text" id="piNoInput"></div>
     <div class="field"><label for="piNameInput">Project name</label><input type="text" id="piNameInput"></div>
     <div class="field"><label for="piBuilderInput">Builder</label><input type="text" id="piBuilderInput"></div>
     <div class="field"><label for="piSiteAddressInput">Site address</label><input type="text" id="piSiteAddressInput"></div>
-    <div class="field"><label for="piProjectManagerInput">Project manager</label><input type="text" id="piProjectManagerInput"></div>
+    <!-- (v35) "ignore project manage that will need to be picked from a list" -->
+    <div class="field"><label for="piProjectManagerSelect">Project manager</label>
+      <div class="pi-pm-row"><select id="piProjectManagerSelect"></select>
+        <button class="btn secondary" id="piPmRemoveBtn" type="button" hidden title="Take this name off the list (projects that already have it keep it)">Remove from list</button></div>
+      <div class="pi-pm-add" id="piPmAddRow" hidden><input type="text" id="piPmAddInput" placeholder="Name, e.g. Richard Graham" autocomplete="off">
+        <button class="btn" id="piPmAddBtn" type="button">Add</button><button class="btn secondary" id="piPmAddCancel" type="button">Cancel</button></div>
+    </div>
+    <!-- (v35) Andrew: "when setting up a project, ask what the pc date is for the project, then set that as the required delivery date with a comment of 'PC Date'" -->
+    <div class="field"><label for="piPcDateInput">PC date (practical completion)</label><input type="date" id="piPcDateInput">
+      <div class="hint" style="font-size:12px;color:var(--muted);margin-top:4px;">Every joinery item gets this as its required delivery date, with the comment “PC Date”, until its own date is set in the Scheduler.</div></div>
     <div class="modal-actions">
       <button class="btn secondary" id="projectInfoSkip">Cancel</button>
       <button class="btn" id="projectInfoSave">Save</button>
@@ -4086,7 +4166,8 @@
         name: String(parsed.name || ""),
         contractor: String(parsed.contractor || ""),
         siteAddress: String(parsed.siteAddress || ""),
-        projectManager: String(parsed.projectManager || "")
+        projectManager: String(parsed.projectManager || ""),
+        pcDate: /^\d{4}-\d{2}-\d{2}$/.test(String(parsed.pcDate || "")) ? String(parsed.pcDate) : "" // (v35)
       };
     }).then(function(res){ return res.found ? res.value : null; });
   }
@@ -4105,7 +4186,8 @@
       name: String((meta && meta.name) || ""),
       contractor: String((meta && meta.contractor) || ""),
       siteAddress: String((meta && meta.siteAddress) || ""),
-      projectManager: String((meta && meta.projectManager) || "")
+      projectManager: String((meta && meta.projectManager) || ""),
+      pcDate: /^\d{4}-\d{2}-\d{2}$/.test(String((meta && meta.pcDate) || "")) ? String(meta.pcDate) : "" // (v35)
     });
     return dirHandle.getFileHandle(projectMetaFilename(), { create: true }).then(function(fh){
       return fh.createWritable();
@@ -4154,7 +4236,16 @@
   var piNameInput = document.getElementById("piNameInput");
   var piBuilderInput = document.getElementById("piBuilderInput");
   var piSiteAddressInput = document.getElementById("piSiteAddressInput");
-  var piProjectManagerInput = document.getElementById("piProjectManagerInput");
+  var piProjectManagerSelect = document.getElementById("piProjectManagerSelect"); // (v35) was a text box
+  var piPmRemoveBtn = document.getElementById("piPmRemoveBtn");
+  var piPmAddRow = document.getElementById("piPmAddRow");
+  var piPmAddInput = document.getElementById("piPmAddInput");
+  var piPmAddBtn = document.getElementById("piPmAddBtn");
+  var piPmAddCancel = document.getElementById("piPmAddCancel");
+  var piFillFromReportBtn = document.getElementById("piFillFromReportBtn");
+  var piReportFileInput = document.getElementById("piReportFileInput");
+  var piFillNote = document.getElementById("piFillNote");
+  var piPcDateInput = document.getElementById("piPcDateInput"); // (v35)
   var projectInfoSave = document.getElementById("projectInfoSave");
   var projectInfoSkip = document.getElementById("projectInfoSkip");
   var projectInfoResolve = null;
@@ -4163,7 +4254,12 @@
     piNameInput.value = (current && current.name) || "";
     piBuilderInput.value = (current && current.contractor) || "";
     piSiteAddressInput.value = (current && current.siteAddress) || "";
-    piProjectManagerInput.value = (current && current.projectManager) || "";
+    pmDialogCurrent = (current && current.projectManager) || ""; // (v35) picked from the list
+    pmRenderSelect(pmDialogCurrent);
+    piPmAddRow.hidden = true;
+    piFillNote.hidden = true; piFillNote.textContent = "";
+    pmLoadIntoDialog();
+    piPcDateInput.value = (current && current.pcDate) || "";
     projectInfoBackdrop.hidden = false;
     piNoInput.focus();
     return new Promise(function(resolve){ projectInfoResolve = resolve; });
@@ -4179,9 +4275,194 @@
       no: piNoInput.value,
       contractor: piBuilderInput.value,
       siteAddress: piSiteAddressInput.value,
-      projectManager: piProjectManagerInput.value
+      projectManager: pmSelectedValue(),
+      pcDate: piPcDateInput.value || ""
     };
   }
+
+  /* ---- (v35) Project managers: picked from a list ----
+     Andrew: "ignore project manage that will need to be picked from a
+     list". One company-wide list, <Projects root>/utzline-project-managers.json
+     ({ schemaVersion, updatedAt, names: [...] }) -- a FILE beside
+     utzline-users.csv and company-logo.png, so no app ever lists it as a
+     project. The dialog's Project manager is a drop-down of that list;
+     "+ Add a project manager…" adds a name there and then (read strictly,
+     merged, written back -- an unreadable list is never rewritten), and
+     "Remove from list" takes one off (projects that already have it keep
+     it). The first time the list is opened and there's no file yet, it's
+     started from the project managers already typed on the existing
+     projects, so nobody has to type them again. A project whose PM isn't
+     on the list keeps it (shown "not on the list"). The work order
+     report's own "Project Manager" is never used. */
+  var PM_LIST_FILE = "utzline-project-managers.json";
+  var PM_ADD = "__add__";
+  var pmNames = [];           // the list as last read
+  var pmDialogCurrent = "";   // the project's own PM when the dialog opened
+  var pmLastValue = "";       // what the drop-down showed before "+ Add…"
+  function pmNormalize(names){
+    var seen = {}, out = [];
+    (names || []).forEach(function(n){
+      var t = String(n || "").replace(/\s+/g, " ").trim();
+      if (!t || seen[t.toLowerCase()]) return;
+      seen[t.toLowerCase()] = true; out.push(t);
+    });
+    return out.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+  }
+  function pmReadListStrict(){
+    if (!projectsRootHandle) return Promise.resolve({ found: false, names: [] });
+    return readTextFileStrict(projectsRootHandle, PM_LIST_FILE, PM_LIST_FILE, function(text){
+      var v = JSON.parse(text);
+      if (!v || !Array.isArray(v.names)) throw new Error("not a project manager list");
+      return v.names;
+    }).then(function(res){ return { found: res.found, names: res.found ? pmNormalize(res.value) : [] }; });
+  }
+  function pmWriteList(names){
+    var payload = JSON.stringify({ schemaVersion: 1, updatedAt: new Date().toISOString(), names: pmNormalize(names) }, null, 1);
+    return projectsRootHandle.getFileHandle(PM_LIST_FILE, { create: true }).then(function(fh){ return fh.createWritable(); }).then(function(w){
+      return w.write(payload).then(function(){ return w.close(); });
+    });
+  }
+  // No list yet: start it from the PMs already on the projects (best-effort -- an unreadable project is skipped).
+  function pmSeedFromProjects(){
+    return listExistingProjects(projectsRootHandle).then(function(names){
+      var found = [];
+      var p = Promise.resolve();
+      names.forEach(function(n){
+        p = p.then(function(){
+          return projectsRootHandle.getDirectoryHandle(n).then(function(d){ return readProjectMeta(d); }).then(function(m){
+            if (m && m.projectManager) found.push(m.projectManager);
+          }, function(){});
+        });
+      });
+      return p.then(function(){ return pmNormalize(found); });
+    });
+  }
+  function pmLoadList(){
+    return pmReadListStrict().then(function(r){
+      if (r.found) return r.names;
+      return pmSeedFromProjects().then(function(seed){
+        if (!seed.length) return seed;
+        return pmWriteList(seed).then(function(){ return seed; }, function(err){ console.error("Couldn't start the project manager list:", err); return seed; });
+      });
+    });
+  }
+  function pmOnList(name){ var l = String(name || "").toLowerCase(); return !!l && pmNames.some(function(n){ return n.toLowerCase() === l; }); }
+  function pmRenderSelect(selected){
+    selected = String(selected || "");
+    var html = "<option value=\"\">— Pick the project manager —</option>";
+    pmNames.forEach(function(n){ html += "<option value=\"" + escapeHtml(n) + "\">" + escapeHtml(n) + "</option>"; });
+    if (selected && !pmOnList(selected)) html += "<option value=\"" + escapeHtml(selected) + "\">" + escapeHtml(selected) + " (not on the list)</option>";
+    html += "<option value=\"" + PM_ADD + "\">+ Add a project manager…</option>";
+    piProjectManagerSelect.innerHTML = html;
+    // the list's own spelling for a name that differs only in case
+    var match = pmNames.filter(function(n){ return n.toLowerCase() === selected.toLowerCase(); })[0];
+    piProjectManagerSelect.value = match || selected;
+    pmLastValue = piProjectManagerSelect.value;
+    piPmRemoveBtn.hidden = !pmOnList(pmLastValue);
+  }
+  function pmSelectedValue(){ var v = piProjectManagerSelect.value; return v === PM_ADD ? pmLastValue : v; }
+  // (v35 test fix) Add/Remove wait for this: a first-time list still being
+  // started from the projects (slow on the tablet) used to be written AFTER
+  // a name added meanwhile, losing it.
+  var pmLoading = Promise.resolve();
+  function pmLoadIntoDialog(){
+    pmLoading = pmLoadList().then(function(names){
+      pmNames = names;
+      if (!projectInfoBackdrop.hidden || projectInfoResolve) pmRenderSelect(pmSelectedValue());
+    }, function(err){
+      console.error("Reading the project manager list failed:", err);
+    });
+    return pmLoading;
+  }
+  piProjectManagerSelect.addEventListener("change", function(){
+    if (piProjectManagerSelect.value === PM_ADD){
+      piProjectManagerSelect.value = pmLastValue;
+      piPmAddRow.hidden = false;
+      piPmAddInput.value = "";
+      piPmAddInput.focus();
+      return;
+    }
+    pmLastValue = piProjectManagerSelect.value;
+    piPmRemoveBtn.hidden = !pmOnList(pmLastValue);
+  });
+  function pmAddFromInput(){
+    var name = String(piPmAddInput.value || "").replace(/\s+/g, " ").trim();
+    if (!name){ piPmAddInput.focus(); return Promise.resolve(); }
+    if (!projectsRootHandle){ showToast("Choose the Projects folder first."); return Promise.resolve(); }
+    piPmAddBtn.disabled = true;
+    return pmLoading.then(function(){ return pmReadListStrict(); }).then(function(r){
+      var names = r.names;
+      if (!r.found && !names.length) names = pmNames.slice(); // a first list keeps any seeded names
+      var already = names.some(function(n){ return n.toLowerCase() === name.toLowerCase(); });
+      var next = already ? names : names.concat([name]);
+      return (already ? Promise.resolve() : pmWriteList(next)).then(function(){
+        pmNames = pmNormalize(next);
+        pmRenderSelect(name);
+        piPmAddRow.hidden = true;
+        showToast(already ? "“" + name + "” is already on the list — picked." : "Added “" + name + "” to the project manager list.");
+      });
+    }).catch(function(err){
+      console.error("Adding a project manager failed:", err);
+      if (isReadFailed(err)) readFailedToast(PM_LIST_FILE);
+      else showToast("Couldn't save the project manager list — try again.");
+    }).then(function(){ piPmAddBtn.disabled = false; });
+  }
+  piPmAddBtn.addEventListener("click", function(){ pmAddFromInput(); });
+  piPmAddInput.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); pmAddFromInput(); }
+    else if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); piPmAddRow.hidden = true; }
+  });
+  piPmAddCancel.addEventListener("click", function(){ piPmAddRow.hidden = true; });
+  piPmRemoveBtn.addEventListener("click", function(){
+    var name = pmSelectedValue();
+    if (!pmOnList(name)) return;
+    piPmRemoveBtn.disabled = true;
+    pmLoading.then(function(){ return pmReadListStrict(); }).then(function(r){
+      var next = r.names.filter(function(n){ return n.toLowerCase() !== name.toLowerCase(); });
+      return pmWriteList(next).then(function(){
+        pmNames = pmNormalize(next);
+        // the project's own saved PM stays picked (now "not on the list"); anything else goes back to "pick"
+        pmRenderSelect(name.toLowerCase() === pmDialogCurrent.toLowerCase() ? pmDialogCurrent : "");
+        showToast("Took “" + name + "” off the project manager list — projects that already have it keep it.", 4000);
+      });
+    }).catch(function(err){
+      console.error("Removing a project manager failed:", err);
+      if (isReadFailed(err)) readFailedToast(PM_LIST_FILE);
+      else showToast("Couldn't save the project manager list — try again.");
+    }).then(function(){ piPmRemoveBtn.disabled = false; });
+  });
+
+  /* ---- (v35) "Fill from work order report…" ----
+     Reads just the header of the job system's report (Work Order Cost
+     Analysis: "Job Id", "Job Description", "Customer:"; Work Order List:
+     "ID:", "Job:", "Customer") into Job number, Project name and Builder.
+     The report's Project Manager is left alone -- that's picked from the
+     list above. */
+  piFillFromReportBtn.addEventListener("click", function(){ piReportFileInput.value = ""; piReportFileInput.click(); });
+  piReportFileInput.addEventListener("change", function(){
+    var file = piReportFileInput.files && piReportFileInput.files[0];
+    piReportFileInput.value = "";
+    if (!file) return;
+    if (!isPdfFile(file)){ showToast("Choose the work order report PDF from the job system."); return; }
+    piFillFromReportBtn.disabled = true;
+    woReadReportHeaderFromFile(file).then(function(h){
+      if (!h.jobNo && !h.name && !h.builder){
+        showToast("Couldn't find the Job Id, Job Description or Customer in that PDF — is it the Work Order Cost Analysis report?", 6000);
+        return;
+      }
+      if (h.jobNo) piNoInput.value = h.jobNo;
+      if (h.name) piNameInput.value = h.name;
+      if (h.builder) piBuilderInput.value = h.builder;
+      piFillNote.innerHTML = "From <b>" + escapeHtml(file.name) + "</b>: " +
+        [h.jobNo ? "Job # <b>" + escapeHtml(h.jobNo) + "</b>" : "", h.name ? "<b>" + escapeHtml(h.name) + "</b>" : "", h.builder ? "builder <b>" + escapeHtml(h.builder) + "</b>" : ""].filter(Boolean).join(" · ") +
+        ". The report's project manager isn't used — pick one from the list.";
+      piFillNote.hidden = false;
+    }).catch(function(err){
+      console.error("Reading the report header failed:", err);
+      if (err && (err.code === "pdf_import_failed" || err.code === "pdf_import_loading")) showToast(pdfImportErrorToast(err));
+      else showToast("Couldn't read that PDF — is it the Work Order Cost Analysis report?", 6000);
+    }).then(function(){ piFillFromReportBtn.disabled = false; });
+  });
   projectInfoSave.addEventListener("click", function(){ closeProjectInfo(currentProjectInfoValue()); });
   projectInfoSkip.addEventListener("click", function(){ closeProjectInfo(null); });
   projectInfoBackdrop.addEventListener("click", function(e){ if (e.target === projectInfoBackdrop) closeProjectInfo(null); });
@@ -4257,6 +4538,137 @@
     });
   });
 
+  /* ============================== (v35) PC date -> every item's required delivery date ==============================
+     Andrew (2026-09-28): "when setting up a project, ask what the pc date
+     is for the project, then set that as the required delivery date with a
+     comment of 'PC Date'". The PC date is a Project info field (asked when
+     a project is created, editable after) stored in project-meta.json as
+     pcDate. Every joinery item with no schedule of its own gets a schedule
+     record exactly as the Scheduler's Set schedule would write it --
+     requiredDeliveryDate = the PC date, the default 30-business-day lead
+     time and the manufacture start that gives -- plus note: "PC Date", as
+     one more immutable "set" event in Project Saves/Joinery Schedule/<key>/.
+     So the Scheduler, Machine Schedule and Solid Surface Schedule all see
+     the date and work out delays from it with no change of their own; the
+     Scheduler and Machine Schedule show the "PC Date" comment beside it.
+       - New items (work order import, Add joinery item, a work order
+         dropped in a room) get it when they're created.
+       - Changing the PC date moves every item still on "PC Date" to the
+         new date; an item whose date someone set in the Scheduler keeps
+         it. Removing the PC date clears the items still on it.
+       - An item whose schedule was cleared on purpose is left alone, and
+         an item whose schedule folder can't be read right now is skipped
+         (never guessed) -- the next change catches it up. */
+  var PC_DATE_NOTE = "PC Date";
+  var PC_DEFAULT_LEAD_DAYS = 30; // the Scheduler's DEFAULT_LEAD_TIME_DAYS
+  function pcIsWeekendUTC(d){ var wd = d.getUTCDay(); return wd === 0 || wd === 6; }
+  // The Scheduler's own subtractBusinessDays, copied exactly (Mon-Fri, a
+  // weekend result moves to the Monday after).
+  function pcSubtractBusinessDays(dateStr, days){
+    if (!dateStr) return "";
+    var d = new Date(dateStr + "T00:00:00Z");
+    if (isNaN(d.getTime())) return "";
+    var remaining = Math.max(0, parseInt(days, 10) || 0);
+    while (remaining > 0){
+      d.setUTCDate(d.getUTCDate() - 1);
+      if (!pcIsWeekendUTC(d)) remaining--;
+    }
+    var wd = d.getUTCDay();
+    if (wd === 6) d.setUTCDate(d.getUTCDate() + 2);
+    else if (wd === 0) d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+  function writePcScheduleEvent(projectHandle, item, kind, pcDate, by, leadDays){
+    var at = new Date().toISOString();
+    var payload = { kind: kind, level: item.level || "", room: item.room || "", joineryId: item.joineryId || "", by: by || "", at: at };
+    if (kind === "set"){
+      // (v35 test fix) a lead time changed in the Scheduler (it keeps the "PC Date" note) stays when the PC date moves
+      var lead = (typeof leadDays === "number" && isFinite(leadDays) && leadDays >= 0) ? leadDays : PC_DEFAULT_LEAD_DAYS;
+      payload.requiredDeliveryDate = pcDate;
+      payload.manufactureLeadTimeDays = lead;
+      payload.manufactureStartDate = pcSubtractBusinessDays(pcDate, lead);
+      payload.note = PC_DATE_NOTE;
+    } else {
+      payload.note = "PC Date removed";
+    }
+    return getJoineryScheduleItemDir(projectHandle, joineryItemKey(item), true).then(function(dirH){
+      return dirH.getFileHandle(statusEventFileName(by, statusEventStampFromIso(at), kind), { create: true });
+    }).then(function(fh){ return fh.createWritable(); }).then(function(w){
+      return w.write(JSON.stringify(payload)).then(function(){ return w.close(); });
+    });
+  }
+  // opts.recheck: also move items still on "PC Date" (the PC date changed).
+  // Resolves { set, moved, cleared, skipped }.
+  function applyPcDateToItems(projectHandle, pcDate, opts){
+    opts = opts || {};
+    var by = deviceUserName || "";
+    var out = { set: 0, moved: 0, cleared: 0, skipped: 0 };
+    if (!projectHandle || (!pcDate && !opts.recheck)) return Promise.resolve(out);
+    return migrateLegacyJoineryScheduleIfNeeded(projectHandle).then(function(){
+      return Promise.all([readJoineryItems(projectHandle), getJoineryScheduleEventsRootDir(projectHandle, true).then(listEventItemDirs)]);
+    }).then(function(res){
+      var items = res[0], dirs = {};
+      res[1].forEach(function(d){ dirs[d.name] = d; });
+      var seen = {};
+      var p = Promise.resolve();
+      items.forEach(function(it){
+        var key = joineryItemKey(it);
+        if (seen[key]) return; // the same key twice (a duplicate record) -- once is enough
+        seen[key] = true;
+        p = p.then(function(){
+          var dirH = dirs[key];
+          if (!dirH){
+            if (!pcDate) return;
+            return writePcScheduleEvent(projectHandle, it, "set", pcDate, by).then(function(){ out.set++; });
+          }
+          if (!opts.recheck) return;
+          return listFilesInDir(dirH, function(n){ return /\.json$/i.test(n); }).then(function(files){
+            return Promise.all(files.map(function(f){ return readJsonFileHandleStrictOrNull(f.handle); }));
+          }).then(function(evs){
+            if (evs.some(function(e){ return e === null; })){ out.skipped++; return; } // mid-sync: don't guess
+            var latest = null;
+            evs.forEach(function(e){ if (!latest || (e.at || "") > (latest.at || "")) latest = e; });
+            // (v35 test fix) cleared only because the PC date was removed = still on the PC date: it gets it back when one is set again
+            var pcCleared = !!latest && latest.kind === "clear" && latest.note === "PC Date removed";
+            if (!pcCleared && (!latest || latest.kind !== "set" || latest.note !== PC_DATE_NOTE)) return; // its own date, or cleared on purpose
+            if (pcCleared){
+              if (!pcDate) return;
+              return writePcScheduleEvent(projectHandle, it, "set", pcDate, by).then(function(){ out.set++; });
+            }
+            if (!pcDate) return writePcScheduleEvent(projectHandle, it, "clear", "", by).then(function(){ out.cleared++; });
+            if (latest.requiredDeliveryDate === pcDate) return;
+            return writePcScheduleEvent(projectHandle, it, "set", pcDate, by, latest.manufactureLeadTimeDays).then(function(){ out.moved++; });
+          });
+        });
+      });
+      return p.then(function(){ registerScheduleList = []; return out; });
+    });
+  }
+  function readJsonFileHandleStrictOrNull(fh){
+    return fh.getFile().then(function(f){ return f.text(); }).then(function(t){
+      var v = JSON.parse(t);
+      return (v && typeof v === "object") ? v : null;
+    }).catch(function(){ return null; });
+  }
+  // New items get the project's PC date, if it has one. Never fails the
+  // thing that created them -- a miss is caught up by the next change.
+  function applyPcDateToNewItems(){
+    var ph = activeProjectHandle;
+    return readProjectMeta(ph).then(function(meta){
+      if (!meta || !meta.pcDate) return null;
+      return applyPcDateToItems(ph, meta.pcDate, {});
+    }).catch(function(err){ console.error("Setting the PC date on new items failed:", err); return null; });
+  }
+  function pcDateSummary(r, pcDate){
+    if (!r) return "";
+    var bits = [];
+    if (r.set) bits.push(r.set + " item" + (r.set === 1 ? "" : "s") + " set to the PC date");
+    if (r.moved) bits.push(r.moved + " moved to the new PC date");
+    if (r.cleared) bits.push(r.cleared + " cleared");
+    if (r.skipped) bits.push(r.skipped + " couldn't be read (still syncing?) — save again later to catch them up");
+    return bits.length ? " " + bits.join(", ") + "." : "";
+  }
+
   /* ============================== create project ============================== */
   var newProjectBtn = document.getElementById("newProjectBtn");
   var editProjectInfoBtn = document.getElementById("editProjectInfoBtn");
@@ -4316,13 +4728,26 @@
   // exists but can't be read refuses to open the dialog at all, rather than
   // opening it blank and letting Save write blanks over the real info.
   function editCurrentProjectInfo(){
+    var before = "";
     readProjectMeta(activeProjectHandle).then(function(current){
+      before = (current && current.pcDate) || "";
       return showProjectInfoDialog(current);
     }).then(function(info){
       if (!info) return;
       return writeProjectMeta(activeProjectHandle, info).then(function(){
-        showToast("Project info saved.");
-        return populateLevelList();
+        var pc = info.pcDate || "";
+        // (v35) a new or changed PC date goes onto every item still using it
+        // (v35 test fix) items skipped last time (unreadable) are rechecked on the next Save, as the toast asks
+        var recheckKey = "utzline-projects:pcRecheck:" + (activeProjectName || "");
+        var pending = false; try{ pending = localStorage.getItem(recheckKey) === "1"; }catch(e){}
+        var applyP = applyPcDateToItems(activeProjectHandle, pc, { recheck: pc !== before || pending });
+        return applyP.then(function(r){
+          try{ if (r && r.skipped) localStorage.setItem(recheckKey, "1"); else localStorage.removeItem(recheckKey); }catch(e){}
+          showToast("Project info saved." + pcDateSummary(r, pc), (r && (r.set || r.moved || r.cleared || r.skipped)) ? 6000 : 2600);
+        }, function(err){
+          console.error("Applying the PC date failed:", err);
+          showToast("Project info saved, but the PC date couldn't be put on the items just now (still syncing?) — save again in a moment.", 6000);
+        }).then(function(){ return populateLevelList(); });
       });
     }).catch(function(err){
       console.error("Saving project info failed:", err);
@@ -4617,20 +5042,33 @@
      plan has no text layer and simply stores none -- no OCR on a 4 GB
      tablet. */
   var PLAN_LABEL_RE = /^(?=.*\d)(?=.*[A-Za-z])[A-Za-z0-9][A-Za-z0-9.\-]{0,22}[A-Za-z0-9]$/;
+  var PLAN_TEXT_BOXES_MAX = 20000; // (v35) text runs kept as "don't cover" boxes
   function pdfPageLabels(pdfDoc, pageNum, scale){
     return pdfDoc.getPage(pageNum).then(function(page){
       var vp = page.getViewport({ scale: scale });
       var longest = Math.max(vp.width, vp.height);
       if (longest > PDF_IMPORT_MAX_DIM) vp = page.getViewport({ scale: scale * (PDF_IMPORT_MAX_DIM / longest) });
       return page.getTextContent().then(function(tc){
-        var out = [];
+        var out = [], boxes = [];
         (tc.items || []).forEach(function(it){
           var str = String(it.str || "");
-          if (!str.trim() || !/\d/.test(str)) return;
+          if (!str.trim()) return;
           var t = it.transform || [1, 0, 0, 1, 0, 0];
           var dl = Math.hypot(t[0], t[1]) || 1, ul = Math.hypot(t[2], t[3]) || 1;
           var dx = t[0] / dl, dy = t[1] / dl, ux = t[2] / ul, uy = t[3] / ul;
           var width = Number(it.width) || 0, height = Number(it.height) || ul;
+          // (v35) the plan-pixel box of the slice [f0, f1] of this run (any rotation)
+          function vbox(f0, f1){
+            var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            [[f0, -0.2], [f1, -0.2], [f0, 0.8], [f1, 0.8]].forEach(function(q){
+              var p = vp.convertToViewportPoint(t[4] + dx * width * q[0] + ux * height * q[1], t[5] + dy * width * q[0] + uy * height * q[1]);
+              x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]);
+            });
+            return [Math.round(x0), Math.round(y0), Math.max(1, Math.round(x1 - x0)), Math.max(1, Math.round(y1 - y0))];
+          }
+          // (v35) every run of text on the plan, so a marker is never put over any of it
+          if (boxes.length < PLAN_TEXT_BOXES_MAX) boxes.push(vbox(0, 1));
+          if (!/\d/.test(str)) return;
           var re = /\S+/g, m;
           while ((m = re.exec(str))){
             var tok = m[0].replace(/^[(\[{"']+|[)\]}"',;:]+$/g, "");
@@ -4639,15 +5077,16 @@
             var px = t[4] + dx * width * frac + ux * height * 0.35;
             var py = t[5] + dy * width * frac + uy * height * 0.35;
             var p = vp.convertToViewportPoint(px, py);
-            out.push([tok, Math.round(p[0]), Math.round(p[1])]);
+            var b = vbox(m.index / str.length, (m.index + m[0].length) / str.length);
+            out.push([tok, Math.round(p[0]), Math.round(p[1]), b[2], b[3]]); // (v35) + the label's width and height
           }
         });
         if (page.cleanup) page.cleanup();
-        return out;
+        return { labels: out, boxes: boxes };
       });
     }).catch(function(err){
       console.error("Reading the plan's labels failed (the plan still imports):", err);
-      return [];
+      return { labels: [], boxes: [] };
     });
   }
   function pdfFileToImage(file){
@@ -4656,8 +5095,9 @@
       var importScale = 1 / PX_TO_PT;
       function renderOnePage(pdfDoc, pageNum){
         return renderPdfPageMaybeTiled(pdfDoc, pageNum, importScale).then(function(res){
-          return pdfPageLabels(pdfDoc, pageNum, importScale).then(function(labels){
-            res.planLabels = { from: file.name || "", page: pageNum, at: new Date().toISOString(), labels: labels };
+          return pdfPageLabels(pdfDoc, pageNum, importScale).then(function(lr){
+            // (v35) labels are [text, x, y, w, h]; boxes are every text run's [x, y, w, h]
+            res.planLabels = { from: file.name || "", page: pageNum, at: new Date().toISOString(), labels: lr.labels, boxes: lr.boxes };
             return res;
           });
         });
@@ -4891,6 +5331,8 @@
   // Re-reads strictly (readJoineryItems rejects read_failed for a file
   // that exists but can't be read) -- never appends onto an empty guess.
   function addJoineryItem(projectHandle, item){
+    // (v36) who added it and when -- the History card's first line
+    if (!item.createdAt && !item.importedFrom){ item.createdAt = new Date().toISOString(); item.createdBy = deviceUserName || ""; }
     return readJoineryItems(projectHandle).then(function(items){
       items.push(item);
       return writeJoineryItems(projectHandle, items).then(function(){ return items; });
@@ -5423,7 +5865,8 @@
       manufactureLeadTimeDays: latest.manufactureLeadTimeDays,
       manufactureStartDate: latest.manufactureStartDate || "",
       updatedAt: latest.at,
-      setBy: latest.by || ""
+      setBy: latest.by || "",
+      note: latest.note || "" // (v35) "PC Date" when it's the project's PC date
     };
   }
   // Strict (v23 sweep) -- same reasoning as readLegacyJoineryStatusFile.
@@ -5554,7 +5997,7 @@
       return "<span class=\"muted-cell\">— (no schedule set)</span>";
     }
     var cls = delayCueClass(delay.key);
-    return escapeHtml(formatDateDisplay(scheduleRec.requiredDeliveryDate)) + " — " +
+    return escapeHtml(formatDateDisplay(scheduleRec.requiredDeliveryDate)) + (scheduleRec.note ? " <span class=\"pc-note\">" + escapeHtml(scheduleRec.note) + "</span>" : "") + " — " +
       (cls ? "<span class=\"" + cls + "\">" : "<span>") + escapeHtml(delay.label) + "</span>";
   }
 
@@ -5658,26 +6101,43 @@
       return sdH.getDirectoryHandle(key, { create: false });
     });
   }
+  /* (v35) Andrew: "we call them REV A    REV B and so on". A drawing's
+     revisions are lettered -- REV A (the first), REV B, ... REV Z, REV AA.
+     A file saved as "REV 0/1/2 - ..." (numbered, 23-28 Sep 2026) reads as
+     REV A/B/C, in the same order -- nothing on disk is renamed. The
+     first-day "RevA - ..." files still read as before. */
+  function shopRevLetters(n){
+    var out = ""; n = Math.max(0, n | 0) + 1;
+    while (n > 0){ var r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
+    return out;
+  }
   function parseShopDrawingRevisionFileName(fileName){
-    var m = /^REV (\d+) - /.exec(fileName) || /^Rev([A-Z]+) - /.exec(fileName);
+    var m = /^REV ([A-Z]{1,3}|\d+) - /.exec(fileName), legacy = m ? null : /^Rev([A-Z]+) - /.exec(fileName);
     var revLabel = "REV ?";
-    if (m) revLabel = (/^\d+$/.test(m[1]) ? "REV " + m[1] : "Rev" + m[1]);
-    var afterRev = m ? fileName.slice(m[0].length) : fileName;
+    if (m) revLabel = "REV " + (/^\d+$/.test(m[1]) ? shopRevLetters(parseInt(m[1], 10)) : m[1]);
+    else if (legacy) revLabel = "Rev" + legacy[1];
+    var hit = m || legacy;
+    var afterRev = hit ? fileName.slice(hit[0].length) : fileName;
     var idx = afterRev.indexOf(" - ");
     var displayName = idx >= 0 ? afterRev.slice(idx + 3) : afterRev;
-    return { revLabel: revLabel, displayName: displayName };
+    var stamp = idx >= 0 && /^\d{4}-\d{2}-\d{2}/.test(afterRev) ? afterRev.slice(0, idx) : ""; // when it was saved
+    return { revLabel: revLabel, displayName: displayName, stamp: stamp };
   }
+
   function revLabelValue(revLabel){
-    var m = /^REV (\d+)$/.exec(revLabel || "");
-    if (m) return parseInt(m[1], 10);
+    var m = /^REV ([A-Z]{1,3})$/.exec(revLabel || "");
+    if (m){ var v = 0; for (var i = 0; i < m[1].length; i++){ v = v * 26 + (m[1].charCodeAt(i) - 64); } return v - 1; } // (v35) REV A = 0
+    var d = /^REV (\d+)$/.exec(revLabel || "");
+    if (d) return parseInt(d[1], 10);
     var legacy = /^Rev([A-Z]+)$/.exec(revLabel || "");
     if (legacy){
       var letters = legacy[1], n = 0;
-      for (var i = 0; i < letters.length; i++){ n = n * 26 + (letters.charCodeAt(i) - 64); }
+      for (var j = 0; j < letters.length; j++){ n = n * 26 + (letters.charCodeAt(j) - 64); }
       return n - 1000000;
     }
     return -1;
   }
+
   function listShopDrawingsForItem(projectHandle, item){
     return getShopDrawingsDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
       return everySubdir(dirH).then(function(groupHandles){
@@ -5685,18 +6145,89 @@
           return listFilesInDir(groupH, function(name){ return /\.pdf$/i.test(name); }).then(function(files){
             var revisions = files.map(function(f){
               var parsed = parseShopDrawingRevisionFileName(f.fileName);
-              return { fileName: f.fileName, handle: f.handle, revLabel: parsed.revLabel, displayName: parsed.displayName };
+              return { fileName: f.fileName, handle: f.handle, revLabel: parsed.revLabel, displayName: parsed.displayName, stamp: parsed.stamp };
             });
             revisions.sort(function(a, b){ return revLabelValue(a.revLabel) - revLabelValue(b.revLabel); });
-            return { drawingId: groupH.name, revisions: revisions };
+            // (v35) the copies that came back, in the drawing's own "Returned" folder
+            return listShopDrawingReturned(groupH).then(function(returned){ return { drawingId: groupH.name, revisions: revisions, returned: returned }; });
           });
         }));
       });
     }, function(){ return []; }).then(function(groups){
-      groups = (groups || []).filter(function(g){ return g.revisions.length > 0; });
+      groups = (groups || []).filter(function(g){ return g.revisions.length > 0 || g.returned.length > 0; });
       groups.sort(function(a, b){ return b.drawingId.localeCompare(a.drawingId); });
       return groups;
     });
+  }
+
+
+  /* ---- (v35) Shop drawings: Sent and Returned ----
+     Andrew: "shop drawings need a sent and a returned section" and "second
+     shop drawing + for a joinery item will alwasy be a new revision".
+     On disk (a drawing's folder, as always):
+       Shop Drawings/<item>/<drawing>/REV n - <saved> - <file>.pdf            sent
+       Shop Drawings/<item>/<drawing>/Returned/REV n - <saved> - <file>.pdf   returned (n = the sent revision it answers)
+     Returned copies sit in their own sub-folder, so the apps that only know
+     sent drawings (Site Measure's View shop drawing, the ITP apps) carry on
+     showing exactly what they showed before. */
+  function listShopDrawingReturned(groupH){
+    return groupH.getDirectoryHandle("Returned", { create: false }).then(function(rh){
+      return listFilesInDir(rh, function(name){ return /\.pdf$/i.test(name); });
+    }, function(){ return []; }).then(function(files){
+      return files.map(function(f){
+        var p = parseShopDrawingRevisionFileName(f.fileName);
+        return { fileName: f.fileName, handle: f.handle, revLabel: p.revLabel, displayName: p.displayName, stamp: p.stamp, drawingId: groupH.name };
+      });
+    });
+  }
+  function shopStampDate(stamp){
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(stamp || ""));
+    if (!m) return "";
+    try{ return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }); }
+    catch(e){ return m[3] + "/" + m[2] + "/" + m[1]; }
+  }
+  // Every sent revision (newest first) and every returned copy (newest first).
+  function shopDrawingParts(groups){
+    var sent = [], ret = [];
+    (groups || []).forEach(function(g){
+      g.revisions.forEach(function(r){ sent.push(Object.assign({ drawingId: g.drawingId }, r)); });
+      (g.returned || []).forEach(function(r){ ret.push(r); });
+    });
+    function byRev(a, b){ return (revLabelValue(b.revLabel) - revLabelValue(a.revLabel)) || String(b.stamp || "").localeCompare(String(a.stamp || "")); }
+    sent.sort(byRev);
+    ret.sort(function(a, b){ return String(b.stamp || "").localeCompare(String(a.stamp || "")) || byRev(a, b); });
+    return { sent: sent, returned: ret };
+  }
+  /* (v35) Andrew: "we need the option to open all revisions, not just the
+     latest one, have a button that goes to the revisions if there are any
+     then you can chose which one." Each part shows its latest; when there
+     are more, "All revisions (n)" opens the full list (newest first), each
+     with its own Open. */
+  function renderShopDrawingPart(el, list, emptyText, subFor, allWord){
+    el.innerHTML = "";
+    if (!list.length){ el.innerHTML = "<p class=\"sub\" style=\"margin:0;\">" + emptyText + "</p>"; return; }
+    var latest = list[0];
+    el.appendChild(docRow(escapeHtml(latest.displayName), subFor(latest) + (list.length > 1 ? " · latest" : ""), latest.handle));
+    if (list.length < 2) return;
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "btn secondary sm sd-revs-btn";
+    btn.setAttribute("aria-expanded", "false");
+    btn.textContent = "All " + allWord + " (" + list.length + ")";
+    var box = document.createElement("div");
+    box.className = "sd-revs"; box.hidden = true;
+    list.forEach(function(r){ box.appendChild(docRow(escapeHtml(r.displayName), subFor(r), r.handle)); });
+    btn.addEventListener("click", function(){
+      box.hidden = !box.hidden;
+      btn.setAttribute("aria-expanded", String(!box.hidden));
+      btn.textContent = (box.hidden ? "All " : "Hide ") + allWord + " (" + list.length + ")";
+    });
+    el.appendChild(btn);
+    el.appendChild(box);
+  }
+  function renderShopDrawingParts(groups, sentEl, returnedEl){
+    var parts = shopDrawingParts(groups);
+    renderShopDrawingPart(sentEl, parts.sent, "Nothing sent yet.", function(r){ return r.revLabel + (r.stamp ? " · sent " + shopStampDate(r.stamp) : ""); }, "revisions");
+    renderShopDrawingPart(returnedEl, parts.returned, "Nothing returned yet.", function(r){ return r.revLabel + " returned" + (r.stamp ? " · " + shopStampDate(r.stamp) : ""); }, "returned");
   }
 
   /* ---- Site Measure overlays (2026-09-24, mirrors source.html's own
@@ -5883,7 +6414,8 @@
     return {
       id: o.id, type: o.type, typeLabel: o.typeLabel, requiredByDate: o.requiredByDate, supplier: o.supplier,
       poNumber: o.poNumber, notes: o.notes, fileName: o.fileName, received: o.received,
-      receivedDate: o.receivedDate, attachedAt: o.attachedAt, handle: handle
+      receivedDate: o.receivedDate, attachedAt: o.attachedAt, handle: handle,
+      attachedBy: o.attachedBy, receivedAt: o.receivedAt, receivedBy: o.receivedBy // (v36) for the History card
     };
   }
   function readSubOrdersForItem(projectHandle, item){
@@ -6148,6 +6680,37 @@
   function roomlinkDisplayText(obj){
     return obj.joineryCode || obj.roomName || "";
   }
+  /* (v35) Andrew: "the text is a bit small, need it about twice the size".
+     v34 drew every marker's code at 14 plan px -- a CSS font-size on
+     .marker-label beat the saved size (32) set on the text. That rule is
+     gone, so the codes are drawn at their saved 32 (about 2.3x). The
+     scale below stays so the size can be changed in one place: the text
+     is pushed out from the dot by the same amount so it never runs into
+     it (a label under the dot stays under it, one above stays above).
+     The markers' saved data is untouched. */
+  var PLAN_TEXT_SCALE = 1; // (v35) 32: v34 really drew 14 (the CSS above), so this is the "about twice"
+  function planMarkerTextSize(obj){ return (Number(obj.label && obj.label.fontSize) || 32) * PLAN_TEXT_SCALE; }
+  function planMarkerTextPos(obj){
+    var lx = Number(obj.label.x) || 0, ly = Number(obj.label.y) || 0;
+    var dx = lx - obj.x, dy = ly - obj.y, len = Math.hypot(dx, dy), r = Number(obj.r) || 27;
+    if (!(len > r)) return { x: lx, y: ly };
+    var nl = r + (len - r) * PLAN_TEXT_SCALE;
+    return { x: obj.x + dx / len * nl, y: obj.y + dy / len * nl };
+  }
+  // What a marker covers as drawn here: its dot, and its code's text.
+  function planMarkerRingR(r){ return r * 1.55 + Math.max(2, r * 0.18) / 2; } // the amber "check" ring's outer edge (planRenderMarkers)
+  function planMarkerBoxes(obj){
+    var r = Number(obj.r) || 27, rr = obj.autoPlaced ? planMarkerRingR(r) : r; // an unchecked marker's ring covers more than its dot
+    var out = [{ x0: obj.x - rr, y0: obj.y - rr, x1: obj.x + rr, y1: obj.y + rr }];
+    var text = roomlinkDisplayText(obj);
+    if (obj.label && text){
+      var T = planMarkerTextSize(obj), p = planMarkerTextPos(obj), tw = planTextWidth(text, T);
+      var a = obj.label.anchor || "middle", x0 = a === "start" ? p.x : a === "end" ? p.x - tw : p.x - tw / 2;
+      out.push({ x0: x0, y0: p.y - T * 0.78, x1: x0 + tw, y1: p.y + T * 0.22 });
+    }
+    return out;
+  }
+  function planTextWidth(text, size){ return String(text || "").length * size * 0.6; }
   function makeRoomLinkObject(x, y, roomName, joineryCode){
     var color = "#c8391c"; // COLORS[0], same default defaultColorFor("roomlink") resolves to on a fresh style
     var fontSize = 32; // defaultFontSize() on this app's own always-fresh defaultStyleObject()
@@ -6253,13 +6816,14 @@
       if (obj.label && obj.label.text){
         var text = document.createElementNS(SVG_NS, "text");
         text.setAttribute("class", "marker-label");
-        text.setAttribute("x", obj.label.x); text.setAttribute("y", obj.label.y);
+        var tp = planMarkerTextPos(obj), tsz = planMarkerTextSize(obj); // (v35) twice the size
+        text.setAttribute("x", tp.x); text.setAttribute("y", tp.y);
         text.setAttribute("text-anchor", obj.label.anchor || "middle");
         text.setAttribute("fill", obj.label.color || "#fff");
-        text.setAttribute("font-size", obj.label.fontSize || 32);
+        text.setAttribute("font-size", tsz);
         text.setAttribute("paint-order", "stroke");
         text.setAttribute("stroke", "#0b0707");
-        text.setAttribute("stroke-width", "4");
+        text.setAttribute("stroke-width", Math.max(4, tsz * 0.12));
         text.textContent = roomlinkDisplayText(obj);
         planCanvasMarkersG.appendChild(text);
       }
@@ -6534,6 +7098,7 @@
         closeAddItemDialog();
         registerAllItems = []; // the Register's in-memory copy is now stale -- re-read on its next open
         showToast("Added " + finalRoomName + (finalCode ? " · " + finalCode : "") + ".");
+        applyPcDateToNewItems(); // (v35) in the background
       });
     }).catch(function(err){
       if (err && err.code === "handled") return;
@@ -6593,6 +7158,13 @@
         if (lvAtOpen !== activeLevelName) return;
         planHasLabels = levelHasPlanLabels(pl);
         if (planUnplacedPanel && !planUnplacedPanel.hidden) renderUnplacedList();
+        // (v35) markers the last version put right on top of their labels (not checked yet) move beside them
+        var onLabels = (planSaved && planSaved.objects || []).filter(function(o){ return o.type === "roomlink" && o.autoPlaced && !(o.autoPlacedV >= AUTO_PLACE_V); }).length;
+        if (planHasLabels && onLabels){
+          autoPlaceFromPlanLabels(lvAtOpen, { onlyMoveOld: true }).then(function(r){
+            if (r && r.moved) showToast("Moved " + r.moved + " marker" + (r.moved === 1 ? "" : "s") + " off the plan's labels, so the labels can be read — still amber until checked.", 6000);
+          }, function(err){ console.error("Moving markers off the plan's labels failed:", err); });
+        }
       }, function(){ planHasLabels = false; });
       refreshUnplacedForLevel();
       requestAnimationFrame(function(){
@@ -7579,7 +8151,8 @@
   var itemOverlaysList = document.getElementById("itemOverlaysList");
   var itemSolidSurfaceCompletionCard = document.getElementById("itemSolidSurfaceCompletionCard");
   var itemSolidSurfaceCompletionList = document.getElementById("itemSolidSurfaceCompletionList");
-  var itemShopDrawingsList = document.getElementById("itemShopDrawingsList");
+  var itemShopDrawingsList = document.getElementById("itemShopDrawingsList"); // (v35) the Sent part
+  var itemShopReturnedList = document.getElementById("itemShopReturnedList");
   var itemJobNotesList = document.getElementById("itemJobNotesList");
   var itemItpList = document.getElementById("itemItpList");
   var itemReworkList = document.getElementById("itemReworkList");
@@ -7648,6 +8221,7 @@
       itemSolidSurfaceCompletionList.innerHTML = "";
     }
     itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    itemShopReturnedList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
 
@@ -7673,18 +8247,11 @@
 
     listShopDrawingsForItem(activeProjectHandle, item).then(function(groups){
       if (activeJoineryItem !== item) return; // navigated away before this resolved
-      itemShopDrawingsList.innerHTML = "";
-      if (!groups.length){
-        itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No shop drawings yet for this item.</p>";
-        return;
-      }
-      groups.forEach(function(g){
-        var latest = g.revisions[g.revisions.length - 1];
-        itemShopDrawingsList.appendChild(docRow(escapeHtml(latest.displayName), latest.revLabel + " · " + g.revisions.length + (g.revisions.length === 1 ? " revision" : " revisions"), latest.handle));
-      });
+      renderShopDrawingParts(groups, itemShopDrawingsList, itemShopReturnedList); // (v35) Sent / Returned
     }).catch(function(err){
       console.error("Listing shop drawings failed:", err);
       itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load shop drawings.</p>";
+      itemShopReturnedList.innerHTML = "";
     });
 
     listJobNotesForItem(activeProjectHandle, item).then(function(notes){
@@ -7948,30 +8515,248 @@
   // list style. An item with no editHistory at all (never edited, or
   // created before this feature existed) shows a plain "No edits yet"
   // line, same empty-state convention as every other card on this page.
-  var itemEditHistoryList = document.getElementById("itemEditHistoryList");
+  /* ---- (v36) History: every edit and every step, in date order ----
+     Andrew: "joinery summary page needs to list all edits an progress in
+     date order. with edits show date time and user. we have edit history
+     but that card needs to show all changes , by who and when". Read for
+     the one item when its page opens (nothing project-wide), each source
+     on its own so one file mid-sync only leaves that part out (and says
+     so):
+       created (Add item / WO import / dropped on the plan), edits (the
+       Edit item dialog's history), status steps and job notes (Joinery
+       Status), schedule changes incl. the PC date (Joinery Schedule),
+       machining cuts (Machining Flags), solid surface completion and its
+       own schedule, shop drawings sent / returned (who, from the .json the
+       Scheduler keeps beside each one), orders attached / received,
+       reworks (every step and comment), and each Site Measure save.
+     Oldest first ("date order"); "Newest first" flips it and is
+     remembered on this device. */
+  var itemHistoryList = document.getElementById("itemHistoryList");
+  var itemHistoryOrderBtn = document.getElementById("itemHistoryOrderBtn");
+  var ITEM_HISTORY_ORDER_KEY = "utzline-projects:historyNewestFirst";
+  var itemHistoryLast = null; // { item, entries, problems }
+  function historyNewestFirst(){ try{ return localStorage.getItem(ITEM_HISTORY_ORDER_KEY) === "1"; }catch(e){ return false; } }
+  function syncHistoryOrderBtn(){ itemHistoryOrderBtn.textContent = historyNewestFirst() ? "Oldest first" : "Newest first"; }
+  itemHistoryOrderBtn.addEventListener("click", function(){
+    try{ localStorage.setItem(ITEM_HISTORY_ORDER_KEY, historyNewestFirst() ? "0" : "1"); }catch(e){}
+    syncHistoryOrderBtn();
+    if (itemHistoryLast && itemHistoryLast.item === activeJoineryItem) paintItemHistory(itemHistoryLast.entries, itemHistoryLast.problems);
+  });
   function joineryItemEditHistoryValueText(field, value){
     if (field === "Has Solid Surface") return value ? "Yes" : "No";
     return value ? String(value) : "(blank)";
   }
-  function renderJoineryItemEditHistory(item){
-    var hist = Array.isArray(item.editHistory) ? item.editHistory.slice() : [];
-    hist.sort(function(a, b){ return (b.at || "").localeCompare(a.at || ""); });
-    itemEditHistoryList.innerHTML = "";
-    if (!hist.length){
-      itemEditHistoryList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">No edits yet.</p>";
-      return;
-    }
-    hist.forEach(function(entry){
-      var row = document.createElement("div");
-      row.className = "edit-history-entry";
-      var changesHtml = (Array.isArray(entry.changes) ? entry.changes : []).map(function(c){
-        return "<div class=\"edit-history-change\"><b>" + escapeHtml(c.field) + ":</b> " +
-          escapeHtml(joineryItemEditHistoryValueText(c.field, c.from)) + " → " + escapeHtml(joineryItemEditHistoryValueText(c.field, c.to)) + "</div>";
-      }).join("");
-      row.innerHTML = "<div class=\"edit-history-who\">" + escapeHtml(formatHistoryDate(entry.at)) + (entry.by ? " — " + escapeHtml(entry.by) : "") + "</div>" + changesHtml;
-      itemEditHistoryList.appendChild(row);
+  // "YYYY-MM-DD HH-MM-SS" (a file name's saved-at, local time) -> ISO
+  function histStampToIso(stamp){
+    var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2})-(\d{2})-(\d{2})/.exec(String(stamp || ""));
+    if (!m) return "";
+    var d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+    return isNaN(d.getTime()) ? "" : d.toISOString();
+  }
+  // Every .json event in Project Saves/<branch>/<key>/ -- [] when the folder
+  // isn't there; a file mid-sync is counted in .skipped, not fatal.
+  function readItemEventFolder(projectHandle, branch, key){
+    return projectDir(projectHandle, [projectSavesDirName(), branch, key], false).then(function(dirH){
+      return listFilesInDir(dirH, function(n){ return /\.json$/i.test(n); }).then(function(files){
+        var out = []; out.skipped = 0;
+        return Promise.all(files.map(function(f){
+          return f.handle.getFile().then(function(file){ return file.text(); }).then(function(t){
+            var v = null;
+            try{ v = JSON.parse(t); }catch(e){}
+            if (v && typeof v === "object") out.push(v); else out.skipped++;
+          }, function(){ out.skipped++; });
+        })).then(function(){ return out; });
+      });
+    }, function(err){
+      if (isNotFoundErr(err)){ var none = []; none.skipped = 0; return none; }
+      return Promise.reject(err);
     });
   }
+  function histFmtDate(d){ return d ? formatDateDisplay(d) : "—"; }
+  var HIST_CUT_LABELS = { carcase: "Carcase", colourBoard: "Colour board", solidSurface: "Solid surface" };
+  function historyFromItem(item){
+    var out = [];
+    if (item.importedFrom && item.importedFrom.at){
+      var f = item.importedFrom;
+      out.push({ at: f.at, by: f.by || "", cat: "Created", cls: "c-created",
+        text: f.droppedOnPlan ? "Added from work order " + (item.workOrderNo || "") + " (dropped on the plan)" : "Imported from the work order report", detail: f.file ? [f.file] : [] });
+    } else if (item.createdAt){
+      out.push({ at: item.createdAt, by: item.createdBy || "", cat: "Created", cls: "c-created", text: "Added in UTZLINE Projects", detail: [] });
+    }
+    (Array.isArray(item.editHistory) ? item.editHistory : []).forEach(function(e){
+      out.push({ at: e.at || "", by: e.by || "", cat: "Edited", cls: "c-edit", text: "Details changed",
+        detail: (Array.isArray(e.changes) ? e.changes : []).map(function(c){ return "<b>" + escapeHtml(c.field) + ":</b> " + escapeHtml(joineryItemEditHistoryValueText(c.field, c.from)) + " → " + escapeHtml(joineryItemEditHistoryValueText(c.field, c.to)); })
+          .concat(e.note ? [escapeHtml(e.note)] : []), detailIsHtml: true });
+    });
+    return out;
+  }
+  function historyFromStatusEvents(evs){
+    var out = [];
+    evs.forEach(function(e){
+      if (e.kind === "status" && e.status) out.push({ at: e.at || "", by: e.by || "", cat: "Status", cls: "c-status", text: joineryStatusLabel(e.status), detail: [] });
+      else if (e.kind === "jobNote") out.push({ at: e.at || "", by: e.by || "", cat: "Job note", cls: "", text: "Job note added", detail: [], jobNote: true });
+    });
+    return out;
+  }
+  function historyFromScheduleEvents(evs, label){
+    return evs.filter(function(e){ return e.kind === "set" || e.kind === "clear"; }).map(function(e){
+      if (e.kind === "clear") return { at: e.at || "", by: e.by || "", cat: label, cls: "c-schedule", text: "Schedule cleared" + (e.note ? " (" + e.note + ")" : ""), detail: [] };
+      return { at: e.at || "", by: e.by || "", cat: label, cls: "c-schedule",
+        text: "Required delivery " + histFmtDate(e.requiredDeliveryDate) + (e.note ? " — " + e.note : ""),
+        detail: [(e.manufactureLeadTimeDays != null ? e.manufactureLeadTimeDays + " working days' lead" : "") + (e.manufactureStartDate ? ", manufacture start " + histFmtDate(e.manufactureStartDate) : "")].filter(Boolean) };
+    });
+  }
+  function historyFromMachining(evs){
+    return evs.filter(function(e){ return e.cutType && e.state; }).map(function(e){
+      var what = HIST_CUT_LABELS[e.cutType] || e.cutType;
+      var st = e.state === "done" ? "cut" : e.state === "na" ? "not needed" : "back to not cut";
+      return { at: e.at || "", by: e.by || "", cat: "Machining", cls: "", text: what + " " + st, detail: [] };
+    });
+  }
+  function historyFromSsCompletion(evs){
+    return evs.filter(function(e){ return e.flag && e.state; }).map(function(e){
+      var what = e.flag === "completed" ? "Solid surface completed" : e.flag === "delivered" ? "Solid surface delivered" : "Solid surface " + e.flag;
+      return { at: e.at || "", by: e.by || "", cat: "Solid surface", cls: "", text: e.state === "pending" ? what.replace(/ (completed|delivered)$/, "") + " — back to not " + e.flag : what, detail: [] };
+    });
+  }
+  // Sent and returned shop drawings, with who from the Scheduler's .json beside each PDF.
+  function historyFromShopDrawings(projectHandle, item){
+    function listDir(dirH, part, groupName){
+      return listFilesInDir(dirH, function(n){ return /\.(pdf|json)$/i.test(n); }).then(function(files){
+        var byBase = {};
+        files.forEach(function(f){ if (/\.json$/i.test(f.fileName)) byBase[f.fileName.replace(/\.json$/i, "")] = f; });
+        var pdfs = files.filter(function(f){ return /\.pdf$/i.test(f.fileName); });
+        return Promise.all(pdfs.map(function(f){
+          var p = parseShopDrawingRevisionFileName(f.fileName);
+          var side = byBase[f.fileName.replace(/\.pdf$/i, "")];
+          var sideP = side ? side.handle.getFile().then(function(file){ return file.text(); }).then(function(t){ try{ return JSON.parse(t); }catch(e){ return null; } }, function(){ return null; }) : Promise.resolve(null);
+          return sideP.then(function(info){
+            return { at: (info && info.at) || histStampToIso(p.stamp), by: (info && info.by) || "", cat: "Shop drawing", cls: "",
+              text: (part === "returned" ? "Returned " : "Sent ") + p.revLabel, detail: [p.displayName] };
+          });
+        }));
+      });
+    }
+    return getShopDrawingsDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
+      return everySubdir(dirH).then(function(groups){
+        return Promise.all(groups.map(function(g){
+          return Promise.all([
+            listDir(g, "sent", g.name),
+            g.getDirectoryHandle("Returned", { create: false }).then(function(r){ return listDir(r, "returned", g.name); }, function(){ return []; })
+          ]).then(function(r){ return r[0].concat(r[1]); });
+        }));
+      });
+    }, function(err){ if (isNotFoundErr(err)) return []; return Promise.reject(err); }).then(function(lists){
+      return [].concat.apply([], lists || []);
+    });
+  }
+  function historyFromOrders(orders){
+    var out = [];
+    orders.forEach(function(o){
+      var what = (o.typeLabel || o.type || "Order") + (o.supplier ? " — " + o.supplier : "") + (o.poNumber ? " (PO " + o.poNumber + ")" : "");
+      if (o.attachedAt) out.push({ at: o.attachedAt, by: o.attachedBy || "", cat: "Order", cls: "", text: "Attached: " + what, detail: o.requiredByDate ? ["Required by " + histFmtDate(o.requiredByDate)] : [] });
+      if (o.received){
+        var at = o.receivedAt || (o.receivedDate ? o.receivedDate + "T12:00:00" : "");
+        out.push({ at: at ? new Date(at).toISOString() : "", by: o.receivedBy || "", cat: "Order", cls: "", text: "Received: " + what, detail: [], dateOnly: !o.receivedAt });
+      }
+    });
+    return out;
+  }
+  function historyFromReworks(projectHandle, item){
+    var R = window.UtzRework;
+    if (!R || typeof R.listItemReworks !== "function") return Promise.resolve([]);
+    return R.listItemReworks(projectHandle, activeProjectName, item.level || "", item.room || "", item.joineryId || "").then(function(res){
+      return Promise.all((res.rows || []).map(function(row){
+        return R.readLog(projectHandle, row).then(null, function(){ return []; }).then(function(evs){
+          var e = row.entry || {};
+          var who = (e.cabinetNumber ? "Cab " + e.cabinetNumber : "Rework") + (e.text ? ": " + String(e.text).slice(0, 80) : "");
+          return R.logLines(e, evs).map(function(l){ return { at: l.at || "", by: l.by || "", cat: "Rework", cls: "c-rework", text: l.what, detail: [who] }; });
+        });
+      }));
+    }).then(function(lists){ return [].concat.apply([], lists || []); });
+  }
+  function historyFromOverlays(list){
+    return list.map(function(o){ return { at: histStampToIso(o.stamp), by: o.user || "", cat: "Site measure", cls: "", text: "Site measure saved", detail: [] }; });
+  }
+  // Job note events get their file's name when one was saved within 3 minutes of them.
+  function attachJobNoteNames(entries, notes){
+    var files = notes.map(function(n){
+      var m = / - (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.pdf$/i.exec(n.fileName);
+      return { name: n.fileName, at: m ? histStampToIso(m[1]) : "", used: false };
+    });
+    entries.filter(function(e){ return e.jobNote; }).forEach(function(e){
+      var t = new Date(e.at).getTime(), best = null, bestD = Infinity;
+      files.forEach(function(f){
+        if (f.used || !f.at) return;
+        var d = Math.abs(new Date(f.at).getTime() - t);
+        if (d < bestD && d <= 180000){ best = f; bestD = d; }
+      });
+      if (best){ best.used = true; e.detail = [best.name]; }
+    });
+    files.filter(function(f){ return !f.used; }).forEach(function(f){
+      entries.push({ at: f.at, by: "", cat: "Job note", cls: "", text: "Job note saved", detail: [f.name] });
+    });
+  }
+  function renderJoineryItemEditHistory(item){ // (v36) now the whole History card
+    syncHistoryOrderBtn();
+    itemHistoryList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    var ph = activeProjectHandle, key = joineryItemKey(item);
+    var problems = [];
+    function soft(label, p){
+      return p.then(function(v){
+        if (v && v.skipped) problems.push(label + " (" + v.skipped + " file" + (v.skipped === 1 ? "" : "s") + " still syncing)");
+        return v || [];
+      }, function(err){ console.error("History: reading " + label + " failed:", err); problems.push(label); return []; });
+    }
+    var entries = historyFromItem(item);
+    Promise.all([
+      soft("status and job notes", readItemEventFolder(ph, joineryStatusEventsBranchName(), key)),
+      soft("schedule", readItemEventFolder(ph, "Joinery Schedule", key)),
+      soft("machining", readItemEventFolder(ph, "Machining Flags", key)),
+      soft("solid surface completion", readItemEventFolder(ph, "Solid Surface Completion", key)),
+      soft("solid surface schedule", readItemEventFolder(ph, "Solid Surface Schedule", key)),
+      soft("shop drawings", historyFromShopDrawings(ph, item)),
+      soft("orders", readSubOrdersForItem(ph, item)),
+      soft("reworks", historyFromReworks(ph, item)),
+      soft("site measures", listJoineryOverlaysForItem(ph, item)),
+      soft("job notes", listJobNotesForItem(ph, item))
+    ]).then(function(r){
+      if (activeJoineryItem !== item) return;
+      entries = entries.concat(historyFromStatusEvents(r[0]), historyFromScheduleEvents(r[1], "Schedule"), historyFromMachining(r[2]),
+        historyFromSsCompletion(r[3]), historyFromScheduleEvents(r[4], "Solid surface schedule"), r[5], historyFromOrders(r[6]), r[7], historyFromOverlays(r[8]));
+      attachJobNoteNames(entries, r[9]);
+      itemHistoryLast = { item: item, entries: entries, problems: problems };
+      paintItemHistory(entries, problems);
+    });
+  }
+  function paintItemHistory(entries, problems){
+    var list = entries.filter(function(e){ return e.at; }).concat([]);
+    list.sort(function(a, b){ return String(a.at).localeCompare(String(b.at)); });
+    if (historyNewestFirst()) list.reverse();
+    var undated = entries.filter(function(e){ return !e.at; });
+    itemHistoryList.innerHTML = "";
+    if (!list.length && !undated.length){
+      itemHistoryList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Nothing recorded for this item yet.</p>";
+    }
+    list.concat(undated).forEach(function(e){
+      var row = document.createElement("div");
+      row.className = "hist-row";
+      var when = e.at ? (e.dateOnly ? formatDateOnly(String(e.at).slice(0, 10)) : formatHistoryDate(e.at)) : "—";
+      var detail = (e.detail || []).map(function(d){ return "<div>" + (e.detailIsHtml ? d : escapeHtml(d)) + "</div>"; }).join("");
+      row.innerHTML = "<div class=\"hist-when\">" + escapeHtml(when) + "</div>" +
+        "<div class=\"hist-body\"><span class=\"hist-cat " + (e.cls || "") + "\">" + escapeHtml(e.cat) + "</span>" + escapeHtml(e.text || "") +
+        " <span class=\"hist-who\">— " + (e.by ? "<b>" + escapeHtml(e.by) + "</b>" : "not recorded") + "</span>" +
+        (detail ? "<div class=\"hist-detail\">" + detail + "</div>" : "") + "</div>";
+      itemHistoryList.appendChild(row);
+    });
+    if (problems.length){
+      var n = document.createElement("p");
+      n.className = "hist-note";
+      n.textContent = "Couldn't read everything just now (still syncing?): " + problems.join(", ") + ". Reopen this page in a moment for the rest.";
+      itemHistoryList.appendChild(n);
+    }
+  }
+
   // Meta-grid + edit-history rendering, split out of openJoineryItemPage so
   // a successful edit can refresh both in place without re-running the
   // rest of that function (status/schedule reload, linked-sections
@@ -8614,7 +9399,7 @@
     projectMetaEmptyText.textContent = "Couldn't read this project's info (project-meta.json may still be syncing) — try again in a moment.";
   }
   function renderProjectMetaPreview(meta){
-    if (!meta || (!meta.no && !meta.name && !meta.contractor && !meta.siteAddress && !meta.projectManager)){
+    if (!meta || (!meta.no && !meta.name && !meta.contractor && !meta.siteAddress && !meta.projectManager && !meta.pcDate)){
       projectMetaCard.hidden = true;
       projectMetaEmptyCard.hidden = false;
       projectMetaEmptyText.textContent = "This project has no metadata yet.";
@@ -8626,7 +9411,8 @@
       ["Project name", meta.name],
       ["Builder", meta.contractor],
       ["Site address", meta.siteAddress],
-      ["Project manager", meta.projectManager]
+      ["Project manager", meta.projectManager],
+      ["PC date", meta.pcDate ? formatDateDisplay(meta.pcDate) : ""] // (v35)
     ];
     projectMetaGrid.innerHTML = "";
     rows.forEach(function(pair){
@@ -8943,10 +9729,11 @@
     return tok.length <= 24 && /\d/.test(tok) && /[.\-]/.test(tok) && /^[A-Z]/i.test(tok) && WO_CODE_RE.test(tok);
   }
   // pdf.js -> [page][row]{y, items:[{x, str}]} (top-down, left-right).
-  function woExtractPdfRows(pdfDoc){
+  function woExtractPdfRows(pdfDoc, maxPages){
     var pages = [];
     var p = Promise.resolve();
-    for (var n = 1; n <= pdfDoc.numPages; n++){
+    var last = maxPages ? Math.min(maxPages, pdfDoc.numPages) : pdfDoc.numPages; // (v35) the header needs page 1 only
+    for (var n = 1; n <= last; n++){
       (function(n){
         p = p.then(function(){
           return pdfDoc.getPage(n).then(function(page){
@@ -8978,6 +9765,79 @@
     });
     rows.forEach(function(r){ r.items.sort(function(a, b){ return a.x - b.x; }); });
     return rows;
+  }
+
+  /* ---- (v35) the report's header: Job #, Project name, Builder ----
+     Andrew: "the import can also give you the job #, (Job Id) Project (Job
+     Description) and Builder (Customer) ignore project manage that will
+     need to be picked from a list". Page 1 of each report layout:
+       Work Order Cost Analysis   "Job Id: 3756"   "Job Description: Jones Radiology Mt Barker"
+                                  "Customer:"  "FDC Construction & Fitout (SA) Pty Ltd"   (same line)
+       Work Order List            "ID:" "3749"     "Job:" "New Mount Barker Hospital"
+                                  "Customer" (a heading) with the name on the line below it
+     A label and its value may come as one text run or two; a value is the
+     nearest run to the label's right on the same line. The report's
+     Project Manager is never read. Pure: pages -> { jobNo, name, builder }. */
+  function woParseReportHeader(pages){
+    var out = { jobNo: "", name: "", builder: "" };
+    var items = [];
+    ((pages && pages[0]) || []).forEach(function(row){ row.items.forEach(function(i){ items.push(i); }); });
+    function clean(v){ return String(v || "").replace(/\s+/g, " ").trim(); }
+    function rightOf(lab, maxDx){
+      var c = items.filter(function(i){ return i !== lab && Math.abs(i.y - lab.y) <= 3 && i.x > lab.x + 1 && i.x - lab.x <= maxDx; })
+        .sort(function(a, b){ return a.x - b.x; })[0];
+      if (!c) return "";
+      var t = clean(c.str);
+      return /:$/.test(t) || /^\/\s*\/$/.test(t) ? "" : t; // another label, or an empty date "/ /"
+    }
+    function below(lab){
+      var c = items.filter(function(i){ return i.y > lab.y + 4 && i.y < lab.y + 26 && Math.abs(i.x - lab.x) <= 70; })
+        .sort(function(a, b){ return a.y - b.y; })[0];
+      return c ? clean(c.str) : "";
+    }
+    var isList = items.some(function(i){ return /^Work Order List$/i.test(clean(i.str)); });
+    items.forEach(function(i){
+      var t = clean(i.str), m;
+      if ((m = /^Job\s*Id\s*:\s*(.*)$/i.exec(t))){ if (!out.jobNo) out.jobNo = clean(m[1]) || rightOf(i, 160); }
+      else if ((m = /^Job\s*Description\s*:\s*(.*)$/i.exec(t))){ if (!out.name) out.name = clean(m[1]) || rightOf(i, 360); }
+      else if (/^Customer\s*:$/i.test(t)){ if (!out.builder) out.builder = rightOf(i, 360); }
+      else if (isList && /^ID\s*:$/i.test(t)){ if (!out.jobNo) out.jobNo = rightOf(i, 160); }
+      else if (isList && (m = /^Job\s*:\s*(.*)$/i.exec(t))){ if (!out.name) out.name = clean(m[1]) || rightOf(i, 300); }
+      else if (isList && /^Customer$/i.test(t)){ if (!out.builder) out.builder = below(i); }
+    });
+    if (out.jobNo && !/^[A-Za-z0-9][A-Za-z0-9 ._\/-]{0,30}$/.test(out.jobNo)) out.jobNo = ""; // not a job number
+    return out;
+  }
+  function woReadReportHeaderFromFile(file){
+    return withPdfImportLibsReady(function(){
+      ensurePdfWorker();
+      return file.arrayBuffer().then(function(buf){
+        return window.pdfjsLib.getDocument({ data: buf }).promise;
+      }).then(function(pdfDoc){
+        return woExtractPdfRows(pdfDoc, 1).then(function(pages){
+          if (pdfDoc.destroy) pdfDoc.destroy();
+          return woParseReportHeader(pages);
+        });
+      });
+    });
+  }
+  // What the report's header would change in the project's info.
+  //   meta: project-meta.json (null = none yet); use: { no, name, contractor } -> bool (the ticks)
+  var WO_JOBINFO_FIELDS = [["no", "Job #", "jobNo"], ["name", "Project", "name"], ["contractor", "Builder", "builder"]];
+  function woJobInfoRows(header, meta){
+    var rows = [];
+    WO_JOBINFO_FIELDS.forEach(function(f){
+      var val = String((header && header[f[2]]) || "").trim();
+      if (!val) return;
+      var cur = String((meta && meta[f[0]]) || "").trim();
+      rows.push({ key: f[0], label: f[1], value: val, current: cur,
+        state: !cur ? "fill" : (cur.toLowerCase() === val.toLowerCase() ? "same" : "differs") });
+    });
+    return rows;
+  }
+  function woJobInfoChanges(st){
+    if (!st || st.metaFailed) return [];
+    return woJobInfoRows(st.header, st.meta).filter(function(r){ return r.state !== "same" && st.jobInfoUse[r.key]; });
   }
   // Pure: rows -> { groups: [{itemNo, heading, wos:[{wo, desc}]}], cols }
   function woParseReportRows(pages){
@@ -9340,6 +10200,7 @@
   var woImportBackdrop = document.getElementById("woImportBackdrop");
   var woImportSummaryEl = document.getElementById("woImportSummary");
   var woImportZonesEl = document.getElementById("woImportZones");
+  var woImportJobInfoEl = document.getElementById("woImportJobInfo"); // (v35)
   var woImportPreviewEl = document.getElementById("woImportPreview");
   var woImportConfirmBtn = document.getElementById("woImportConfirmBtn");
   var woImportCancelBtn = document.getElementById("woImportCancelBtn");
@@ -9382,11 +10243,21 @@
         showToast("Couldn't find any joinery work orders in that PDF — is it the Work Order List or Work Order Cost Analysis report?", 6000);
         return;
       }
-      return woLoadProjectContext().then(function(ctx){
+      var header = woParseReportHeader(pages); // (v35) Job # / Project / Builder
+      var metaP = readProjectMeta(activeProjectHandle).then(function(m){ return { meta: m, failed: false }; }, function(err){
+        console.error("Reading project-meta.json for the import failed:", err);
+        return { meta: null, failed: true };
+      });
+      return Promise.all([woLoadProjectContext(), metaP]).then(function(both){
+        var ctx = both[0], mr = both[1];
         var saved = woLoadZoneMap();
         var zoneMap = {};
         woZonesOf(interp).forEach(function(z){ zoneMap[z] = (saved[z] && ctx.levels.indexOf(saved[z]) !== -1) ? saved[z] : ""; });
-        woImportState = { fileName: file.name, interp: interp, levels: ctx.levels, levelRooms: ctx.levelRooms, items: ctx.items, woList: ctx.woList, zoneMap: zoneMap, plan: [] };
+        // (v35) a blank field is filled from the report; one that already says something else is only replaced if ticked
+        var jobInfoUse = {};
+        woJobInfoRows(header, mr.meta).forEach(function(r){ jobInfoUse[r.key] = (r.state === "fill"); });
+        woImportState = { fileName: file.name, interp: interp, levels: ctx.levels, levelRooms: ctx.levelRooms, items: ctx.items, woList: ctx.woList, zoneMap: zoneMap, plan: [],
+          header: header, meta: mr.meta, metaFailed: mr.failed, jobInfoUse: jobInfoUse };
         woRenderImportDialog();
         woImportBackdrop.hidden = false;
       });
@@ -9447,6 +10318,32 @@
     if (ex.sellPrice !== rec.sellPrice || ex.code !== rec.code || ex.desc !== rec.desc) return "changed";
     return "same";
   }
+
+  // (v35) the report's Job # / Project / Builder against the project's own info
+  function woRenderJobInfo(st){
+    var rows = woJobInfoRows(st.header, st.meta);
+    if (!rows.length){ woImportJobInfoEl.hidden = true; woImportJobInfoEl.innerHTML = ""; return; }
+    var html = "<div class=\"wo-jobinfo-head\">Project info from the report</div>";
+    if (st.metaFailed){
+      html += "<div class=\"wo-jobinfo-warn\">Couldn't read this project's info just now (still syncing?) — the report's Job #, Project and Builder are left out of this import. Import again later, or fill them in Project info.</div>";
+    }
+    rows.forEach(function(r){
+      var stateHtml;
+      if (st.metaFailed) stateHtml = "<span class=\"wji-state same\">—</span>";
+      else if (r.state === "same") stateHtml = "<span class=\"wji-state same\">✓ matches</span>";
+      else if (r.state === "fill") stateHtml = "<label class=\"wji-state fill\"><input type=\"checkbox\" data-jobinfo=\"" + r.key + "\"" + (st.jobInfoUse[r.key] ? " checked" : "") + "> fill in (blank now)</label>";
+      else stateHtml = "<label class=\"wji-state\"><input type=\"checkbox\" data-jobinfo=\"" + r.key + "\"" + (st.jobInfoUse[r.key] ? " checked" : "") + "> use this (now “" + escapeHtml(r.current) + "”)</label>";
+      html += "<div class=\"wo-jobinfo-row\"><span class=\"wji-label\">" + escapeHtml(r.label) + "</span><span class=\"wji-val\">" + escapeHtml(r.value) + "</span>" + stateHtml + "</div>";
+    });
+    var noRow = rows.filter(function(r){ return r.key === "no" && r.state === "differs"; })[0];
+    if (noRow && !st.metaFailed) html += "<div class=\"wo-jobinfo-warn\">This report is for job " + escapeHtml(noRow.value) + " — this project is job " + escapeHtml(noRow.current) + ". Is it the right report?</div>";
+    html += "<div class=\"wo-jobinfo-note\">The report's project manager isn't used — pick one from the list in Project info" + (st.meta && st.meta.projectManager ? " (this project's is " + escapeHtml(st.meta.projectManager) + ")" : "") + ".</div>";
+    woImportJobInfoEl.innerHTML = html;
+    woImportJobInfoEl.hidden = false;
+    Array.prototype.forEach.call(woImportJobInfoEl.querySelectorAll("input[data-jobinfo]"), function(cb){
+      cb.addEventListener("change", function(){ st.jobInfoUse[cb.getAttribute("data-jobinfo")] = cb.checked; woRenderImportDialog(); });
+    });
+  }
   function woRenderImportDialog(){
     var st = woImportState;
     st.plan = woPlanImport(st.interp, st.zoneMap, st.levelRooms, st.items);
@@ -9479,6 +10376,7 @@
       (nNewRooms ? " · " + nNewRooms + " new room" + (nNewRooms === 1 ? "" : "s") : "") +
       (dropNew ? " · <span class=\"wo-count drop\">" + dropNew + " to drag onto the plan</span>" : "") +
       (listChanged ? " · " + listChanged + " price/description update" + (listChanged === 1 ? "" : "s") : "");
+    woRenderJobInfo(st); // (v35)
     // zone -> level
     woImportZonesEl.innerHTML = "";
     woZonesOf(st.interp).forEach(function(z){
@@ -9537,10 +10435,12 @@
       });
     });
     var todo = (counts["new"] || 0) + (counts.fill || 0);
+    var infoN = woJobInfoChanges(st).length; // (v35)
     var anything = todo + (st.listChanges || 0);
-    woImportConfirmBtn.disabled = !anything;
+    woImportConfirmBtn.disabled = !(anything || infoN);
     woImportConfirmBtn.textContent = todo ? "Import " + todo + " item" + (todo === 1 ? "" : "s") + (dropNew ? " + " + dropNew + " to place" : "")
-      : dropNew ? "Import " + dropNew + " to place" : anything ? "Update " + anything + " work order" + (anything === 1 ? "" : "s") : "Nothing to import";
+      : dropNew ? "Import " + dropNew + " to place" : anything ? "Update " + anything + " work order" + (anything === 1 ? "" : "s")
+      : infoN ? "Update project info" : "Nothing to import";
   }
   function woCloseImportDialog(){ woImportBackdrop.hidden = true; woImportState = null; }
   if (woImportCancelBtn) woImportCancelBtn.addEventListener("click", woCloseImportDialog);
@@ -9565,10 +10465,18 @@
           woSaveZoneMap(st.zoneMap);
           woCloseImportDialog();
           registerAllItems = [];
+          if (!res.added && !res.filled && !res.listed && !res.valued && res.info && res.info.length){
+            showToast("Project info filled in from the report (" + res.info.join(", ") + ").", 5000);
+            if (typeof populateLevelList === "function") populateLevelList();
+            return;
+          }
           showToast("Imported: " + res.added + " new item" + (res.added === 1 ? "" : "s") + ", " + res.filled + " WO # added" +
             (res.valued ? ", " + res.valued + " value" + (res.valued === 1 ? "" : "s") + " set from the sell price" : "") +
             (res.toDrop ? ", " + res.toDrop + " with no room yet" : "") +
             (res.autoPlaced ? ", " + res.autoPlaced + " placed from the plan's labels (" + (res.autoByRoom ? res.autoByRoom + " on the room label; " : "") + "check them — amber on the plan)" : "") +
+            (res.pcSet ? ", " + res.pcSet + " given the PC date as their required delivery date" : "") +
+            (res.info && res.info.length ? ", project info filled in from the report (" + res.info.join(", ") + ")" : "") +
+            (res.infoFailed ? ", but the project info couldn't be updated just now (still syncing?) — fill it in Project info" : "") +
             ((res.added || res.toDrop) ? ". Open a level's plan (Place joinery items) and drag the rest from “To place” into position." : "."), 11000);
           if (typeof populateLevelList === "function") populateLevelList();
         });
@@ -9580,9 +10488,30 @@
       else showToast("Couldn't import — nothing was changed. Try again.", 6000);
     });
   }
+  // (v35) Items first (unchanged), then the ticked Job # / Project / Builder
+  // go into project-meta.json -- re-read strictly and merged, so the PC
+  // date, address and PM written since the dialog opened are kept. A
+  // project info that won't read is left alone (the import still stands).
+  function woApplyImport(st, who){
+    return woApplyImportItems(st, who).then(function(out){
+      var changes = woJobInfoChanges(st);
+      if (!changes.length) return out;
+      return readProjectMeta(activeProjectHandle).then(function(meta){
+        var next = meta ? Object.assign({}, meta) : { no: "", name: "", contractor: "", siteAddress: "", projectManager: "", pcDate: "" };
+        var done = [];
+        changes.forEach(function(c){ if (String(next[c.key] || "").trim() !== c.value){ next[c.key] = c.value; done.push(c.label); } });
+        if (!done.length) return out;
+        return writeProjectMeta(activeProjectHandle, next).then(function(){ out.info = done; return out; });
+      }).catch(function(err){
+        console.error("Updating project info from the report failed:", err);
+        out.infoFailed = true;
+        return out;
+      });
+    });
+  }
   // Re-reads everything strictly, re-plans against what's on disk NOW,
   // writes each changed level file, then joinery-items.json once.
-  function woApplyImport(st, who){
+  function woApplyImportItems(st, who){
     return woLoadProjectContext().then(function(ctx){
       var plan = woPlanImport(st.interp, st.zoneMap, ctx.levelRooms, ctx.items);
       var at = new Date().toISOString();
@@ -9635,6 +10564,8 @@
             out.autoPlaced += ar.placed; out.autoByRoom += ar.byRoom;
           }, function(err){ console.error("Placing from " + lv + "'s plan labels failed:", err); });
         });
+        // (v35) the new items get the project's PC date as their required delivery date
+        q = q.then(function(){ return applyPcDateToNewItems(); }).then(function(r){ out.pcSet = r ? r.set : 0; });
         return q.then(function(){ return out; });
       });
     });
@@ -10068,6 +10999,7 @@
       registerAllItems = [];
       offerUndo("Placed " + code + " in " + room + (w.sellPrice !== null && w.sellPrice !== undefined ? " — " + woMoney(share) + (count > 1 ? " each across " + count + " rooms" : "") : "") + ".",
         { level: levelName, markerId: res.marker.id, room: room, code: code, createdItem: created ? { level: levelName, room: room, joineryId: code } : null, wo: w });
+      if (created) applyPcDateToNewItems(); // (v35) in the background
       refreshUnplacedForLevel();
       return true;
     }).catch(dropFailed);
@@ -10170,15 +11102,79 @@
      counted on the "Check placed" button (Move mode: drag it if it's
      wrong, tap it if it's right, or "All look right"). One read of
      joinery-items.json and the level, one write of the level file. */
+  // (v35) each label with its size -- a v34 labels file has none, so a
+  // label's size is estimated from its length (A-104: 25 px tall, 12.7 px a character)
+  var PLAN_LABEL_DEFAULT_H = 25, PLAN_LABEL_CHAR_W = 12.7;
+  function planLabelBox(l){
+    var w = +l[3] > 0 ? +l[3] : String(l[0]).length * PLAN_LABEL_CHAR_W, h = +l[4] > 0 ? +l[4] : PLAN_LABEL_DEFAULT_H;
+    return { x: +l[1], y: +l[2], w: w, h: h };
+  }
   function planLabelIndex(pl){
     var idx = {};
     var labels = pl && Array.isArray(pl.labels) ? pl.labels : [];
     labels.forEach(function(l){
       if (!Array.isArray(l) || l.length < 3) return;
       var k = String(l[0]).toUpperCase();
-      (idx[k] = idx[k] || []).push({ x: +l[1], y: +l[2] });
+      (idx[k] = idx[k] || []).push(planLabelBox(l));
     });
     return idx;
+  }
+  // (v35) everything a marker mustn't cover: every text run on the plan
+  // (or, for a v34 labels file, every label), a little padded.
+  function planTextObstacles(pl){
+    var out = [], pad = 3;
+    if (pl && Array.isArray(pl.boxes) && pl.boxes.length){
+      pl.boxes.forEach(function(b){ if (Array.isArray(b) && b.length >= 4) out.push({ x0: +b[0] - pad, y0: +b[1] - pad, x1: +b[0] + +b[2] + pad, y1: +b[1] + +b[3] + pad }); });
+    } else {
+      ((pl && pl.labels) || []).forEach(function(l){
+        if (!Array.isArray(l) || l.length < 3) return;
+        var b = planLabelBox(l);
+        out.push({ x0: b.x - b.w / 2 - pad, y0: b.y - b.h / 2 - pad, x1: b.x + b.w / 2 + pad, y1: b.y + b.h / 2 + pad });
+      });
+    }
+    return out;
+  }
+  function planBoxOverlap(a, b){
+    var w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+    return (w > 0 && h > 0) ? w * h : 0;
+  }
+  /* (v35) Where a marker goes for a label ("anchor" -- its code tag, or its
+     room number): right beside it, never on it. Tries left of the label,
+     right, above and below, then the same a step further out, and takes
+     the first spot where the marker (dot + its code, as drawn here, twice
+     size) covers no text on the plan and no other marker; failing that,
+     the spot that covers least. Above the label the code goes above the
+     dot; everywhere else under it. Pure. */
+  var AUTO_PLACE_V = 2; // markers placed this way; a v34 one (on the label) has none
+  function autoPlaceSpot(anchor, text, obstacles, bounds){
+    var fs = 32, r = fs * 0.85, T = fs * PLAN_TEXT_SCALE, g = 10, tw = planTextWidth(text, T);
+    var rr = planMarkerRingR(r); // it's placed amber: its ring, not just its dot, stays off the text
+    var stepX = Math.max(2 * rr, tw) + g, stepY = 2 * rr + T + g;
+    var sides = ["left", "right", "above", "below"];
+    var best = null;
+    for (var ring = 0; ring < 4; ring++){
+      for (var si = 0; si < sides.length; si++){
+        var side = sides[si], mx = anchor.x, my = anchor.y, above = false;
+        if (side === "left") mx = anchor.x - anchor.w / 2 - g - rr - ring * stepX;
+        else if (side === "right") mx = anchor.x + anchor.w / 2 + g + rr + ring * stepX;
+        else if (side === "above"){ my = anchor.y - anchor.h / 2 - g - rr - ring * stepY; above = true; }
+        else my = anchor.y + anchor.h / 2 + g + rr + ring * stepY;
+        var base = above ? my - r - T * 0.3 : my + r + T * 0.95;
+        var boxes = [{ x0: mx - rr, y0: my - rr, x1: mx + rr, y1: my + rr }, { x0: mx - tw / 2, y0: base - T * 0.78, x1: mx + tw / 2, y1: base + T * 0.22 }];
+        var score = 0;
+        boxes.forEach(function(b){
+          obstacles.forEach(function(o){ score += planBoxOverlap(b, o); });
+          if (bounds && bounds.w > 0 && bounds.h > 0){
+            var inside = planBoxOverlap(b, { x0: 0, y0: 0, x1: bounds.w, y1: bounds.h });
+            score += ((b.x1 - b.x0) * (b.y1 - b.y0) - inside) * 4; // off the plan counts extra
+          }
+        });
+        var cand = { x: Math.round(mx), y: Math.round(my), textAbove: above, side: side, ring: ring, score: score, boxes: boxes };
+        if (score === 0) return cand;
+        if (!best || score < best.score) best = cand;
+      }
+    }
+    return best;
   }
   function planRoomNumber(room){
     var m = /^\s*(\S+?)(?:\s+-\s+|\s+|$)/.exec(String(room || ""));
@@ -10192,7 +11188,7 @@
       " — check them (amber)." + (r.left ? " " + r.left + " still to place." : "");
   }
   // Resolves { placed, byCode, byRoom, left, candidates, noLabels }.
-  function autoPlaceFromPlanLabels(levelName){
+  function autoPlaceFromPlanLabels(levelName, opts){
     return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){
       return Promise.all([readJoineryItems(activeProjectHandle), readLevelFile(activeProjectHandle, activeProjectName, levelName), readPlanLabels(activeProjectHandle, activeProjectName, levelName)]);
     }).then(function(res){
@@ -10200,9 +11196,21 @@
       if (!level || !levelHasPlanLabels(labels)) return { placed: 0, byCode: 0, byRoom: 0, left: 0, candidates: 0, noLabels: true };
       var idx = planLabelIndex(labels);
       level.markers = level.markers || [];
+      // (v35) the unchecked markers v34 put right ON their labels are placed again, beside them (same marker id)
+      var redo = {}, redoMarkers = [];
+      level.markers = level.markers.filter(function(o){
+        if (o.type === "roomlink" && o.autoPlaced && !(o.autoPlacedV >= AUTO_PLACE_V)){
+          redo[(String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase()] = o;
+          redoMarkers.push(o);
+          return false;
+        }
+        return true;
+      });
       var have = {};
       level.markers.forEach(function(o){ if (o.type === "roomlink") have[(String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase()] = true; });
       var todo = items.filter(function(it){ return it.level === levelName && it.joineryId && !have[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()]; });
+      // (v35) opening the plan only moves v34's markers -- an item waiting in To place stays there
+      if (opts && opts.onlyMoveOld) todo = todo.filter(function(it){ return !!redo[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()]; });
       var existingMaxId = level.markers.reduce(function(m, o){ return Math.max(m, parseInt(String(o.id || "o0").slice(1), 10) || 0); }, 0);
       if (existingMaxId >= planNextId) planNextId = existingMaxId + 1;
       function roomPos(it){ var r = idx[planRoomNumber(it.room)]; return r ? r[0] : null; }
@@ -10227,27 +11235,42 @@
           pos.set(p.it, spots[p.si]); how.set(p.it, "code");
         });
       });
-      // then the room label, stacked just under it
-      var stack = {};
+      // then the room's number label (several in one room spread round it)
       todo.forEach(function(it){
         if (pos.has(it)) return;
-        var rn = planRoomNumber(it.room), rp = roomPos(it);
+        var rp = roomPos(it);
         if (!rp) return;
-        var k = stack[rn] = (stack[rn] || 0) + 1;
-        pos.set(it, { x: rp.x, y: rp.y + k * 62 }); how.set(it, "room");
+        pos.set(it, rp); how.set(it, "room");
       });
-      var placed = 0, nCode = 0, nRoom = 0, at = new Date().toISOString();
-      todo.forEach(function(it){
-        if (!pos.has(it)) return;
-        var p = pos.get(it);
+      // (v35) beside the label, not on it: nothing on the plan's text, nor on another marker
+      var obstacles = planTextObstacles(labels);
+      level.markers.forEach(function(o){ if (o.type === "roomlink") planMarkerBoxes(o).forEach(function(b){ obstacles.push(b); }); });
+      // (v35) a v34 marker that can't be placed again stays where it is -- nothing new goes on top of it
+      Object.keys(redo).forEach(function(k){
+        var it = todo.filter(function(t){ return (String(t.room || "") + "\u0000" + String(t.joineryId || "")).toLowerCase() === k; })[0];
+        if (!it || !pos.has(it)) planMarkerBoxes(redo[k]).forEach(function(b){ obstacles.push(b); });
+      });
+      var bounds = { w: level.imageW || 0, h: level.imageH || 0 };
+      var placed = 0, nCode = 0, nRoom = 0, moved = 0, at = new Date().toISOString();
+      var ordered = todo.filter(function(it){ return how.get(it) === "code"; }).concat(todo.filter(function(it){ return how.get(it) === "room"; }));
+      ordered.forEach(function(it){
+        var anchor = pos.get(it);
+        var spot = autoPlaceSpot(anchor, it.joineryId, obstacles, bounds);
         if (!level.rooms.some(function(r){ return String(r.name).toLowerCase() === String(it.room).toLowerCase(); })) level.rooms.push({ name: it.room });
-        var marker = makeRoomLinkObject(p.x, p.y, it.room, it.joineryId);
+        var marker = makeRoomLinkObject(spot.x, spot.y, it.room, it.joineryId);
+        if (spot.textAbove) marker.label.y = marker.y - marker.r - marker.label.fontSize * 0.3;
+        var old = redo[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()];
+        if (old){ marker.id = old.id; delete redo[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()]; moved++; }
         marker.autoPlaced = how.get(it);
-        marker.autoPlacedAt = at;
+        marker.autoPlacedAt = old ? (old.autoPlacedAt || at) : at;
+        marker.autoPlacedV = AUTO_PLACE_V;
         level.markers.push(marker);
+        planMarkerBoxes(marker).forEach(function(b){ obstacles.push(b); });
         placed++; if (how.get(it) === "code") nCode++; else nRoom++;
       });
-      var result = { placed: placed, byCode: nCode, byRoom: nRoom, left: todo.length - placed, candidates: todo.length, noLabels: false };
+      // a v34 marker that couldn't be placed again (its label's gone) stays exactly where it was
+      Object.keys(redo).forEach(function(k){ level.markers.push(redo[k]); });
+      var result = { placed: placed - moved, byCode: nCode, byRoom: nRoom, moved: moved, left: todo.length - placed, candidates: todo.length - moved, noLabels: false };
       if (!placed) return result;
       return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){
         registerAllItems = [];
@@ -10452,6 +11475,8 @@
     woParseReportRowsForTest: function(pages){ return woParseReportRows(pages); },
     woInterpretGroupsForTest: function(groups){ return woInterpretGroups(groups); },
     woImportStateForTest: function(){ return woImportState; },
+    woParseReportHeaderForTest: function(pages){ return woParseReportHeader(pages); },
+    pmNamesForTest: function(){ return pmNames.slice(); },
     woStartImportFromFileForTest: function(file){ return woStartImportFromFile(file); },
     unplacedItemsForTest: function(){ return planUnplacedItems.map(function(e){ var d = woEntryDisplay(e); return { kind: e.kind, room: d.room, joineryId: d.joineryId, workOrderNo: d.workOrderNo }; }); },
     placedWosForTest: function(){ return planPlacedWos.map(function(e){ return { wo: e.w.wo, code: e.w.code, rooms: e.items.map(function(it){ return it.room; }) }; }); },
@@ -10470,6 +11495,12 @@
     // (v34) plan labels -> auto-place; Move mode
     pdfFileToImageForTest: function(file){ return pdfFileToImage(file).then(function(r){ return { w: r.w, h: r.h, tiled: !!r.tiles, planLabels: r.planLabels }; }); },
     autoPlaceFromPlanLabelsForTest: function(level){ return autoPlaceFromPlanLabels(level || activeLevelName); },
+    planMarkerBoxesForTest: function(obj){ return planMarkerBoxes(obj); },
+    planTextObstaclesForTest: function(pl){ return planTextObstacles(pl); },
+    // (v35) PC date
+    addJoineryItemForTest: function(item){ return addJoineryItem(activeProjectHandle, item); }, // (v36)
+    applyPcDateToItemsForTest: function(pc, recheck){ return applyPcDateToItems(activeProjectHandle, pc, { recheck: !!recheck }); },
+    pcSubtractBusinessDaysForTest: function(d, n){ return pcSubtractBusinessDays(d, n); },
     planMoveModeForTest: function(){ return planMoveMode; },
     planMarkersForTest: function(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === "roomlink"; }).map(function(o){ return { id: o.id, room: o.roomName, code: o.joineryCode, x: o.x, y: o.y, autoPlaced: o.autoPlaced || null }; }); },
     planWorldToClientForTest: function(x, y){ var r = planCanvasSvg.getBoundingClientRect(); return { x: r.left + planView.tx + x * planView.scale, y: r.top + planView.ty + y * planView.scale }; },
