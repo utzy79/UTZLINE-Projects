@@ -95,9 +95,11 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<!-- Same pdf.js version/CDN Site Measure's own source.html already imports
-     PDFs with -- read-only, for importing floorplan pages from a PDF. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" onerror="window.__pdfImportLibFailed = true;"></script>
+<!-- Same pdf.js version Site Measure's own source.html already imports
+     PDFs with -- read-only, for importing floorplan pages from a PDF.
+     (v38) From this folder (was the cdnjs CDN), so the PDF imports work
+     offline and in the desktop app. -->
+<script src="./pdf.min.js" onerror="window.__pdfImportLibFailed = true;"></script>
 <!-- jsPDF (2026-09-23): first-ever PDF EXPORT in this app, for the new
      Rework Register's "Print / Save PDF" and "Share…" buttons -- Andrew:
      "Also need the ability to print the rework page or email / share it."
@@ -477,6 +479,27 @@
   .unplaced-auto .btn{ width: 100%; }
   .unplaced-auto .sub{ font-size: 12px; margin: 6px 0 0; }
   .room-pick-modal{ max-width: 520px; }
+  /* (v40) right-click / long-press menu, extra copies to place, left-out import lines */
+  .ctx-menu{ position: fixed; z-index: 95; min-width: 230px; max-width: min(320px, calc(100vw - 16px)); background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.55); }
+  .ctx-menu[hidden]{ display: none; }
+  .ctx-menu .ctx-title{ font-size: 12px; color: var(--muted); padding: 4px 8px 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-menu button{ display: block; width: 100%; text-align: left; background: none; color: var(--text); border: 0; border-radius: 7px; padding: 10px 10px; font-size: 14px; cursor: pointer; touch-action: manipulation; }
+  .ctx-menu button:hover:not([disabled]){ background: var(--panel2); }
+  .ctx-menu button[disabled]{ opacity: .45; cursor: default; }
+  .ctx-menu button small{ display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .ctx-menu button.danger{ color: #ff8a8a; }
+  .copy-pin{ fill: rgba(255,59,59,0.28); stroke: #ffffff; stroke-dasharray: 8 6; cursor: grab; }
+  .copy-pin-label{ pointer-events: none; }
+  .qty-row{ display: flex; align-items: center; gap: 8px; margin: 10px 0 6px; }
+  .qty-row input{ width: 90px; text-align: center; font-size: 20px; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+  .qty-row .btn{ min-width: 46px; font-size: 20px; padding: 6px 0; }
+  .qty-each{ font-size: 13px; color: #4ade80; min-height: 18px; }
+  .wo-row.wo-out{ opacity: .45; }
+  .wo-row.wo-out .wo-code, .wo-row.wo-out .wo-desc{ text-decoration: line-through; }
+  .wo-out .wo-action, .wo-count.out{ color: #ff8a8a; }
+  .unplaced-copy{ border-style: dashed; }
+  .removed-wos{ margin-top: 10px; }
+  .removed-wos summary{ cursor: pointer; font-size: 12px; color: var(--muted); padding: 6px 0; }
   .room-pick-search, .room-pick-new input{ width: 100%; box-sizing: border-box; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 14px; }
   .room-pick-list{ max-height: 46vh; overflow-y: auto; margin: 10px 0; display:flex; flex-direction: column; gap: 6px; }
   .room-pick{ text-align: left; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; cursor: pointer; touch-action: manipulation; }
@@ -484,6 +507,8 @@
   .room-pick.suggested{ border-color: #4ade80; }
   .room-pick i{ color: var(--muted); font-style: normal; font-size: 12px; }
   .room-pick[disabled]{ opacity: .45; cursor: default; }
+  .room-pick.taken{ border-color: #f0b23e; } /* (v41) already here: another one is asked about */
+  .room-pick.taken i{ color: #f0b23e; }
   .room-pick-new{ display:flex; gap: 8px; margin-bottom: 8px; }
   .room-pick-new input{ flex: 1 1 auto; }
   .plan-canvas-hint{
@@ -719,12 +744,15 @@
   .tick-label input[type=checkbox]{ width: 18px; height: 18px; margin: 0; }
   .error-note[hidden]{ display: none; }
 </style>
+<style>/* (RC 1.0) the small release tag on the logo */
+.rc-tag{ display:inline-block; margin-left:7px; padding:0 4px; border:1px solid currentColor; border-radius:4px; font-size:9px; line-height:13px; font-weight:600; letter-spacing:.05em; opacity:.55; vertical-align:middle; position:relative; top:-1px; white-space:nowrap; text-transform:none; font-style:normal; }
+</style>
 </head>
 <body>
 
 <header>
   <img src="./icons/icon-192.png" alt="">
-  <div class="brand">UTZLINE Projects<small>the master app</small></div>
+  <div class="brand">UTZLINE Projects<span class="rc-tag" title="Release candidate 1.0">RC 1.0</span><small>the master app</small></div>
 </header>
 
 <main>
@@ -1229,6 +1257,37 @@
   </div>
 </div>
 
+<!-- (v40) right-click / long-press menu (plan markers, To place rows, import lines) -->
+<div class="ctx-menu" id="planCtxMenu" role="menu" hidden></div>
+<!-- (v40) how many of this joinery item -->
+<div class="modal-backdrop" id="planQtyBackdrop" hidden>
+  <div class="modal">
+    <h2 id="planQtyTitle">How many?</h2>
+    <p class="sub" id="planQtySub"></p>
+    <div class="qty-row">
+      <button type="button" class="btn secondary" id="planQtyMinus">−</button>
+      <input type="number" id="planQtyInput" min="1" max="50" step="1" inputmode="numeric">
+      <button type="button" class="btn secondary" id="planQtyPlus">+</button>
+    </div>
+    <div class="qty-each" id="planQtyEach"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="planQtyCancelBtn">Cancel</button>
+      <button class="btn" id="planQtyOkBtn">OK</button>
+    </div>
+  </div>
+</div>
+<!-- (v40) move an item to another level -->
+<div class="modal-backdrop" id="planLevelPickBackdrop" hidden>
+  <div class="modal room-pick-modal">
+    <h2 id="planLevelPickTitle">Move to which level?</h2>
+    <p class="sub" id="planLevelPickSub"></p>
+    <div class="room-pick-list" id="planLevelPickList"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="planLevelPickCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ---- crop dialog (image floorplan import) ---- -->
 <div class="modal-backdrop" id="cropBackdrop" hidden>
   <div class="modal">
@@ -1332,8 +1391,17 @@
 <div class="modal-backdrop" id="editItemBackdrop" hidden>
   <div class="modal">
     <h2>Edit joinery item</h2>
-    <p class="sub" style="margin:0 0 10px;">Level, Room, and Joinery ID can't be changed here -- delete and re-create the item if one of those is wrong.</p>
+    <p class="sub" style="margin:0 0 10px;">Level and Joinery ID can't be changed here. The room can, while nothing's been recorded against the item yet (a status, job notes, drawings, ITPs, orders…).</p>
     <dl class="meta-grid readonly-fields" id="editItemFixedGrid"></dl>
+    <!-- (v41) Andrew: "edit joinery item needs the room editable" -->
+    <div class="field">
+      <label for="editItemRoomSelect">Room</label>
+      <select id="editItemRoomSelect" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;"></select>
+    </div>
+    <div class="field" id="editItemNewRoomField" hidden>
+      <label for="editItemNewRoomInput">New room name</label>
+      <input type="text" id="editItemNewRoomInput" placeholder="e.g. G.61 - Store">
+    </div>
     <div class="field"><label for="editItemDescInput">Description</label><input type="text" id="editItemDescInput"></div>
     <div class="field"><label for="editItemWorkOrderInput">Work order #</label><input type="text" id="editItemWorkOrderInput"></div>
     <div class="field"><label for="editItemDollarValueInput">Dollar value ($)</label><input type="text" inputmode="decimal" id="editItemDollarValueInput" placeholder="0.00"></div>
@@ -4969,7 +5037,7 @@
   }
   function ensurePdfWorker(){
     if (!ensurePdfWorker._set){
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdf.worker.min.js"; // (v38) this folder's copy, not the CDN
       ensurePdfWorker._set = true;
     }
   }
@@ -6707,7 +6775,10 @@
      is pushed out from the dot by the same amount so it never runs into
      it (a label under the dot stays under it, one above stays above).
      The markers' saved data is untouched. */
-  var PLAN_TEXT_SCALE = 1; // (v35) 32: v34 really drew 14 (the CSS above), so this is the "about twice"
+  /* (v38) Andrew: "make indicater text 25% smaller" (the plan markers' codes):
+     0.75 x the saved 32 = 24. Placement uses the same size, so new markers
+     sit a little closer to their labels; nothing saved changes. */
+  var PLAN_TEXT_SCALE = 0.75; // (v35) was 1 (32: v34 really drew 14, so that was the "about twice")
   function planMarkerTextSize(obj){ return (Number(obj.label && obj.label.fontSize) || 32) * PLAN_TEXT_SCALE; }
   function planMarkerTextPos(obj){
     var lx = Number(obj.label.x) || 0, ly = Number(obj.label.y) || 0;
@@ -6847,6 +6918,7 @@
         planCanvasMarkersG.appendChild(text);
       }
     });
+    if (typeof planRenderCopies === "function") planRenderCopies(); // (v40)
   }
   function planMarkerAt(worldX, worldY){
     if (!planSaved || !planSaved.objects) return null;
@@ -6866,14 +6938,18 @@
   var planPointers = {};
   var planDownPoint = null, planDragMoved = false, planPinchLastDist = null;
   planCanvasSvg.addEventListener("pointerdown", function(e){
+    if (e.pointerType === "mouse" && e.button !== 0) return; // (v40) a right-click is the menu, not a tap or a pan
+    if (!Object.keys(planPointers).length && planCopyDragStart(e)) return; // (v40) an extra copy's dashed pin
     planPointers[e.pointerId] = { x: e.clientX, y: e.clientY };
     try{ planCanvasSvg.setPointerCapture(e.pointerId); }catch(err){}
     var n = Object.keys(planPointers).length;
-    if (n === 1){ planDownPoint = { x: e.clientX, y: e.clientY }; planDragMoved = false; planMarkerDragStart(e); } // (v34) Move mode grabs a marker
+    if (n === 1){ planDownPoint = { x: e.clientX, y: e.clientY }; planDragMoved = false; planMarkerDragStart(e); planLongPressStart(e); } // (v34) Move mode grabs a marker; (v40) a long press opens the menu
     else { planPinchLastDist = null; if (planMarkerDrag){ applyMarkerLocally(planMarkerDrag.obj, planMarkerDrag.orig.x, planMarkerDrag.orig.y); planMarkerDrag = null; planRenderMarkers(); } }
   });
   planCanvasSvg.addEventListener("pointermove", function(e){
+    if (planCopyDrag && planCopyDrag.pointerId === e.pointerId){ planCopyDragMove(e); return; } // (v40)
     if (!planPointers[e.pointerId]) return;
+    planLongPressMove(e); // (v40)
     if (planMarkerDrag && planMarkerDrag.pointerId === e.pointerId){ planPointers[e.pointerId] = { x: e.clientX, y: e.clientY }; planDragMoved = true; planMarkerDragMove(e); return; } // (v34)
     var prev = planPointers[e.pointerId];
     var dx = e.clientX - prev.x, dy = e.clientY - prev.y;
@@ -6895,6 +6971,9 @@
     }
   });
   function planPointerEnd(e){
+    if (planCopyDrag && planCopyDrag.pointerId === e.pointerId){ planCopyDragEnd(e); return; } // (v40)
+    planLongPressCancel(); // (v40)
+    if (planCtxSuppressTap){ planCtxSuppressTap = false; delete planPointers[e.pointerId]; planPinchLastDist = null; if (planMarkerDrag && planMarkerDrag.pointerId === e.pointerId){ applyMarkerLocally(planMarkerDrag.obj, planMarkerDrag.orig.x, planMarkerDrag.orig.y); planMarkerDrag = null; planRenderMarkers(); } return; } // (v40) the press opened the menu
     if (planMarkerDrag && planMarkerDrag.pointerId === e.pointerId){ delete planPointers[e.pointerId]; planMarkerDragEnd(); return; } // (v34)
     var wasSingleTap = Object.keys(planPointers).length === 1 && !planDragMoved;
     var tapClient = planDownPoint;
@@ -6907,6 +6986,8 @@
   }
   planCanvasSvg.addEventListener("pointerup", planPointerEnd);
   planCanvasSvg.addEventListener("pointercancel", function(e){
+    planLongPressCancel(); planCtxSuppressTap = false; // (v40)
+    if (planCopyDrag && planCopyDrag.pointerId === e.pointerId){ planCopyDrag = null; planRenderMarkers(); } // (v40)
     delete planPointers[e.pointerId]; planPinchLastDist = null;
     if (planMarkerDrag && planMarkerDrag.pointerId === e.pointerId){ applyMarkerLocally(planMarkerDrag.obj, planMarkerDrag.orig.x, planMarkerDrag.orig.y); planMarkerDrag = null; planRenderMarkers(); } // (v34)
   });
@@ -6915,6 +6996,12 @@
   // marker labels; the plan canvas swallows the context menu (it has no
   // menu of its own), and the stage is user-select:none in CSS.
   planCanvasStage.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+  // (v40) right-click (a touch screen's own long press lands here too) on a marker -> its menu
+  planCanvasSvg.addEventListener("contextmenu", function(e){
+    e.preventDefault();
+    if (Date.now() - planLongPressOpenedAt < 900) return; // our own long press already opened it
+    planOpenMenuAtClient(e.clientX, e.clientY);
+  });
   planCanvasSvg.addEventListener("wheel", function(e){
     e.preventDefault();
     var factor = Math.pow(1.0015, -e.deltaY);
@@ -8612,7 +8699,7 @@
   function historyFromStatusEvents(evs){
     var out = [];
     evs.forEach(function(e){
-      if (e.kind === "status" && e.status) out.push({ at: e.at || "", by: e.by || "", cat: "Status", cls: "c-status", text: joineryStatusLabel(e.status), detail: [] });
+      if (e.kind === "status" && e.status) out.push({ at: e.at || "", by: e.by || "", cat: "Status", cls: "c-status", text: joineryStatusLabel(e.status) + (e.measureNotRequired ? " — site measure not required" : ""), detail: [] }); // (v41) Site Measure's "Site measure not required"
       else if (e.kind === "jobNote") out.push({ at: e.at || "", by: e.by || "", cat: "Job note", cls: "", text: "Job note added", detail: [], jobNote: true });
     });
     return out;
@@ -8825,11 +8912,82 @@
   var editItemCancelBtn = document.getElementById("editItemCancelBtn");
   var editItemSaveBtn = document.getElementById("editItemSaveBtn");
   var editJoineryItemBtn = document.getElementById("editJoineryItemBtn");
+  // (v41) the room: this level's rooms, or a new one
+  var editItemRoomSelect = document.getElementById("editItemRoomSelect");
+  var editItemNewRoomField = document.getElementById("editItemNewRoomField");
+  var editItemNewRoomInput = document.getElementById("editItemNewRoomInput");
+  var EDIT_ITEM_NEW_ROOM = "__new__";
+  function fillEditItemRooms(item){
+    function paint(rooms){
+      if (rooms.indexOf(item.room) === -1) rooms.push(item.room);
+      rooms.sort(function(a, b){ return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }); });
+      editItemRoomSelect.innerHTML = rooms.map(function(r){ return "<option value=\"" + escapeHtml(r) + "\"" + (r === item.room ? " selected" : "") + ">" + escapeHtml(r) + "</option>"; }).join("") +
+        "<option value=\"" + EDIT_ITEM_NEW_ROOM + "\">+ New room…</option>";
+      editItemRoomSelect.value = item.room;
+    }
+    paint([]);
+    editItemNewRoomField.hidden = true; editItemNewRoomInput.value = "";
+    return Promise.all([listExistingRoomsInLevel(activeProjectHandle, activeProjectName, item.level).catch(function(){ return []; }), readJoineryItems(activeProjectHandle).catch(function(){ return []; })]).then(function(res){
+      var rooms = res[0].slice();
+      res[1].forEach(function(it){ if (it.level === item.level && it.room && rooms.indexOf(it.room) === -1) rooms.push(it.room); });
+      if (editItemBackdrop.hidden || activeJoineryItem !== item) return;
+      var keep = editItemRoomSelect.value;
+      paint(rooms);
+      if (keep && keep !== item.room) editItemRoomSelect.value = keep;
+    });
+  }
+  editItemRoomSelect.addEventListener("change", function(){
+    editItemNewRoomField.hidden = editItemRoomSelect.value !== EDIT_ITEM_NEW_ROOM;
+    if (!editItemNewRoomField.hidden) setTimeout(function(){ try{ editItemNewRoomInput.focus(); }catch(e){} }, 20);
+  });
+  function editItemChosenRoom(){
+    if (editItemRoomSelect.value !== EDIT_ITEM_NEW_ROOM) return editItemRoomSelect.value;
+    var typed = (editItemNewRoomInput.value || "").trim();
+    if (!typed) return "";
+    var name = sanitizeFileBase(woCleanRoomName(typed));
+    return name === "plan" ? "" : name;
+  }
+  // Moves an item to another room on its level: joinery-items.json (logged
+  // in its history), then its marker and the level's room list. Only called
+  // once itemActivityBlocks has said nothing is recorded against it.
+  function changeJoineryItemRoom(item, newRoom, who){
+    var level = item.level, oldRoom = item.room, code = item.joineryId || "", at = new Date().toISOString();
+    return readJoineryItems(activeProjectHandle).then(function(items){
+      var rec = items.filter(function(x){ return itemKeyMatch(x, item); })[0];
+      if (!rec){ var e = new Error("Joinery item not found: " + level + " / " + oldRoom + " / " + code); e.code = "item_gone"; throw e; }
+      if (items.some(function(x){ return x !== rec && itemKeyMatch(x, { level: level, room: newRoom, joineryId: code }); })){ var e2 = new Error("room taken"); e2.code = "room_taken"; throw e2; }
+      rec.room = newRoom;
+      rec.editHistory = Array.isArray(rec.editHistory) ? rec.editHistory : [];
+      rec.editHistory.push({ at: at, by: who, changes: [{ field: "Room", from: oldRoom, to: newRoom }] });
+      return writeJoineryItems(activeProjectHandle, items).then(function(){ return rec; });
+    }).then(function(rec){
+      return readLevelFile(activeProjectHandle, activeProjectName, level).then(function(lv){
+        if (!lv) return rec;
+        var changed = false;
+        if (!lv.rooms.some(function(r){ return r.name.toLowerCase() === newRoom.toLowerCase(); })){ lv.rooms.push({ name: newRoom }); changed = true; }
+        (lv.markers || []).forEach(function(o){
+          if (o.type !== "roomlink" || String(o.roomName || "").toLowerCase() !== oldRoom.toLowerCase() || String(o.joineryCode || "").toLowerCase() !== code.toLowerCase()) return;
+          o.roomName = newRoom;
+          if (o.label && typeof o.label.text === "string" && o.label.text.indexOf(oldRoom) !== -1) o.label.text = o.label.text.replace(oldRoom, newRoom);
+          changed = true;
+        });
+        if (!changed) return rec;
+        return writeLevelFile(activeProjectHandle, activeProjectName, level, lv).then(function(){
+          if (level === activeLevelName && planSaved) (planSaved.objects || []).forEach(function(o){ if (o.type === "roomlink" && String(o.roomName || "").toLowerCase() === oldRoom.toLowerCase() && String(o.joineryCode || "").toLowerCase() === code.toLowerCase()) o.roomName = newRoom; });
+          return rec;
+        });
+      });
+    }).then(function(rec){
+      registerAllItems = [];
+      applyPcDateToNewItems(); // the PC date follows it (in the background)
+      return rec;
+    });
+  }
   function openEditItemDialog(item){
     editItemFixedGrid.innerHTML =
       "<dt>Level</dt><dd>" + escapeHtml(item.level) + "</dd>" +
-      "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
       "<dt>Joinery ID</dt><dd>" + escapeHtml(item.joineryId || "(no ID)") + "</dd>";
+    fillEditItemRooms(item);
     editItemDescInput.value = item.description || "";
     editItemWorkOrderInput.value = item.workOrderNo || "";
     editItemDollarValueInput.value = formatDollarValueInput(item.dollarValue);
@@ -8868,9 +9026,20 @@
     // 2) Skip the PIN step entirely for a no-op save -- nothing to confirm,
     // nothing to log (see diffJoineryItemEditableFields's own comment).
     var preDiff = diffJoineryItemEditableFields(item, edits);
-    if (!preDiff.length){ showToast("No changes to save."); closeEditItemDialog(); return; }
+    var newRoom = editItemChosenRoom(); // (v41)
+    if (!newRoom){ showToast("Type the new room's name (or pick a room)."); return; }
+    var roomChanged = newRoom !== item.room;
+    if (!preDiff.length && !roomChanged){ showToast("No changes to save."); closeEditItemDialog(); return; }
     var editorName = deviceUserName;
-    readUsersCsv().then(function(rows){
+    // (v41) a new room: not if that room already has this code, or anything's recorded against it
+    (roomChanged ? readJoineryItems(activeProjectHandle).then(function(items){
+      if (items.some(function(x){ return !itemKeyMatch(x, item) && itemKeyMatch(x, { level: item.level, room: newRoom, joineryId: item.joineryId || "" }); })){
+        showToast(newRoom + " already has a " + (item.joineryId || "joinery item") + " — nothing was changed.", 5000); return true;
+      }
+      return itemActivityBlocks(item, "moved to another room");
+    }) : Promise.resolve(false)).then(function(blocked){
+    if (blocked) return;
+    return readUsersCsv().then(function(rows){
       var row = findUserRowCI(rows, editorName);
       if (!row){
         showToast("“" + editorName + "” is no longer in the shared name/PIN list — sign in again above.");
@@ -8894,7 +9063,10 @@
       }).then(function(pin){
         if (pin === null){ showToast("Edit cancelled — nothing was saved."); return; }
         return applyJoineryItemEdit(activeProjectHandle, item.level, item.room, item.joineryId, edits, editorName).then(function(result){
-          if (!result.changes.length){ showToast("No changes to save."); closeEditItemDialog(); return; }
+          if (!roomChanged) return result;
+          return changeJoineryItemRoom(item, newRoom, editorName).then(function(rec){ result.item = rec; result.roomChanged = true; result.fromRoom = item.room; item.room = rec.room; return result; }); // (v41)
+        }).then(function(result){
+          if (!result.changes.length && !result.roomChanged){ showToast("No changes to save."); closeEditItemDialog(); return; }
           // Mutate the SAME in-memory item object (not a new reference) --
           // this object is shared with registerAllItems
           // etc., same convention the old backfill/toggle code followed.
@@ -8914,13 +9086,17 @@
           item.dollarValue = result.item.dollarValue;
           item.hasSolidSurface = result.item.hasSolidSurface;
           item.editHistory = result.item.editHistory;
-          showToast("Joinery item updated.");
+          showToast(result.roomChanged ? "Joinery item updated — now in " + item.room + " (was " + result.fromRoom + ")." : "Joinery item updated.");
           closeEditItemDialog();
-          renderJoineryItemMetaAndHistory(item);
+          if (result.roomChanged) openJoineryItemPage(item, joineryItemReturnScreen); // everything on its page follows the room
+          else renderJoineryItemMetaAndHistory(item);
         });
       });
+    });
     }).catch(function(err){
       console.error("Saving joinery item edit failed:", err);
+      if (err && err.code === "room_taken"){ showToast("That room already has a " + (item.joineryId || "joinery item") + " — nothing was changed.", 5000); return; }
+      if (err && err.code === "item_gone"){ showToast("That item isn't there any more (changed on another device?) — go back and open it again."); return; }
       // (v23 sweep) The save re-reads joinery-items.json strictly; an
       // unreadable file (or registry) means NOTHING was written.
       if (isReadFailed(err)) readFailedToast(/users/.test(err.message) ? "utzline-users.csv" : "joinery-items.json");
@@ -10426,18 +10602,29 @@
       });
     });
   }
-  var WO_ACTION_LABELS = { "new": "New — to place", "fill": "Adds WO #", "same": "Already there", "differs": "WO # differs — kept", "skip-zone": "Zone not mapped" };
+  var WO_ACTION_LABELS = { "new": "New — to place", "fill": "Adds WO #", "same": "Already there", "differs": "WO # differs — kept", "skip-zone": "Zone not mapped", "out": "Left out" };
+  // (v40) Andrew: "i have had a double up, we need an option to remove on
+  // right click in the import page" -- a line right-clicked "Leave this one
+  // out" isn't imported (keyed by WO # + room, so one room of a list can go).
+  function woOutKeyForRow(r){ return "r::" + r.wo + "::" + String(r.room || "").toLowerCase(); } // (no \u0000: it goes in an HTML attribute)
+  function woOutKeyForWo(w){ return "w::" + w.wo; }
+  function woApplyLeftOut(st, plan){
+    var out = st.leftOut || {};
+    plan.forEach(function(r){ if (out[woOutKeyForRow(r)]){ r.inAction = r.action; r.action = "out"; } });
+    return plan;
+  }
   // (v32) What an import puts in the project's work-order list: every work
   // order that lands in a room (so it can be dropped again in another room)
   // and every one with no room (so it can be dragged onto the plan).
   function woListRecordsFor(st, plan, at, who){
     var recs = [];
     plan.forEach(function(r){
-      if (r.action === "skip-zone" || r.action === "differs") return;
+      if (r.action === "skip-zone" || r.action === "differs" || r.action === "out") return; // (v40) left out
       recs.push({ wo: r.wo, code: r.code, desc: r.desc, sellPrice: r.sell === undefined ? null : r.sell, reportRoom: r.room, level: r.level, group: "", roomHint: "", status: r.status || "", file: st.fileName, importedAt: at, importedBy: who });
     });
     (st.interp.roomless || []).forEach(function(g){
       g.wos.forEach(function(w){
+        if (st.leftOut && st.leftOut[woOutKeyForWo(w)]) return; // (v40) left out
         recs.push({ wo: w.wo, code: w.code, codeless: !!w.codeless, desc: w.desc, sellPrice: w.sell === undefined ? null : w.sell, reportRoom: "", level: "", group: g.group, roomHint: w.roomHint || "", status: w.status || "", file: st.fileName, importedAt: at, importedBy: who });
       });
     });
@@ -10538,7 +10725,7 @@
   }
   function woRenderImportDialog(){
     var st = woImportState;
-    st.plan = woPlanImport(st.interp, st.zoneMap, st.levelRooms, st.items);
+    st.plan = woApplyLeftOut(st, woPlanImport(st.interp, st.zoneMap, st.levelRooms, st.items)); // (v40) lines left out
     var counts = {};
     st.plan.forEach(function(r){ counts[r.action] = (counts[r.action] || 0) + 1; });
     var newRooms = {};
@@ -10551,12 +10738,13 @@
       if (stt === "new") listNew++; else if (stt === "changed") listChanged++;
       if (rec.group !== "" && stt === "new") dropNew++;
     });
-    (st.interp.roomless || []).forEach(function(g){ nRoomless += g.wos.length; });
-    st.plan.forEach(function(r){ if (r.sell !== null && r.sell !== undefined){ anyPrice = true; total += r.sell; } }); // the whole report, to check against its own total
-    (st.interp.roomless || []).forEach(function(g){ g.wos.forEach(function(w){ if (w.sell !== null && w.sell !== undefined){ anyPrice = true; total += w.sell; } }); });
+    var nOut = 0; // (v40)
+    (st.interp.roomless || []).forEach(function(g){ g.wos.forEach(function(w){ if (st.leftOut && st.leftOut[woOutKeyForWo(w)]) nOut++; else nRoomless++; }); });
+    st.plan.forEach(function(r){ if (r.action === "out"){ nOut++; return; } if (r.sell !== null && r.sell !== undefined){ anyPrice = true; total += r.sell; } }); // the whole report, to check against its own total
+    (st.interp.roomless || []).forEach(function(g){ g.wos.forEach(function(w){ if (st.leftOut && st.leftOut[woOutKeyForWo(w)]) return; if (w.sell !== null && w.sell !== undefined){ anyPrice = true; total += w.sell; } }); });
     st.listChanges = listNew + listChanged;
     woImportSummaryEl.innerHTML =
-      "<b>" + escapeHtml(st.fileName) + "</b> — " + st.interp.rooms.length + " rooms, " + st.plan.length + " joinery work orders" +
+      "<b>" + escapeHtml(st.fileName) + "</b> — " + st.interp.rooms.length + " rooms, " + st.plan.filter(function(r){ return r.action !== "out"; }).length + " joinery work orders" +
       (nRoomless ? ", " + nRoomless + " with no room (drag them onto the plan)" : "") +
       (st.interp.skipped.length ? ", " + st.interp.skipped.length + " lines skipped (no room or joinery code" + (anyPrice ? " or value" : "") + ")" : "") + "." +
       (anyPrice ? " <b>" + woMoney(total) + "</b> total sell price." : "") + "<br>" +
@@ -10567,6 +10755,7 @@
       (counts["skip-zone"] ? " · <span class=\"wo-count skip\">" + counts["skip-zone"] + " in unmapped zones</span>" : "") +
       (nNewRooms ? " · " + nNewRooms + " new room" + (nNewRooms === 1 ? "" : "s") : "") +
       (dropNew ? " · <span class=\"wo-count drop\">" + dropNew + " to drag onto the plan</span>" : "") +
+      (nOut ? " · <span class=\"wo-count out\">" + nOut + " left out</span>" : "") +
       (listChanged ? " · " + listChanged + " price/description update" + (listChanged === 1 ? "" : "s") : "");
     woRenderJobInfo(st); // (v35)
     woRenderFormat(st); // (v37)
@@ -10595,7 +10784,7 @@
       html += "<div class=\"wo-group\"><div class=\"wo-group-head\">" + escapeHtml(rs[0].heading) +
         (room && room.isList ? " <label class=\"wo-split\"><input type=\"checkbox\" data-split=\"" + escapeHtml(no) + "\"" + (room.split ? " checked" : "") + "> one item per room (" + room.numbers.length + ")</label>" : "") + "</div>";
       rs.forEach(function(r){
-        html += "<div class=\"wo-row wo-" + r.action + "\"><span class=\"wo-wo\">" + escapeHtml(r.wo) + "</span><span class=\"wo-code\">" + escapeHtml(r.code) + "</span>" +
+        html += "<div class=\"wo-row wo-" + r.action + "\" data-out=\"" + escapeHtml(woOutKeyForRow(r)) + "\" title=\"Right-click (or press and hold) to leave it out\"><span class=\"wo-wo\">" + escapeHtml(r.wo) + "</span><span class=\"wo-code\">" + escapeHtml(r.code) + "</span>" +
           "<span class=\"wo-where\">" + (r.level ? escapeHtml(r.level) + " · " : "") + escapeHtml(r.room) + (r.roomIsNew && r.level ? " <i>(new room)</i>" : "") + "</span>" +
           "<span class=\"wo-desc\">" + escapeHtml(r.desc) + "</span>" +
           "<span class=\"wo-value\">" + (r.sell !== null && r.sell !== undefined ? escapeHtml(woMoney(r.sell)) : "") + "</span>" +
@@ -10608,11 +10797,12 @@
       html += "<div class=\"wo-group\"><div class=\"wo-group-head\">" + escapeHtml(g.group) + " — no room: drag each onto the plan and pick its room (the value is shared if it goes in more than one)</div>";
       g.wos.forEach(function(w){
         var stt = woListRecordState(st.woList || { workOrders: [] }, { wo: w.wo, code: w.code, desc: w.desc, sellPrice: w.sell === undefined ? null : w.sell });
-        html += "<div class=\"wo-row wo-drop\"><span class=\"wo-wo\">" + escapeHtml(w.wo) + "</span><span class=\"wo-code\">" + escapeHtml(w.code) + "</span>" +
+        var isOut = !!(st.leftOut && st.leftOut[woOutKeyForWo(w)]); // (v40)
+        html += "<div class=\"wo-row " + (isOut ? "wo-out" : "wo-drop") + "\" data-out=\"" + escapeHtml(woOutKeyForWo(w)) + "\" title=\"Right-click (or press and hold) to leave it out\"><span class=\"wo-wo\">" + escapeHtml(w.wo) + "</span><span class=\"wo-code\">" + escapeHtml(w.code) + "</span>" +
           "<span class=\"wo-where\">" + (w.roomHint ? "suggested: " + escapeHtml(w.roomHint) : "<i>you pick the room</i>") + "</span>" +
           "<span class=\"wo-desc\">" + escapeHtml(w.desc) + "</span>" +
           "<span class=\"wo-value\">" + (w.sell !== null && w.sell !== undefined ? escapeHtml(woMoney(w.sell)) : "") + "</span>" +
-          "<span class=\"wo-action\">" + (stt === "new" ? "To drag onto the plan" : stt === "changed" ? "Listed — updated" : "Already listed") + "</span></div>";
+          "<span class=\"wo-action\">" + (isOut ? "Left out" : stt === "new" ? "To drag onto the plan" : stt === "changed" ? "Listed — updated" : "Already listed") + "</span></div>";
       });
       html += "</div>";
     });
@@ -10621,6 +10811,21 @@
         st.interp.skipped.map(function(s){ return "<div class=\"wo-row wo-skip\"><span class=\"wo-wo\">" + escapeHtml(s.wo) + "</span><span class=\"wo-desc\">" + escapeHtml(s.heading + (s.desc ? " — " + s.desc : "")) + "</span><span class=\"wo-action\">" + escapeHtml(s.why) + "</span></div>"; }).join("") + "</details>";
     }
     woImportPreviewEl.innerHTML = html;
+    if (!woImportPreviewEl.__ctxWired){ // (v40) right-click / press and hold a line -> leave it out (or put it back)
+      woImportPreviewEl.__ctxWired = true;
+      woImportPreviewEl.addEventListener("contextmenu", function(e){
+        var row = e.target.closest ? e.target.closest(".wo-row[data-out]") : null;
+        var cur = woImportState;
+        if (!row || !cur) return;
+        e.preventDefault();
+        var key = row.getAttribute("data-out"), isOut = !!(cur.leftOut && cur.leftOut[key]);
+        var code = (row.querySelector(".wo-code") || {}).textContent || "", wo = (row.querySelector(".wo-wo") || {}).textContent || "";
+        openCtxMenu(e.clientX, e.clientY, "WO " + wo + " · " + code, [
+          isOut ? { label: "Put it back", note: "import this line after all", run: function(){ delete cur.leftOut[key]; woRenderImportDialog(); } }
+                : { label: "Leave this one out", note: "a double-up, or not ours — it won't be imported", cls: "danger", run: function(){ cur.leftOut = cur.leftOut || {}; cur.leftOut[key] = true; woRenderImportDialog(); } }
+        ]);
+      });
+    }
     Array.prototype.forEach.call(woImportPreviewEl.querySelectorAll("input[data-split]"), function(cb){
       cb.addEventListener("change", function(){
         var room = st.interp.rooms.filter(function(r){ return r.itemNo === cb.getAttribute("data-split"); })[0];
@@ -10706,7 +10911,7 @@
   // writes each changed level file, then joinery-items.json once.
   function woApplyImportItems(st, who){
     return woLoadProjectContext().then(function(ctx){
-      var plan = woPlanImport(st.interp, st.zoneMap, ctx.levelRooms, ctx.items);
+      var plan = woApplyLeftOut(st, woPlanImport(st.interp, st.zoneMap, ctx.levelRooms, ctx.items)); // (v40)
       var at = new Date().toISOString();
       var items = ctx.items;
       var added = 0, filled = 0;
@@ -10808,7 +11013,7 @@
   var planPinSkipped = {};
   var planLastDrop = null;     // for Undo
   function woItemKey(it){ return (it.room + "\u0000" + it.joineryId).toLowerCase(); }
-  function woEntryKey(e){ return e.kind === "item" ? "i\u0000" + woItemKey(e.item) : "w\u0000" + e.w.wo; }
+  function woEntryKey(e){ return e.kind === "item" ? "i\u0000" + woItemKey(e.item) : (e.copy ? "c\u0000" : "w\u0000") + e.w.wo; }
   function woEntryDisplay(e){ // what the pin bar / draft label show
     if (e.kind === "item") return e.item;
     return { room: "", joineryId: e.w.code, workOrderNo: e.w.wo, description: e.w.desc };
@@ -10836,9 +11041,11 @@
       var unplaced = items.filter(function(it){ return it.level === activeLevelName && !placed[woItemKey(it)]; }).sort(sortItems);
       var byWo = {};
       items.forEach(function(it){ var k = String(it.workOrderNo || "").trim(); if (k) (byWo[k] = byWo[k] || []).push(it); });
-      var roomlessTodo = [], placedWos = [];
+      var roomlessTodo = [], placedWos = [], copies = [], removedWos = [];
       (list.workOrders || []).forEach(function(w){
         var mine = byWo[w.wo] || [];
+        if (w.removed && !mine.length){ removedWos.push({ kind: "wo", w: w, removed: true }); return; } // (v40) taken off the list
+        if ((Number(w.copiesToPlace) || 0) > 0 && mine.length) copies.push({ kind: "wo", w: w, copy: true, items: mine }); // (v40) "make it multiples"
         if (!mine.length){ roomlessTodo.push({ kind: "wo", w: w }); return; }
         // "already in a room": it has an item that isn't just waiting in this level's own To place list
         var inRoom = mine.filter(function(it){ return !(it.level === activeLevelName && !placed[woItemKey(it)]); });
@@ -10846,8 +11053,12 @@
       });
       var byCode = function(a, b){ return String(a.w.code).localeCompare(String(b.w.code), undefined, { numeric: true, sensitivity: "base" }); };
       roomlessTodo.sort(byCode); placedWos.sort(byCode);
-      planUnplacedItems = unplaced.map(function(it){ return { kind: "item", item: it }; }).concat(roomlessTodo);
+      copies.sort(byCode);
+      planUnplacedItems = copies.concat(unplaced.map(function(it){ return { kind: "item", item: it }; })).concat(roomlessTodo);
       planPlacedWos = placedWos;
+      planRemovedWos = removedWos; // (v40)
+      planItemsCache = items;     // (v40) for the extra copies' pins
+      planRenderMarkers();
       renderUnplacedButton();
       if (!planUnplacedPanel.hidden) renderUnplacedList();
     }).catch(function(err){ console.error("Reading items for the To place list failed:", err); });
@@ -10869,7 +11080,7 @@
   function woEntryRowHtml(e, idx, sub){
     var d = woEntryDisplay(e);
     var val = woEntryValueText(e);
-    return "<div class=\"unplaced-item\" data-idx=\"" + idx + "\"><span class=\"drag-grip\" data-grip=\"1\" title=\"Drag onto the plan\">⠿</span>" +
+    return "<div class=\"unplaced-item" + (e.copy ? " unplaced-copy" : "") + "\" data-idx=\"" + idx + "\"><span class=\"drag-grip\" data-grip=\"1\" title=\"Drag onto the plan\">⠿</span>" +
       "<span class=\"unplaced-main\"><b>" + escapeHtml(d.joineryId || "(no code)") + "</b> " + escapeHtml(d.description || "") +
       (d.workOrderNo ? " <span class=\"unplaced-wo\">WO " + escapeHtml(d.workOrderNo) + "</span>" : "") +
       (val ? " <span class=\"unplaced-val\">" + escapeHtml(val) + "</span>" : "") +
@@ -10895,9 +11106,10 @@
     planUnplacedItems.forEach(function(e){
       if (q && hay(e).indexOf(q) === -1) return;
       var idx = planListEntries.push(e) - 1;
-      var head = e.kind === "item" ? e.item.room : "No room yet — pick the room when you drop it";
+      var head = e.copy ? "More of the same — drag each to its room" : e.kind === "item" ? e.item.room : "No room yet — pick the room when you drop it";
       if (head !== lastRoom){ html += "<div class=\"unplaced-room\">" + escapeHtml(head) + "</div>"; lastRoom = head; }
-      html += woEntryRowHtml(e, idx, e.kind === "wo" ? [e.w.group, e.w.roomHint ? "suggested: " + e.w.roomHint : ""].filter(Boolean).join(" · ") : "");
+      html += woEntryRowHtml(e, idx, e.copy ? (e.w.copiesToPlace + " more to place (" + (e.items.length + Number(e.w.copiesToPlace)) + " in all) · now in " + e.items.map(function(it){ return it.room; }).join(", "))
+        : e.kind === "wo" ? [e.w.group, e.w.roomHint ? "suggested: " + e.w.roomHint : ""].filter(Boolean).join(" · ") : "");
     });
     if (!planListEntries.length) html += "<p class=\"sub\" style=\"margin:8px 0;\">" + (planUnplacedItems.length ? "Nothing to place matches." : "Everything on this level is placed.") + "</p>";
     var placedRows = "", nPlaced = 0;
@@ -10909,6 +11121,12 @@
     });
     if (planPlacedWos.length){
       html += "<details class=\"placed-wos\"" + (planPlacedOpen || q ? " open" : "") + "><summary>Already in a room — drag one again to add it to another room (" + nPlaced + ")</summary>" + placedRows + "</details>";
+    }
+    // (v40) work orders taken off the list (right-click one to put it back)
+    if (planRemovedWos.length){
+      var removedRows = "";
+      planRemovedWos.forEach(function(e){ if (q && hay(e).indexOf(q) === -1) return; var idx = planListEntries.push(e) - 1; removedRows += woEntryRowHtml(e, idx, "Taken off the list — right-click (or press and hold) to put it back"); });
+      if (removedRows) html += "<details class=\"removed-wos\"" + (q ? " open" : "") + "><summary>Taken off the list (" + planRemovedWos.length + ")</summary>" + removedRows + "</details>";
     }
     if (planWoList.unreadable) html += "<p class=\"sub\" style=\"margin:8px 0;\">Couldn't read the work order list (still syncing?) — close and reopen this list in a moment.</p>";
     planUnplacedList.innerHTML = html;
@@ -10948,7 +11166,7 @@
     var row = e.target.closest ? e.target.closest(".unplaced-item") : null;
     if (!row || (e.button !== undefined && e.button !== 0)) return;
     var entry = planListEntries[+row.getAttribute("data-idx")];
-    if (!entry) return;
+    if (!entry || entry.removed) return;
     var grip = !!(e.target.closest && e.target.closest("[data-grip]"));
     planDrag = { entry: entry, row: row, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, grip: grip, mouse: e.pointerType === "mouse", active: false, ghost: null };
     if (grip){ e.preventDefault(); try{ row.setPointerCapture(e.pointerId); }catch(err){} }
@@ -11011,7 +11229,18 @@
     var row = e.target.closest ? e.target.closest(".unplaced-item") : null;
     if (!row) return;
     var entry = planListEntries[+row.getAttribute("data-idx")];
-    if (entry) startPinMode(entry);
+    if (entry && !entry.removed) startPinMode(entry);
+  });
+  // (v40) right-click (or press and hold) a row -> its menu
+  if (planUnplacedList) planUnplacedList.addEventListener("contextmenu", function(e){
+    var row = e.target.closest ? e.target.closest(".unplaced-item") : null;
+    if (!row) return;
+    e.preventDefault();
+    var entry = planListEntries[+row.getAttribute("data-idx")];
+    if (!entry) return;
+    planDrag = null;
+    planDragSuppressClick = true; setTimeout(function(){ planDragSuppressClick = false; }, 700);
+    planOpenListMenu(entry, e.clientX, e.clientY);
   });
 
   /* ---- tap-to-place (v31) ---- */
@@ -11112,7 +11341,26 @@
     if (entry.kind === "item") return placeItemMarker(entry.item, pt);
     return chooseDropRoom(entry, pt).then(function(room){
       if (!room) return false;
-      return dropWorkOrderInRoom(entry.w, room, pt);
+      return confirmSameRoom(entry.w, room).then(function(another){
+        if (another === null) return false;
+        var opts = entry.copy ? { copy: true } : {};
+        if (another) opts.another = true;
+        return dropWorkOrderInRoom(entry.w, room, pt, opts);
+      });
+    });
+  }
+  // (v41) Andrew: "we still need the option to drag into the same room, (may
+  // be multiples in a room) but warn that this is a double up". Resolves
+  // false (not there yet), true (put another one there) or null (cancelled).
+  function confirmSameRoom(w, room){
+    var levelName = activeLevelName;
+    return readJoineryItems(activeProjectHandle).then(function(items){
+      var onPlan = woMarkerKeys();
+      var here = items.filter(function(it){ return it.level === levelName && String(it.room || "").toLowerCase() === String(room).toLowerCase() && String(it.workOrderNo || "").trim() === w.wo; });
+      if (!here.length || !here.some(function(it){ return onPlan[woItemKey(it)]; })) return false;
+      var total = items.filter(function(it){ return String(it.workOrderNo || "").trim() === w.wo; }).length;
+      return showConfirmDialog("⚠ Double-up? " + (w.code || "It") + " (WO " + w.wo + ") is already in " + room + (here.length > 1 ? " (" + here.length + " there now)" : "") + ". Put another one in the same room? Only if there really is more than one there — its value is then shared " + (total + 1) + " ways.")
+        .then(function(ok){ return ok ? true : null; });
     });
   }
   function markerExistsIn(level, room, code){
@@ -11161,13 +11409,15 @@
   }
   // A work order dropped in a room: adds its item there (or places an
   // existing unplaced one), then re-shares the sell price.
-  function dropWorkOrderInRoom(w, room, pt){
+  function dropWorkOrderInRoom(w, room, pt, opts){
+    opts = opts || {};
     if (!deviceUserName){ showToast("Sign in with your name on the Projects screen first — every drop is logged under your name.", 4500); return Promise.resolve(false); }
     var who = deviceUserName, levelName = activeLevelName, at = new Date().toISOString();
     var created = null, count = 0, share = 0, code = w.code;
     return readJoineryItems(activeProjectHandle).then(function(items){
       var here = items.filter(function(it){ return it.level === levelName && String(it.room || "").toLowerCase() === room.toLowerCase(); });
       var mine = here.filter(function(it){ return String(it.workOrderNo || "").trim() === w.wo; })[0];
+      if (opts.another) mine = null; // (v41) one more in the same room (confirmed double-up): a new item, numbered
       var target = mine;
       if (!target){
         // the code is taken in this room by a different work order: numbered suffix, same rule as Add item
@@ -11190,11 +11440,14 @@
       if (res.already){ showToast(code + " is already on the plan in " + room + "."); refreshUnplacedForLevel(); return false; }
       showPlacedMarker(levelName, res.marker);
       registerAllItems = [];
-      offerUndo("Placed " + code + " in " + room + (w.sellPrice !== null && w.sellPrice !== undefined ? " — " + woMoney(share) + (count > 1 ? " each across " + count + " rooms" : "") : "") + ".",
-        { level: levelName, markerId: res.marker.id, room: room, code: code, createdItem: created ? { level: levelName, room: room, joineryId: code } : null, wo: w });
+      var copy = !!(opts.copy && created); // (v40) one of "make it multiples"' extra copies
+      offerUndo("Placed " + code + " in " + room + (opts.another ? " (another one in the same room)" : "") + (w.sellPrice !== null && w.sellPrice !== undefined ? " — " + woMoney(share) + (count > 1 ? " each across " + count + (opts.another ? "" : " rooms") : "") : "") + ".",
+        { level: levelName, markerId: res.marker.id, room: room, code: code, createdItem: created ? { level: levelName, room: room, joineryId: code } : null, wo: w, copy: copy });
       if (created) applyPcDateToNewItems(); // (v35) in the background
-      refreshUnplacedForLevel();
-      return true;
+      return (copy ? woAdjustCopies(w.wo, -1).catch(function(err){ console.error("Counting down the copies to place failed:", err); }) : Promise.resolve()).then(function(){
+        refreshUnplacedForLevel();
+        return true;
+      });
     }).catch(dropFailed);
   }
 
@@ -11214,8 +11467,13 @@
       var rooms = res[0].slice(), items = res[1];
       items.forEach(function(it){ if (it.level === levelName && it.room && rooms.indexOf(it.room) === -1) rooms.push(it.room); });
       rooms.sort(function(a, b){ return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }); });
-      var taken = {};
-      items.forEach(function(it){ if (it.level === levelName && String(it.workOrderNo || "").trim() === w.wo) taken[String(it.room).toLowerCase()] = true; });
+      // (v41) a room where it's already ON THE PLAN can still be picked (more than one in a room),
+      // with a double-up warning; one where it's only waiting to be placed just places that one
+      var taken = {}, waiting = {}, onPlan = woMarkerKeys();
+      items.forEach(function(it){
+        if (it.level !== levelName || String(it.workOrderNo || "").trim() !== w.wo) return;
+        if (onPlan[woItemKey(it)]) taken[String(it.room).toLowerCase()] = true; else waiting[String(it.room).toLowerCase()] = true;
+      });
       // suggestions: the nearest marker's room, then the report room / hint
       var suggested = [];
       var best = null, bestD = Infinity;
@@ -11236,7 +11494,7 @@
         (mineCount ? " — already in " + mineCount + " room" + (mineCount === 1 ? "" : "s") + "; its value will be split across " + (mineCount + 1) + "." : "");
       woRoomPickSearch.value = ""; woRoomPickNewInput.value = "";
       return new Promise(function(resolve){
-        woRoomPickState = { resolve: resolve, rooms: rooms, taken: taken, suggested: suggested };
+        woRoomPickState = { resolve: resolve, rooms: rooms, taken: taken, waiting: waiting, suggested: suggested };
         renderRoomPick();
         woRoomPickBackdrop.hidden = false;
       });
@@ -11248,9 +11506,9 @@
     var q = (woRoomPickSearch.value || "").trim().toLowerCase();
     var html = "";
     function btn(r, sug){
-      var taken = st.taken[r.toLowerCase()];
-      return "<button type=\"button\" class=\"room-pick" + (sug ? " suggested" : "") + "\" data-room=\"" + escapeHtml(r) + "\"" + (taken ? " disabled" : "") + ">" + escapeHtml(r) +
-        (taken ? " <i>(already here)</i>" : sug ? " <i>(" + (st.suggested[0] === r ? "nearest" : "suggested") + ")</i>" : "") + "</button>";
+      var taken = st.taken[r.toLowerCase()], waiting = st.waiting && st.waiting[r.toLowerCase()];
+      return "<button type=\"button\" class=\"room-pick" + (taken ? " taken" : sug ? " suggested" : "") + "\" data-room=\"" + escapeHtml(r) + "\">" + escapeHtml(r) +
+        (taken ? " <i>(already here — another one would be a double-up)</i>" : waiting ? " <i>(waiting to be placed here)</i>" : sug ? " <i>(" + (st.suggested[0] === r ? "nearest" : "suggested") + ")</i>" : "") + "</button>";
     }
     if (!q) st.suggested.forEach(function(r){ html += btn(r, true); });
     st.rooms.forEach(function(r){
@@ -11276,8 +11534,7 @@
     if (!woRoomPickNewInput.value.trim() || name === "plan"){ showToast("Type the new room's name first."); return; }
     var st = woRoomPickState;
     var existing = st && st.rooms.filter(function(r){ return r.toLowerCase() === name.toLowerCase(); })[0];
-    if (existing && st.taken[existing.toLowerCase()]){ showToast("It's already in " + existing + "."); return; }
-    closeRoomPick(existing || name);
+    closeRoomPick(existing || name); // (v41) already there -> the double-up question comes next
   });
   if (woRoomPickCancelBtn) woRoomPickCancelBtn.addEventListener("click", function(){ closeRoomPick(null); });
 
@@ -11633,6 +11890,7 @@
     planLastDrop = null;
     if (!d) return Promise.resolve(false);
     if (d.kind === "move") return undoMarkerMove(d); // (v34)
+    if (d.kind === "unplace" || d.kind === "level" || d.kind === "delete") return undoItemAction(d); // (v40)
     var who = deviceUserName || "";
     return readLevelFile(activeProjectHandle, activeProjectName, d.level).then(function(level){
       if (!level) return;
@@ -11653,12 +11911,545 @@
       }
       registerAllItems = [];
       showToast("Undone — " + d.code + " taken off the plan" + (d.createdItem ? " and out of " + d.room : "") + ".");
-      refreshUnplacedForLevel();
-      return true;
+      return (d.copy && d.wo ? woAdjustCopies(d.wo.wo, 1).catch(function(){}) : Promise.resolve()).then(function(){ // (v40) it's one to place again
+        refreshUnplacedForLevel();
+        return true;
+      });
     }).catch(function(err){
       console.error("Undo failed:", err);
       if (isReadFailed(err)) readFailedToast("the project's files");
       else showToast("Couldn't undo — try again, or delete it from the item's page.");
+      return false;
+    });
+  }
+
+  /* ============================== (v40) right-click (or press and hold) a placed item ==============================
+     Andrew (2026-09-29), importing joinery items: "we need the option when
+     dragging and dropping, to change to multiples (maybe right click on a
+     dropped item) and change the qty, then drag the new pin to a new
+     location. this will divide the total value by the amount of splits, and
+     also request you to add the new room code (drop down plus option to
+     type)"; "i have had a double up, we need an option to remove on right
+     click in the import page"; "and do move to other levels if zoned
+     wrong"; "and a remove from plan, that drops it back into the list".
+
+     A marker's menu (right-click; on a touch screen, press and hold):
+       Open item page · Make it multiples… · Move to another level… ·
+       Remove from plan (back into To place) · Delete — a double-up.
+     Multiples: "how many?" puts copiesToPlace on the work order
+       (work-orders.json); the extra ones show as dashed pins beside it (and
+       at the top of To place). Drag one where it goes -> pick its room (the
+       list, or type a new one) -> a new item there, and the sell price is
+       shared equally by all of them (woResplitValues, to the cent).
+     Move to another level: the item's level changes (logged in its
+       history), its marker comes off this plan and it waits in the other
+       level's To place list. Delete: PIN-confirmed; the record is kept in
+       Project Saves/Deleted Items/ and the value goes back to the rest.
+       Both only for an item nothing has happened to yet (no status, job
+       notes, drawings, ITPs, orders, reworks, site measures or dates of
+       its own -- the PC date is fine) -- anything else stays put.
+     Every one of them can be undone straight away (Undo under the plan).
+     To place rows get the same menu (move / delete; a work order with no
+     room can be taken off the list and put back), and the import dialog's
+     lines "Leave this one out" (see woApplyLeftOut). */
+  var planCtxMenu = document.getElementById("planCtxMenu");
+  var planCtxEntries = [];
+  var planCtxOpenedAt = 0;
+  var planCtxSuppressTap = false;
+  var planLongPressOpenedAt = 0;
+  var planRemovedWos = [];
+  var planItemsCache = [];
+  function openCtxMenu(clientX, clientY, title, entries){
+    planCtxEntries = entries;
+    planCtxMenu.innerHTML = "<div class=\"ctx-title\">" + escapeHtml(title) + "</div>" + entries.map(function(en, i){
+      return "<button type=\"button\" role=\"menuitem\" data-i=\"" + i + "\" class=\"" + (en.cls || "") + "\"" + (en.disabled ? " disabled" : "") + ">" + escapeHtml(en.label) + (en.note ? "<small>" + escapeHtml(en.note) + "</small>" : "") + "</button>";
+    }).join("");
+    planCtxMenu.hidden = false;
+    planCtxOpenedAt = Date.now();
+    var r = planCtxMenu.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    planCtxMenu.style.left = Math.max(8, Math.min(clientX, vw - r.width - 8)) + "px";
+    planCtxMenu.style.top = Math.max(8, Math.min(clientY, vh - r.height - 8)) + "px";
+  }
+  function closeCtxMenu(){ planCtxMenu.hidden = true; planCtxEntries = []; }
+  planCtxMenu.addEventListener("click", function(e){
+    var b = e.target.closest ? e.target.closest("button[data-i]") : null;
+    if (!b || b.disabled) return;
+    var en = planCtxEntries[+b.getAttribute("data-i")];
+    closeCtxMenu();
+    if (en && en.run) en.run();
+  });
+  document.addEventListener("pointerdown", function(e){ if (!planCtxMenu.hidden && !planCtxMenu.contains(e.target) && Date.now() - planCtxOpenedAt > 250) closeCtxMenu(); }, true);
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !planCtxMenu.hidden) closeCtxMenu(); });
+  window.addEventListener("popstate", function(){ if (!planCtxMenu.hidden) closeCtxMenu(); });
+
+  // A touch or pen held still on a marker for ~0.55 s opens its menu.
+  var planLongPress = null;
+  function planLongPressStart(e){
+    planLongPressCancel();
+    if (e.pointerType === "mouse" || !planSaved || planPinMode) return;
+    var w = planClientToWorld(e.clientX, e.clientY);
+    if (!planMarkerAt(w.x, w.y)) return;
+    var at = { x: e.clientX, y: e.clientY };
+    planLongPress = { at: at, timer: setTimeout(function(){
+      planLongPress = null;
+      if (Object.keys(planPointers).length !== 1 || planDragMoved) return;
+      planCtxSuppressTap = true;
+      planLongPressOpenedAt = Date.now();
+      if (planMarkerDrag){ applyMarkerLocally(planMarkerDrag.obj, planMarkerDrag.orig.x, planMarkerDrag.orig.y); planMarkerDrag = null; planRenderMarkers(); }
+      planOpenMenuAtClient(at.x, at.y);
+    }, 550) };
+  }
+  function planLongPressMove(e){ if (planLongPress && Math.hypot(e.clientX - planLongPress.at.x, e.clientY - planLongPress.at.y) > 8) planLongPressCancel(); }
+  function planLongPressCancel(){ if (planLongPress){ clearTimeout(planLongPress.timer); planLongPress = null; } }
+
+  function planOpenMenuAtClient(clientX, clientY){
+    if (!planSaved) return;
+    var w = planClientToWorld(clientX, clientY);
+    var copy = planCopyAt(w.x, w.y);
+    if (copy){
+      openCtxMenu(clientX, clientY, copy.w.code + " — one more to place", [
+        { label: "Drag it to its room", note: "then pick the room", disabled: true },
+        { label: "Cancel the extra ones", note: "keep " + copy.have + ", don't add more", cls: "danger", run: function(){ planSetCopies(copy.w, 0); } }
+      ]);
+      return;
+    }
+    var hit = planMarkerAt(w.x, w.y);
+    if (!hit) return;
+    stopPinMode();
+    planCtxSuppressTap = planCtxSuppressTap || !!Object.keys(planPointers).length;
+    var levelName = activeLevelName;
+    planFindItem(levelName, hit.roomName || "", hit.joineryCode || "").then(function(r){
+      if (levelName !== activeLevelName) return;
+      var it = r.item, code = hit.joineryCode || hit.roomName || "Marker";
+      var hasWo = !!(it && String(it.workOrderNo || "").trim());
+      openCtxMenu(clientX, clientY, code + (hit.roomName ? " · " + hit.roomName : ""), [
+        { label: "Open item page", disabled: !it, run: function(){ openJoineryItemPage(it, "planCanvas"); } },
+        { label: "Make it multiples…", note: hasWo ? "more than one — each goes in its own room, the value is shared" : "only for items from a work order", disabled: !hasWo, run: function(){ planAskMultiples(it); } },
+        { label: "Move to another level…", note: "zoned wrong? it goes into that level's To place list", disabled: !it, run: function(){ planMoveItemToLevel(it, hit); } },
+        { label: "Remove from plan", note: "back into the To place list", run: function(){ planUnplaceMarker(hit); } },
+        { label: "Delete — a double-up", note: "takes the item out of the project", cls: "danger", disabled: !it, run: function(){ planDeleteItem(it, hit); } }
+      ]);
+    }).catch(function(err){ console.error("Reading joinery items for the menu failed:", err); if (isReadFailed(err)) readFailedToast("joinery-items.json"); });
+  }
+  function planOpenListMenu(entry, clientX, clientY){
+    var d = woEntryDisplay(entry), title = (d.joineryId || "(no code)") + (d.room ? " · " + d.room : "");
+    if (entry.kind === "item"){
+      openCtxMenu(clientX, clientY, title, [
+        { label: "Move to another level…", note: "zoned wrong? it goes into that level's To place list", run: function(){ planMoveItemToLevel(entry.item, null); } },
+        { label: "Delete — a double-up", note: "takes the item out of the project", cls: "danger", run: function(){ planDeleteItem(entry.item, null); } }
+      ]);
+    } else if (entry.copy){
+      openCtxMenu(clientX, clientY, title + " — " + entry.w.copiesToPlace + " more to place", [
+        { label: "Change how many…", run: function(){ planAskMultiples(entry.items[0]); } },
+        { label: "Cancel the extra ones", note: "keep " + entry.items.length + ", don't add more", cls: "danger", run: function(){ planSetCopies(entry.w, 0); } }
+      ]);
+    } else if (entry.removed){
+      openCtxMenu(clientX, clientY, title + " · WO " + entry.w.wo, [
+        { label: "Put it back in the list", run: function(){ planSetWoRemoved(entry.w, false); } }
+      ]);
+    } else if (entry.items && entry.items.length){
+      openCtxMenu(clientX, clientY, title + " · WO " + entry.w.wo, [
+        { label: "Make it multiples…", note: "more than one — each goes in its own room, the value is shared", run: function(){ planAskMultiples(entry.items[0]); } }
+      ]);
+    } else {
+      openCtxMenu(clientX, clientY, title + " · WO " + entry.w.wo, [
+        { label: "Take it off the list", note: "a double-up, or not ours — it can be put back", cls: "danger", run: function(){ planSetWoRemoved(entry.w, true); } }
+      ]);
+    }
+  }
+  function planFindItem(levelName, room, code){
+    return readJoineryItems(activeProjectHandle).then(function(items){
+      var it = items.filter(function(x){ return x.level === levelName && (x.room || "") === room && (x.joineryId || "") === code; })[0];
+      return { items: items, item: it || null };
+    });
+  }
+  function planNeedName(what){
+    if (deviceUserName) return true;
+    showToast("Sign in with your name on the Projects screen first — " + what + " is logged under your name.", 4500);
+    return false;
+  }
+  function itemKeyMatch(a, b){ return a.level === b.level && (a.room || "") === (b.room || "") && (a.joineryId || "") === (b.joineryId || ""); }
+
+  /* ---- the work-order list: extra copies, taken off the list ---- */
+  function woAdjustCopies(wo, delta){
+    return woListRead(activeProjectHandle).then(function(list){
+      var w = (list.workOrders || []).filter(function(x){ return x.wo === wo; })[0];
+      if (!w) return null;
+      var n = Math.max(0, (Number(w.copiesToPlace) || 0) + delta);
+      if (n) w.copiesToPlace = n; else delete w.copiesToPlace;
+      return woListWrite(activeProjectHandle, list).then(function(){ planWoList = list; return n; });
+    });
+  }
+  function planSetCopies(w, n){
+    return woListRead(activeProjectHandle).then(function(list){
+      var rec = (list.workOrders || []).filter(function(x){ return x.wo === w.wo; })[0];
+      if (!rec){ showToast("WO " + w.wo + " isn't in the project's work order list — import its report first."); return null; }
+      if (n > 0){ rec.copiesToPlace = n; rec.copiesSetBy = deviceUserName || ""; rec.copiesSetAt = new Date().toISOString(); }
+      else delete rec.copiesToPlace;
+      return woListWrite(activeProjectHandle, list).then(function(){ planWoList = list; return refreshUnplacedForLevel().then(function(){ return n; }); });
+    }).catch(function(err){ console.error("Saving the work order list failed:", err); if (isReadFailed(err)) readFailedToast("work-orders.json"); else showToast("Couldn't save that — nothing was changed. Try again."); return null; });
+  }
+  function planSetWoRemoved(w, removed){
+    if (!planNeedName("changing the list")) return Promise.resolve(false);
+    return woListRead(activeProjectHandle).then(function(list){
+      var rec = (list.workOrders || []).filter(function(x){ return x.wo === w.wo; })[0];
+      if (!rec) return false;
+      if (removed){ rec.removed = true; rec.removedBy = deviceUserName; rec.removedAt = new Date().toISOString(); }
+      else { delete rec.removed; delete rec.removedBy; delete rec.removedAt; }
+      return woListWrite(activeProjectHandle, list).then(function(){
+        planWoList = list;
+        showToast(removed ? "WO " + w.wo + " (" + (w.code || "") + ") taken off the list — it's under “Taken off the list” if you need it back." : "WO " + w.wo + " is back in the list.", 5000);
+        return refreshUnplacedForLevel().then(function(){ return true; });
+      });
+    }).catch(function(err){ console.error("Saving the work order list failed:", err); if (isReadFailed(err)) readFailedToast("work-orders.json"); else showToast("Couldn't save that — nothing was changed. Try again."); return false; });
+  }
+
+  /* ---- Make it multiples ---- */
+  var planQtyBackdrop = document.getElementById("planQtyBackdrop");
+  var planQtyInput = document.getElementById("planQtyInput");
+  var planQtyState = null; // { w, have, resolve }
+  function planQtyRender(){
+    var st = planQtyState; if (!st) return;
+    var n = Math.floor(Number(planQtyInput.value) || 0);
+    var el = document.getElementById("planQtyEach");
+    if (n < 1){ el.textContent = ""; return; }
+    var sp = st.w.sellPrice;
+    el.textContent = (sp !== null && sp !== undefined ? woMoney(sp) + " ÷ " + n + " = " + woMoney(woSplitValue(sp, n)[n - 1]) + " each" : n + " in all") +
+      (n > st.have ? " — " + (n - st.have) + " more to drag onto the plan" : n < st.have ? " — it's in " + st.have + " rooms now: delete the extra ones instead" : "");
+  }
+  function planAskMultiples(item){
+    if (!item) return Promise.resolve(null);
+    if (!planNeedName("changing the quantity")) return Promise.resolve(null);
+    var wo = String(item.workOrderNo || "").trim();
+    return Promise.all([woListRead(activeProjectHandle), readJoineryItems(activeProjectHandle)]).then(function(res){
+      var w = (res[0].workOrders || []).filter(function(x){ return x.wo === wo; })[0];
+      if (!w){ showToast("WO " + wo + " isn't in the project's work order list — import its report first, then try again.", 5000); return null; }
+      var mine = res[1].filter(function(it){ return String(it.workOrderNo || "").trim() === wo; });
+      var have = mine.length, pending = Number(w.copiesToPlace) || 0;
+      document.getElementById("planQtyTitle").textContent = "How many " + (w.code || item.joineryId) + "?";
+      document.getElementById("planQtySub").textContent = [w.desc, "WO " + wo, (w.sellPrice !== null && w.sellPrice !== undefined) ? woMoney(w.sellPrice) + " in all" : ""].filter(Boolean).join(" · ") +
+        " — in " + mine.map(function(it){ return it.room; }).join(", ") + ". Drag each extra one to its room (the same room asks first — a double-up?); the value is shared equally.";
+      planQtyInput.value = String(have + pending > have ? have + pending : have + 1);
+      return new Promise(function(resolve){
+        planQtyState = { w: w, have: have, resolve: resolve };
+        planQtyRender();
+        planQtyBackdrop.hidden = false;
+        setTimeout(function(){ try{ planQtyInput.focus(); planQtyInput.select(); }catch(e){} }, 30);
+      }).then(function(n){
+        if (n === null) return null;
+        if (n < have){ showToast((w.code || item.joineryId) + " is in " + have + " rooms now — right-click the extra ones and Delete them to go down to " + n + ".", 6000); return null; }
+        var extra = n - have;
+        return planSetCopies(w, extra).then(function(res2){
+          if (res2 === null) return null;
+          showToast(extra ? extra + " more " + (w.code || item.joineryId) + " to place — drag each dashed pin (next to it on the plan, or in To place) to its room." : (w.code || item.joineryId) + ": no extra ones to place.", 6500);
+          return extra;
+        });
+      });
+    }).catch(function(err){ console.error("Make it multiples failed:", err); if (isReadFailed(err)) readFailedToast("the project's files"); else showToast("Couldn't do that — nothing was changed. Try again."); return null; });
+  }
+  function closePlanQty(value){
+    var st = planQtyState; planQtyState = null; planQtyBackdrop.hidden = true;
+    if (st) st.resolve(value);
+  }
+  planQtyInput.addEventListener("input", planQtyRender);
+  planQtyInput.addEventListener("keydown", function(e){ if (e.key === "Enter") document.getElementById("planQtyOkBtn").click(); });
+  document.getElementById("planQtyMinus").addEventListener("click", function(){ planQtyInput.value = String(Math.max(1, (Math.floor(Number(planQtyInput.value)) || 1) - 1)); planQtyRender(); });
+  document.getElementById("planQtyPlus").addEventListener("click", function(){ planQtyInput.value = String(Math.min(50, (Math.floor(Number(planQtyInput.value)) || 0) + 1)); planQtyRender(); });
+  document.getElementById("planQtyCancelBtn").addEventListener("click", function(){ closePlanQty(null); });
+  document.getElementById("planQtyOkBtn").addEventListener("click", function(){
+    var n = Math.floor(Number(planQtyInput.value) || 0);
+    if (n < 1 || n > 50){ showToast("Type how many — 1 to 50."); return; }
+    closePlanQty(n);
+  });
+
+  // The extra copies' dashed pins, beside the first marker of their work order on this level.
+  var planCopies = [];   // [{ w, have, x, y, r }]
+  var planCopyDrag = null;
+  function planComputeCopies(){
+    var out = [];
+    if (!planSaved || !planSaved.objects) return out;
+    var markers = planSaved.objects.filter(function(o){ return o.type === "roomlink"; });
+    ((planWoList && planWoList.workOrders) || []).forEach(function(w){
+      var n = Number(w.copiesToPlace) || 0;
+      if (!n) return;
+      var mine = planItemsCache.filter(function(it){ return String(it.workOrderNo || "").trim() === w.wo; });
+      var anchor = null;
+      mine.some(function(it){
+        if (it.level !== activeLevelName) return false;
+        anchor = markers.filter(function(o){ return String(o.roomName || "").toLowerCase() === String(it.room || "").toLowerCase() && String(o.joineryCode || "").toLowerCase() === String(it.joineryId || "").toLowerCase(); })[0] || null;
+        return !!anchor;
+      });
+      if (!anchor) return;
+      // a column to its right, each with room for its code under it
+      var r = Number(anchor.r) || 27, tsz = 32 * PLAN_TEXT_SCALE;
+      var dx = Math.max(r * 2.9, planTextWidth((w.code || "") + " +", tsz) / 2 + planTextWidth(String(anchor.joineryCode || ""), tsz) / 2 + 16);
+      for (var i = 0; i < Math.min(n, 12); i++) out.push({ w: w, have: mine.length, x: anchor.x + dx, y: anchor.y + i * (2 * r + tsz + 16), r: r, i: i });
+    });
+    return out;
+  }
+  function planRenderCopies(){
+    planCopies = planComputeCopies();
+    planCopies.forEach(function(c){
+      var d = (planCopyDrag && planCopyDrag.copy.w.wo === c.w.wo && planCopyDrag.copy.i === c.i) ? planCopyDrag.at : c;
+      var dot = document.createElementNS(SVG_NS, "circle");
+      dot.setAttribute("class", "copy-pin");
+      dot.setAttribute("cx", d.x); dot.setAttribute("cy", d.y); dot.setAttribute("r", c.r);
+      dot.setAttribute("stroke-width", Math.max(2, c.r * 0.12));
+      planCanvasMarkersG.appendChild(dot);
+      var t = document.createElementNS(SVG_NS, "text");
+      var tsz = 32 * PLAN_TEXT_SCALE;
+      t.setAttribute("class", "copy-pin-label");
+      t.setAttribute("x", d.x); t.setAttribute("y", d.y + c.r + tsz * 0.95); t.setAttribute("text-anchor", "middle");
+      t.setAttribute("font-size", tsz); t.setAttribute("fill", "#fff"); t.setAttribute("paint-order", "stroke"); t.setAttribute("stroke", "#0b0707"); t.setAttribute("stroke-width", Math.max(4, tsz * 0.12));
+      t.textContent = (c.w.code || "") + " +";
+      planCanvasMarkersG.appendChild(t);
+    });
+  }
+  function planCopyAt(wx, wy){
+    var hitR = 28 / planView.scale, best = null, bestD = Infinity;
+    planCopies.forEach(function(c){ var dd = Math.hypot(c.x - wx, c.y - wy); if (dd <= Math.max(c.r, hitR) && dd < bestD){ best = c; bestD = dd; } });
+    return best;
+  }
+  function planCopyDragStart(e){
+    if (!planSaved || !planCopies.length) return false;
+    var w = planClientToWorld(e.clientX, e.clientY);
+    var c = planCopyAt(w.x, w.y);
+    if (!c) return false;
+    stopPinMode();
+    planCopyDrag = { copy: c, pointerId: e.pointerId, startWorld: w, at: { x: c.x, y: c.y }, moved: false };
+    try{ planCanvasSvg.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+    return true;
+  }
+  function planCopyDragMove(e){
+    var d = planCopyDrag, w = planClientToWorld(e.clientX, e.clientY);
+    var nx = d.copy.x + (w.x - d.startWorld.x), ny = d.copy.y + (w.y - d.startWorld.y);
+    if (!d.moved && Math.hypot(nx - d.copy.x, ny - d.copy.y) * planView.scale < 5) return;
+    d.moved = true; d.at = { x: nx, y: ny };
+    if (!planMarkerDragRaf) planMarkerDragRaf = requestAnimationFrame(function(){ planMarkerDragRaf = 0; planRenderMarkers(); });
+  }
+  function planCopyDragEnd(e){
+    var d = planCopyDrag;
+    planCopyDrag = null;
+    if (!d) return Promise.resolve(false);
+    if (!d.moved){ planRenderMarkers(); showToast("Drag it to where it goes, then pick its room."); return Promise.resolve(false); }
+    var pt = { x: Math.round(d.at.x), y: Math.round(d.at.y) };
+    return dropEntryAt({ kind: "wo", w: d.copy.w, copy: true }, pt).then(function(done){ planRenderMarkers(); return done; });
+  }
+
+  /* ---- Remove from plan (back into To place) ---- */
+  function planUnplaceMarker(obj){
+    var levelName = activeLevelName, snap = JSON.parse(JSON.stringify(obj)), code = obj.joineryCode || obj.roomName || "Marker";
+    return readLevelFile(activeProjectHandle, activeProjectName, levelName).then(function(level){
+      if (!level) return Promise.reject(new Error("This level's file isn't there"));
+      var before = (level.markers || []).length;
+      level.markers = (level.markers || []).filter(function(o){ return o.id !== obj.id; });
+      if (level.markers.length === before){ var e = new Error("That marker isn't on the plan any more"); e.code = "marker_gone"; return Promise.reject(e); }
+      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level);
+    }).then(function(){
+      if (levelName === activeLevelName && planSaved){ planSaved.objects = (planSaved.objects || []).filter(function(o){ return o.id !== obj.id; }); planRenderMarkers(); }
+      registerAllItems = [];
+      offerUndo("Took " + code + " off the plan — it's back in To place.", { kind: "unplace", level: levelName, marker: snap, code: code });
+      return refreshUnplacedForLevel().then(function(){ return true; });
+    }).catch(function(err){ markerSaveFailed(err); return false; });
+  }
+  function planReaddMarker(levelName, snap){
+    return readLevelFile(activeProjectHandle, activeProjectName, levelName).then(function(level){
+      if (!level) return null;
+      level.markers = level.markers || [];
+      if (level.markers.some(function(o){ return o.id === snap.id; }) || markerExistsIn(level, snap.roomName, snap.joineryCode)) return null;
+      if (snap.roomName && !level.rooms.some(function(r){ return r.name.toLowerCase() === String(snap.roomName).toLowerCase(); })) level.rooms.push({ name: snap.roomName });
+      level.markers.push(snap);
+      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){
+        if (levelName === activeLevelName && planSaved){ planSaved.objects = planSaved.objects || []; planSaved.objects.push(JSON.parse(JSON.stringify(snap))); planRenderMarkers(); }
+        return snap;
+      });
+    });
+  }
+  function planTakeMarkerOff(levelName, room, code){ // resolves the marker taken off (or null)
+    return readLevelFile(activeProjectHandle, activeProjectName, levelName).then(function(level){
+      if (!level) return null;
+      var m = (level.markers || []).filter(function(o){ return o.type === "roomlink" && String(o.roomName || "").toLowerCase() === String(room || "").toLowerCase() && String(o.joineryCode || "").toLowerCase() === String(code || "").toLowerCase(); })[0];
+      if (!m) return null;
+      level.markers = level.markers.filter(function(o){ return o !== m; });
+      return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){
+        if (levelName === activeLevelName && planSaved){ planSaved.objects = (planSaved.objects || []).filter(function(o){ return o.id !== m.id; }); planRenderMarkers(); }
+        return m;
+      });
+    });
+  }
+
+  /* ---- is anything recorded against it yet? (move / delete only if not) ---- */
+  function itemActivity(item){
+    var ph = activeProjectHandle, key = joineryItemKey(item), found = [], unsure = [];
+    function chk(label, p, test){
+      return p.then(function(v){ if (v && v.skipped) unsure.push(label); if (test(v || [])) found.push(label); }, function(err){ console.error("Checking " + label + " failed:", err); unsure.push(label); });
+    }
+    function any(v){ return !!(v && v.length); }
+    function pcOnly(evs){ return evs.some(function(e){ return !((e.kind === "set" && e.note === PC_DATE_NOTE) || (e.kind === "clear" && e.note === "PC Date removed")); }); }
+    return Promise.all([
+      chk("status or job notes", readItemEventFolder(ph, joineryStatusEventsBranchName(), key), any),
+      chk("schedule dates of its own", readItemEventFolder(ph, "Joinery Schedule", key), pcOnly),
+      chk("machining", readItemEventFolder(ph, "Machining Flags", key), any),
+      chk("solid surface", readItemEventFolder(ph, "Solid Surface Completion", key), any),
+      chk("solid surface dates", readItemEventFolder(ph, "Solid Surface Schedule", key), any),
+      chk("shop drawings", historyFromShopDrawings(ph, item), any),
+      chk("orders", readSubOrdersForItem(ph, item), any),
+      chk("reworks", historyFromReworks(ph, item), any),
+      chk("site measures", listJoineryOverlaysForItem(ph, item), any),
+      chk("job notes", listJobNotesForItem(ph, item), any),
+      chk("an Install ITP", readItpChecklistRaw(ph, "Install ITP", item), function(v){ return !!(v && !Array.isArray(v)); }),
+      chk("a Manufacture ITP", readItpChecklistRaw(ph, "Manufacture ITP", item), function(v){ return !!(v && !Array.isArray(v)); }),
+      chk("a Delivery ITP", readItpChecklistRaw(ph, "Delivery ITP", item), function(v){ return !!(v && !Array.isArray(v)); })
+    ]).then(function(){ return { found: found, unsure: unsure }; });
+  }
+  function itemActivityBlocks(item, what){
+    return itemActivity(item).then(function(a){
+      if (a.found.length){ showToast((item.joineryId || "It") + " already has " + a.found.join(", ") + " — it can't be " + what + " here.", 7000); return true; }
+      if (a.unsure.length){ showToast("Couldn't check " + (item.joineryId || "it") + "'s " + a.unsure.join(", ") + " (still syncing?) — nothing was changed. Try again in a moment.", 7000); return true; }
+      return false;
+    });
+  }
+
+  /* ---- Move to another level ---- */
+  var planLevelPickBackdrop = document.getElementById("planLevelPickBackdrop");
+  var planLevelPickResolve = null;
+  function pickOtherLevel(item){
+    return listExistingLevelsStrict(activeProjectHandle).then(function(levels){
+      var others = levels.filter(function(lv){ return lv !== item.level; });
+      if (!others.length){ showToast("This project has no other level to move it to."); return null; }
+      document.getElementById("planLevelPickTitle").textContent = "Move " + (item.joineryId || "it") + " to which level?";
+      document.getElementById("planLevelPickSub").textContent = "Now on " + item.level + ", in " + item.room + ". It'll wait in that level's To place list, in the same room.";
+      document.getElementById("planLevelPickList").innerHTML = others.map(function(lv){ return "<button type=\"button\" class=\"room-pick\" data-level=\"" + escapeHtml(lv) + "\">" + escapeHtml(lv) + "</button>"; }).join("");
+      planLevelPickBackdrop.hidden = false;
+      return new Promise(function(resolve){ planLevelPickResolve = resolve; });
+    });
+  }
+  function closeLevelPick(v){ planLevelPickBackdrop.hidden = true; var r = planLevelPickResolve; planLevelPickResolve = null; if (r) r(v); }
+  document.getElementById("planLevelPickList").addEventListener("click", function(e){ var b = e.target.closest ? e.target.closest("button[data-level]") : null; if (b) closeLevelPick(b.getAttribute("data-level")); });
+  document.getElementById("planLevelPickCancelBtn").addEventListener("click", function(){ closeLevelPick(null); });
+  function planMoveItemToLevel(item, markerObj){
+    if (!item || !planNeedName("moving an item")) return Promise.resolve(false);
+    var fromLevel = item.level, who = deviceUserName;
+    return itemActivityBlocks(item, "moved").then(function(blocked){
+      if (blocked) return false;
+      return pickOtherLevel(item).then(function(toLevel){
+        if (!toLevel) return false;
+        var moved = null, markerSnap = null;
+        return readJoineryItems(activeProjectHandle).then(function(items){
+          var rec = items.filter(function(x){ return itemKeyMatch(x, item); })[0];
+          if (!rec){ var e = new Error("That item isn't there any more"); e.code = "item_gone"; throw e; }
+          if (items.some(function(x){ return x !== rec && x.level === toLevel && itemKeyMatch(x, { level: toLevel, room: rec.room, joineryId: rec.joineryId }); })){
+            showToast(toLevel + " already has " + rec.joineryId + " in " + rec.room + " — nothing was moved.", 6000); return null;
+          }
+          rec.level = toLevel;
+          rec.editHistory = Array.isArray(rec.editHistory) ? rec.editHistory : [];
+          rec.editHistory.push({ at: new Date().toISOString(), by: who, changes: [{ field: "Level", from: fromLevel, to: toLevel }], note: "Moved to another level from the plan" });
+          moved = rec;
+          return writeJoineryItems(activeProjectHandle, items);
+        }).then(function(ok){
+          if (ok === null) return false;
+          return planTakeMarkerOff(fromLevel, moved.room, moved.joineryId).then(function(m){
+            markerSnap = m;
+            registerAllItems = [];
+            applyPcDateToNewItems(); // the PC date follows it (in the background)
+            offerUndo("Moved " + moved.joineryId + " to " + toLevel + " — it's in that level's To place list.", { kind: "level", level: fromLevel, toLevel: toLevel, room: moved.room, code: moved.joineryId, marker: markerSnap });
+            return refreshUnplacedForLevel().then(function(){ return true; });
+          });
+        });
+      });
+    }).catch(function(err){
+      console.error("Moving the item failed:", err);
+      if (err && err.code === "item_gone") showToast("That item isn't there any more (changed on another device?) — reopen the plan.");
+      else if (isReadFailed(err)) readFailedToast("the project's files");
+      else showToast("Couldn't move it — nothing was changed. Try again.");
+      return false;
+    });
+  }
+
+  /* ---- Delete (a double-up) ---- */
+  function planDeleteItem(item, markerObj){
+    if (!item || !planNeedName("deleting an item")) return Promise.resolve(false);
+    var who = deviceUserName;
+    return itemActivityBlocks(item, "deleted").then(function(blocked){
+      if (blocked) return false;
+      var wo = String(item.workOrderNo || "").trim();
+      return showConfirmDialog("Delete " + (item.joineryId || "this item") + " in " + item.room + " (" + item.level + ")?" + (wo ? " Its share of WO " + wo + " goes back to the rest." : "") + " You can Undo straight after.").then(function(ok){
+        if (!ok) return false;
+        return readUsersCsv().then(function(rows){
+          if (!findUserRowCI(rows, who)){ showToast("“" + who + "” is no longer in the shared name/PIN list — sign in again."); return null; }
+          return openNumberpad({ title: "Confirm PIN", subtitle: "to delete " + (item.joineryId || "this item") + " as “" + who + "”",
+            verify: function(pin){ return readUsersCsv().then(function(fresh){ var r = findUserRowCI(fresh, who); return !!(r && r.pin === pin); }); } });
+        }).then(function(pin){
+          if (pin === null || pin === undefined){ return false; }
+          return planDoDelete(item, who);
+        });
+      });
+    }).catch(function(err){
+      console.error("Deleting the item failed:", err);
+      if (err && err.code === "item_gone") showToast("That item isn't there any more (changed on another device?) — reopen the plan.");
+      else if (isReadFailed(err)) readFailedToast("the project's files");
+      else showToast("Couldn't delete it — nothing was changed. Try again.");
+      return false;
+    });
+  }
+  function planDoDelete(item, who){
+    var levelName = item.level, removed = null, markerSnap = null, at = new Date().toISOString();
+    return Promise.all([readJoineryItems(activeProjectHandle), woListRead(activeProjectHandle).catch(function(){ return { workOrders: [] }; })]).then(function(res){
+      var items = res[0], list = res[1];
+      var idx = -1;
+      items.some(function(x, i){ if (itemKeyMatch(x, item)){ idx = i; return true; } return false; });
+      if (idx === -1){ var e = new Error("That item isn't there any more"); e.code = "item_gone"; throw e; }
+      removed = items.splice(idx, 1)[0];
+      var wo = String(removed.workOrderNo || "").trim();
+      var w = wo ? (list.workOrders || []).filter(function(x){ return x.wo === wo; })[0] : null;
+      if (w) woResplitValues(items, { workOrders: [w] }, who, "Deleted " + removed.joineryId + " in " + removed.room + " (a double-up)");
+      return writeJoineryItems(activeProjectHandle, items);
+    }).then(function(){
+      // the record is kept: Project Saves/Deleted Items/<who> - <stamp> - <code>.json
+      return projectDir(activeProjectHandle, [projectSavesDirName(), "Deleted Items"], true).then(function(dirH){
+        return dirH.getFileHandle(sanitizeFileBase(who + " - " + statusEventStampFromIso(at) + " - " + (removed.joineryId || "item")) + ".json", { create: true });
+      }).then(function(fh){ return fh.createWritable(); }).then(function(w){
+        return w.write(JSON.stringify({ kind: "deletedItem", reason: "double-up", by: who, at: at, item: removed }, null, 1)).then(function(){ return w.close(); });
+      }).catch(function(err){ console.error("Keeping the deleted item's record failed:", err); });
+    }).then(function(){
+      return planTakeMarkerOff(levelName, removed.room, removed.joineryId).catch(function(err){ console.error("Taking the deleted item's marker off failed:", err); return null; });
+    }).then(function(m){
+      markerSnap = m;
+      registerAllItems = [];
+      offerUndo("Deleted " + removed.joineryId + " in " + removed.room + ".", { kind: "delete", level: levelName, item: removed, marker: markerSnap, code: removed.joineryId, room: removed.room });
+      return refreshUnplacedForLevel().then(function(){ return true; });
+    });
+  }
+
+  /* ---- Undo (unplace / level / delete) ---- */
+  function undoItemAction(d){
+    var who = deviceUserName || "";
+    var p;
+    if (d.kind === "unplace"){
+      p = planReaddMarker(d.level, d.marker).then(function(){ showToast("Undone — " + d.code + " is back on the plan."); });
+    } else if (d.kind === "level"){
+      p = readJoineryItems(activeProjectHandle).then(function(items){
+        var rec = items.filter(function(x){ return itemKeyMatch(x, { level: d.toLevel, room: d.room, joineryId: d.code }); })[0];
+        if (!rec) return;
+        rec.level = d.level;
+        rec.editHistory = Array.isArray(rec.editHistory) ? rec.editHistory : [];
+        rec.editHistory.push({ at: new Date().toISOString(), by: who, changes: [{ field: "Level", from: d.toLevel, to: d.level }], note: "Undo: moved back" });
+        return writeJoineryItems(activeProjectHandle, items);
+      }).then(function(){ return d.marker ? planReaddMarker(d.level, d.marker) : null; }).then(function(){ applyPcDateToNewItems(); showToast("Undone — " + d.code + " is back on " + d.level + "."); });
+    } else {
+      p = Promise.all([readJoineryItems(activeProjectHandle), woListRead(activeProjectHandle).catch(function(){ return { workOrders: [] }; })]).then(function(res){
+        var items = res[0], list = res[1];
+        if (!items.some(function(x){ return itemKeyMatch(x, d.item); })) items.push(d.item);
+        var wo = String(d.item.workOrderNo || "").trim();
+        var w = wo ? (list.workOrders || []).filter(function(x){ return x.wo === wo; })[0] : null;
+        if (w) woResplitValues(items, { workOrders: [w] }, who, "Undo: " + d.code + " put back in " + d.room);
+        return writeJoineryItems(activeProjectHandle, items);
+      }).then(function(){ return d.marker ? planReaddMarker(d.level, d.marker) : null; }).then(function(){ showToast("Undone — " + d.code + " is back in " + d.room + "."); });
+    }
+    return p.then(function(){ registerAllItems = []; return refreshUnplacedForLevel().then(function(){ return true; }); }).catch(function(err){
+      console.error("Undo failed:", err);
+      if (isReadFailed(err)) readFailedToast("the project's files"); else showToast("Couldn't undo — try again.");
       return false;
     });
   }
@@ -11703,6 +12494,9 @@
     planTapForTest: function(x, y){ onPlanTap(x, y); },
     planSavedMarkersForTest: function(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === 'roomlink'; }).map(function(o){ return { roomName: o.roomName, joineryCode: o.joineryCode, x: o.x, y: o.y }; }); },
     refreshUnplacedForTest: function(){ return refreshUnplacedForLevel(); },
+    planCopiesForTest: function(){ return planCopies.map(function(c){ return { wo: c.w.wo, code: c.w.code, x: c.x, y: c.y, have: c.have }; }); }, // (v40)
+    ctxMenuForTest: function(){ return planCtxMenu.hidden ? null : { title: planCtxMenu.querySelector(".ctx-title").textContent, items: planCtxEntries.map(function(e){ return { label: e.label, disabled: !!e.disabled }; }) }; },
+    openMarkerMenuForTest: function(x, y){ var r = planCanvasSvg.getBoundingClientRect(); planOpenMenuAtClient(r.left + planView.tx + x * planView.scale, r.top + planView.ty + y * planView.scale); },
     loadDeviceUserNameForTest: function(){ return loadDeviceUserName(); },
     // (v33) rework register / item card fold the rework event files
     setPrintDesktopForTest: function(v){ printDesktopForTest = v; },

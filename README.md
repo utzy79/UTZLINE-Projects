@@ -1,6 +1,55 @@
 # UTZLINE Projects — installable app
 
-**Current version: v37** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v41 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v41 (2026-09-29) — RC 1.0: more than one in a room (with a double-up warning); the room is editable.** Andrew: *"when importing / dupliccating, we still need the option to drag into the same room, (may be multiples in a room) but warn that this is a double up"* and *"edit joinery item needs the room editable"*.
+
+- **The same room again.**
+  - In "Which room?", a room that already has the work order on the plan can be picked now. It's marked in amber: *(already here — another one would be a double-up)*.
+  - Picking it asks first: *"⚠ Double-up? J.001 (WO 100) is already in G.01 Waiting. Put another one in the same room? Only if there really is more than one there — its value is then shared 2 ways."*
+  - OK adds **"J.001 2"** in that room (the numbered suffix, as Add item does). Cancel adds nothing.
+  - This works for dragging a work order again and for Make it multiples' extra pins. Typing an existing room's name gets the same question.
+  - A room where it's only *waiting* to be placed just places that one — no warning.
+- **Edit joinery item: the room.**
+  - The dialog's Room is a select of the level's rooms, plus "+ New room…" to type one.
+  - Saving uses the PIN as before, logs a "Room" change in the item's history, moves its marker on the plan with it, adds a typed room to the level, and keeps the PC date.
+  - It's refused for a room that already has that Joinery ID.
+  - It's also refused for an item that has anything recorded against it (status, job notes, drawings, ITPs, orders, reworks, site measures, its own dates), so none of that is left behind under the old room. Its other fields still save.
+  - Level and Joinery ID stay fixed. Use the plan's "Move to another level" for the level.
+- **History:** a "Check measured" step written by Site Measure's new *Site measure not required* reads "Check measured — site measure not required".
+- Tests: `run_projects_v41_same_room_edit_room.js`; `run_projects_wo_cost_import.js` and `run_edit_joinery_item_pin_traceability.js` updated for the new behaviour.
+
+**v40 (2026-09-29) — RC 1.0: right-click (or press and hold) a placed item.** Andrew, importing joinery items: *"we need the option when dragging and dropping, to change to multiples (maybe right click on a dropped item) and change the qty, then drag the new pin to a new location. this will divide the total value by the amount of splits, and also request you to add the new room code (drop down plus option to type)"*, *"i have had a double up, we need an option to remove on right click in the import page"*, *"and do move to other levels if zoned wrong"*, *"and a remove from plan, that drops it back into the list"*. Still shown as RC 1.0 (*"bring it though as RC 1.0"*).
+
+- **A marker's menu** on a level's plan (right-click; on a tablet, press and hold) has five options:
+  - **Open item page.**
+  - **Make it multiples…** asks how many; the dialog shows the value each will get (e.g. $900.00 ÷ 3 = $300.00 each).
+    - The extra ones appear as dashed pins in a column beside it, and at the top of To place.
+    - Drag one to where it goes and pick its room from the room list, or type a new room.
+    - A new item is made there, and the work order's sell price is shared equally by all of them, to the cent, logged on each.
+    - Right-click a dashed pin to cancel the extra ones.
+  - **Move to another level…** is for an item that was zoned wrong. It goes into that level's To place list in the same room, logged in its history as a Level change, and its PC date follows it.
+  - **Remove from plan** takes its marker off; the item goes back into the To place list.
+  - **Delete — a double-up** asks first and needs your PIN. The item comes out of the project, its share of the work order goes back to the rest, and the record is kept in `Project Saves/Deleted Items/`.
+- **Limits on moving and deleting.** Move and Delete only work on an item nothing has happened to yet: no status, job notes, shop drawings, ITPs, orders, reworks, site measures, or schedule dates of its own (the PC date is fine). Otherwise they say what it has and change nothing.
+- **Undo.** Every one of these can be undone straight away from the bar under the plan.
+- **To place rows** have a menu too:
+  - An unplaced item can be moved to another level or deleted.
+  - A work order with no room can be **taken off the list**. It sits under "Taken off the list" and can be put back.
+  - A work order already in a room can be made multiples.
+- **The import page:** right-click (or press and hold) a line and choose **Leave this one out**. It isn't imported (a double-up, or not ours). "Put it back" undoes that before you import.
+- Test: `run_projects_v40_marker_menu.js`.
+
+**v39 (2026-09-29) — RC 1.0.** Andrew: *"ok, now change them all to version RC 1.0. and have that on the logos (small)"*.
+
+- The app is now **RC 1.0** (release candidate 1.0) across the UTZLINE family. A small **RC 1.0** tag sits beside the logo in the header.
+- The build number (v39) still counts up underneath, so installed copies pick up each update. It's also what the Windows installer "Setup RC 1.0" contains.
+
+**v38 (2026-09-29) — Works offline for PDF imports (and as a desktop app); plan marker text 25% smaller.** Andrew: *"then i need an exe for projects"*, and *"make indicater text 25% smaller"* (the plan markers).
+
+- **pdf.js is in the folder now.** `pdf.min.js` and `pdf.worker.min.js` (2.16.105, the same copies Site Measure ships) replace the cdnjs links. Importing a work order report, a floor plan or its labels no longer needs an internet connection. It's also what the Windows installer (UTZLINE Projects Setup v38.exe) runs.
+- **Marker codes are 25% smaller** on the plan (24 instead of 32). They sit a little closer to their dot. Auto-placement uses the same size, so new markers go a little closer to their labels. Nothing saved changes.
+- Tests: `run_projects_v35_placement.js` now checks 24; the WO import tests read the real PDFs with the local pdf.js.
 
 **v37 (2026-09-29) — Import work orders: "How to read this report".** Andrew: *"on the import page, we need a way to map out the zones , wo numbers, etc. im thing you give me a selector for the first one where we can tell the app what the codes mean. as some of my imports dont work."* — with the 3749 New Mount Barker Hospital Work Order Cost Analysis, which v36 read as 0 rooms (all 246 work orders "with no room").
 

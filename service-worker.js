@@ -548,12 +548,18 @@ var ICON_VERSION = "v1";
 // v37 (2026-09-29): Import work orders -- "How to read this report": the first line's parts, each with a selector for what it
 //   means (zone / zone kept in the room number / part of the room number / ignore; joinery code rule); any room-code shape
 //   ("2-C1.EQ.002 Dropoff - Cleanup", lists, ranges); remembered per project.
-var CACHE_NAME = "utzline-projects-cache-v45";
+// v38 (2026-09-29): pdf.js + its worker from this folder (were the CDN) -- PDF imports work offline; plan marker codes 25% smaller.
+// v39 (2026-09-29): RC 1.0 -- the version is shown as RC 1.0, with a small "RC 1.0" tag on the logo.
+// v40 (2026-09-29): RC 1.0 -- right-click / press and hold a placed item: multiples, move level, remove from plan, delete a double-up; import lines can be left out.
+// v41 (2026-09-29): RC 1.0 -- the same room again (with a double-up warning); the room is editable in Edit joinery item.
+var CACHE_NAME = "utzline-projects-cache-v49";
 
 var PRECACHE_URLS = [
   "./",
   "./index.html",
   "./jspdf.umd.min.js",
+  "./pdf.min.js", // (v38)
+  "./pdf.worker.min.js", // (v38)
   "./manifest.json?v=" + ICON_VERSION,
   "./icons/icon-192.png?v=" + ICON_VERSION,
   "./icons/icon-512.png?v=" + ICON_VERSION,
