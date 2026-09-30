@@ -1,6 +1,33 @@
 # UTZLINE Projects — installable app
 
-**Current version: v42 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v46 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v46 (2026-09-29) — RC 1.0: the ITP cards read the ITPs' change files.**
+
+- The three ITPs now write a small change file with every checklist save, as well as the whole checklist (Andrew: *"shouldnt everything run like this. isnt that the ultimate failsafe"*). The joinery item's ITP card and the delivery pin / snapshot read the whole file plus any change files it hasn't taken in yet, so when two tablets saved the same checklist offline, both tablets' changes show here.
+
+**v45 (2026-09-29) — RC 1.0: REV 0, A, B …; Cutting file and Notes on the joinery summary; the Delivery ITP shows properly.**
+
+- **Shop drawing revisions start at REV 0.** Andrew: *"all revisions start at REV 0  Not REV A  It goes 0 A B C D E etc..."*. A drawing's revisions are put in the order they were saved and labelled by position: REV 0, then REV A, B, C … A first revision saved as "REV A" before today now shows as REV 0. Nothing on disk is renamed. A returned copy shows the label of the revision it answers. The same in the Scheduler, Machine Schedule and Site Measure / Viewer.
+- **Cutting file and Notes cards.** Andrew: *"schedules needs a column where a cutting filename can be pated into and stored. this becomes part of the joinery summary. also a notes column where notes can be added, saved, deleted one by onr"*. They're the same records the three schedules show. Paste the cutting file's name and it saves; notes are added one at a time, and each has its own Delete (tap twice). History lists both.
+- **The ITPs card shows Delivery ITP properly.** Andrew: *"delivery itp does not show up in summary page. it says 5/5 but thats it"*. Every ITP was judged by "both signatures", but Delivery ITP is signed off by the driver (the site supervisor's signature is optional), with no "No", a photo and a delivery pin. A finished delivery now says "Signed off — <name> (<date>)", with its photo count and PDF. An unfinished one says what it still needs. Every ITP now says who has signed.
+- Two saves of the same file at once are done one after the other. Marking an order received never re-creates an Orders file that was removed in the meantime.
+
+**v44 (2026-09-29) — RC 1.0: no more random "couldn't read … (still syncing?)".** Andrew, after the Scheduler's job-note fix: *"i am having a similar issue with projects"*.
+
+- **A v43 bug, fixed.** v43's History reader declared its own `READ_RETRY_MS` in the same scope as the app's, which turned every other read's retry wait into 0 ms. So a file that was busy for a moment failed at once, instead of being read again after 0.6 s. It's renamed.
+- **Every read that fails is tried twice more,** 0.6 s and then 1.5 s later. Before, it was tried once more. A file another program has open for a moment usually reads fine by then; that could be antivirus, a sync client, or another UTZLINE app.
+- **Empty event files are ignored everywhere.** These are 0-byte files in an item's status, schedule, machining or solid-surface folders, left by a save that never finished in any app. They hold nothing, so they no longer make a check fail or show as unreadable. Whole-file lists such as joinery-items.json and level files still refuse to read as empty, so an unreadable list can never be saved over.
+- **The last few saves are now retried and checked:** the names & PINs list, level files, plan labels, the company logo and order Received.
+- **No message says "still syncing?" any more.** It was a guess, and usually wrong. Messages now say "couldn't read … just now". Move to another level, Remove from plan and Delete name the file they couldn't check.
+
+**v43 (2026-09-29) — RC 1.0: the History "still syncing?" note.** Andrew, with a screenshot of an item's History saying *"Couldn't read everything just now (still syncing?): schedule (1 file still syncing)"*: *"i get this error randomly for no reason its not a syncing issue"*.
+
+- **What it was.** A file in that item's `Project Saves/Joinery Schedule/<item>/` folder couldn't be read, and the app guessed "syncing". The likely file is the PC-date record the app writes when an item is created: on Windows, a sync client or antivirus takes hold of a brand-new file for a moment, the app's write into it can fail as it finishes, and a 0-byte file was left behind with nothing said — the item then shows no delivery date, and History reports the file for ever.
+- **Every save now tries again** (0.5 s and 1.5 s later) when it fails or doesn't land, and is read back to check its size: joinery-items.json, project-meta.json, work-orders.json, the project-manager list, every event file (PC date, migrations, deleted items). Only a third failure is reported.
+- **History names the file and the reason.** A file that fails is read again (0.6 s and 1.5 s later); one that still fails is listed as, e.g. *Joinery Schedule › "Andrew - 2026-09-29 13-38-12-345 - set.json" — it's empty (a save that never finished)*, or *another program has it open (NotReadableError)*. There's a **Try again** button. Nothing is called "syncing".
+- **An empty file** (a save that never finished) holds nothing, so it isn't reported at all. It no longer stops the PC date: when an item's schedule folder holds only an empty file, the item gets the PC date again. Opening that item's page does it straight away and says so (*"This item's PC date hadn't saved properly — it's set again now."*).
+- Test: `run_projects_v43_reads.js`.
 
 **v42 (2026-09-29) — RC 1.0: ready for the SharePoint test.** Andrew: *"ok lets do it, make a test run (maybe projects) thats a seperate installable that wont wipe my current setup. add in all the failsafes you need"*.
 
