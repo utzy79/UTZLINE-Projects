@@ -557,7 +557,8 @@ var ICON_VERSION = "v1";
 // v44 (2026-09-29): reads retried twice (and v43's 0 ms retry bug fixed); empty event files ignored; no "still syncing?" guesses; every save retried + checked.
 // v45 (2026-09-29): RC 1.0 -- REV 0, A, B ...; the Cutting file + Notes cards; the ITPs card reads Delivery ITP by its own rule; same-name saves done in turn.
 // v46 (2026-09-29): RC 1.0 -- the ITP cards read each checklist with its change files.
-var CACHE_NAME = "utzline-projects-cache-v54";
+// v47 (2026-09-30): RC 1.0 -- event layout v2: status / schedule / cut / completion / cutting file / note records are one folder per LEVEL (Project Saves/UTZLINE Events/<branch>/<Level>/); old per-item folders are still read.
+var CACHE_NAME = "utzline-projects-cache-v55";
 
 var PRECACHE_URLS = [
   "./",

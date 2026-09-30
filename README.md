@@ -1,6 +1,14 @@
 # UTZLINE Projects — installable app
 
-**Current version: v46 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v47 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v47 (2026-09-30) — RC 1.0: records are kept one folder per level — much faster on a tablet.**
+
+- Andrew: *"how can we speed up schedule loading on the app android"* / *"all are slow"*. Every status, schedule date, cut, solid-surface tick, cutting file and note is still one small file per change (nothing is ever rewritten), but they now go in **one folder per level** — `Project Saves/UTZLINE Events/<record type>/<Level>/`, each file named `<Level> - <Room> - <Code> -- <name> - <time> - <kind>.json` — instead of one folder per joinery item. A schedule now lists a handful of level folders instead of hundreds of item folders; on the tablet each folder costs about a quarter of a second.
+- Records a project already has in the old item folders are still read, and both places are shown together (a record found in both counts once). UTZLINE Projects shows **Speed up this project** on a project that still has old folders and moves them — each record copied, checked, then its old copy removed.
+- **Update every tablet and PC.** An app older than this one doesn't look in the level folders, so it won't see records written by this one — and only press *Speed up this project* once every device is updated.
+- **Speed up this project** (on the project page, under the levels, only while old folders remain): the first press asks you to confirm every device is updated; then it moves the records and says how many, and names any file it left where it was (an empty file from a save that never finished stays, and is still read). It can be pressed again at any time.
+
 
 **v46 (2026-09-29) — RC 1.0: the ITP cards read the ITPs' change files.**
 

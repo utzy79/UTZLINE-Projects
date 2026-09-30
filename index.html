@@ -852,6 +852,11 @@
          <name> - <stamp> - note.json          { kind: "note", noteId, text, ... }
          <name> - <stamp> - note-deleted.json  { kind: "noteDeleted", noteId, ... }
          The notes are every "note" without a later "noteDeleted".
+   (2026-09-30, event layout v2) Those per-item folders are now one folder
+   per level -- Project Saves/UTZLINE Events/<branch>/<Level>/<key> -- <name>
+   -- through the UTZLINE-EVENT-STORE block every host carries (UtzEvents);
+   the code below still sees the old per-item shape and old folders are
+   still read. Hosts without that block keep the old per-item folders.
    Every change is signed with the device's name, like a cut or a status.
    Reads retry twice (0.6 s, 1.5 s); an empty file (a save that never
    finished) is ignored; writes go through the host's retrying, checked
@@ -979,6 +984,17 @@
     var writeFileText = opts.writeFileText;
     var getHandle = opts.getHandle;
     var getUser = opts.getUser || function(){ return ""; };
+    // (event layout v2) the branch folder as the event store's stand-in
+    function evRoot(h, branch, create, project){
+      if (window.UtzEvents && window.UtzEvents.root){
+        return window.UtzEvents.root({
+          dir: function(segs, c){ return segs.reduce(function(p, s){ return p.then(function(d){ return d.getDirectoryHandle(s, { create: !!c }); }); }, h.getDirectoryHandle(SAVES, { create: !!c })); },
+          branch: branch, create: !!create,
+          cacheId: opts.eventsCacheId ? opts.eventsCacheId(project, h) : ("ix\u0000" + (project || h.name || ""))
+        });
+      }
+      return h.getDirectoryHandle(SAVES, { create: !!create }).then(function(ps){ return ps.getDirectoryHandle(branch, { create: !!create }); });
+    }
     var cache = {};      // project -> { map: { key: rec }, at, loading }
     var dirCache = {};   // project \0 branch \0 dir -> { sig, events }
     var pending = {}, pendingTimer = 0;
@@ -998,9 +1014,7 @@
     // ---------- reading ----------
     function readBranch(project, projectHandle, branch){
       // -> { key: { events: [...], unreadable: n } }
-      return projectHandle.getDirectoryHandle(SAVES, { create: false }).then(function(ps){
-        return ps.getDirectoryHandle(branch, { create: false });
-      }).then(function(bh){
+      return evRoot(projectHandle, branch, false, project).then(function(bh){
         return listDir(bh).then(function(entries){
           var out = {};
           return Promise.all(entries.filter(function(e){ return e.kind === "directory"; }).map(function(dh){
@@ -1159,9 +1173,7 @@
     function itemDir(row, branch){
       return Promise.resolve(getHandle(row)).then(function(h){
         if (!h) throw new Error("no project folder");
-        return h.getDirectoryHandle(SAVES, { create: true }).then(function(ps){
-          return ps.getDirectoryHandle(branch, { create: true });
-        }).then(function(bh){ return bh.getDirectoryHandle(rowKey(row), { create: true }); });
+        return evRoot(h, branch, true, row.project).then(function(bh){ return bh.getDirectoryHandle(rowKey(row), { create: true }); });
       });
     }
     function writeEvent(row, branch, fileKind, payload){
@@ -1354,8 +1366,8 @@
       return isNaN(d.getTime()) ? "" : d.toISOString();
     }
     // every .json event in Project Saves/<branch>/<key>/ -> { events, failed: [{ name, why }] }
-    function readFolder(h, branch, key){
-      return h.getDirectoryHandle(SAVES, { create: false }).then(function(ps){ return ps.getDirectoryHandle(branch, { create: false }); })
+    function readFolder(h, branch, key, project){
+      return evRoot(h, branch, false, project)
         .then(function(bh){ return bh.getDirectoryHandle(key, { create: false }); })
         .then(function(dh){
           return listDir(dh).then(function(files){
@@ -1499,7 +1511,7 @@
           }, function(err){ console.error("History: reading " + label + " failed:", err); problems.push(label + " couldn't be read (" + ((err && (err.name || err.code)) || "error") + ")"); return null; });
         }
         var branches = ["Joinery Status", "Joinery Schedule", "Machining Flags", "Solid Surface Completion", "Solid Surface Schedule", BRANCH_CUT, BRANCH_NOTES];
-        return Promise.all(branches.map(function(b){ return soft(b, readFolder(h, b, key)); }).concat([
+        return Promise.all(branches.map(function(b){ return soft(b, readFolder(h, b, key, row.project)); }).concat([
           soft("shop drawings", histFromShopDrawings(h, key)),
           soft("orders", opts.readOrders ? opts.readOrders(row, h) : []),
           soft("reworks", histFromReworks(h, row)),
@@ -1922,6 +1934,581 @@
 })(window);
 </script>
 <!-- UTZLINE-ITP-LOG END -->
+<!-- UTZLINE-EVENT-STORE BEGIN (generated from shared/event-store -- don't edit here) -->
+<script>
+/* ============================== UTZLINE event store v2 (2026-09-30) ==============================
+   Andrew: "how can we speed up schedule loading on the app android" / "all
+   are slow" -> "and yes build it". Every record the apps share (status,
+   schedule date, cut, solid-surface completion / schedule, cutting file,
+   note) is one small immutable file per change. Until v2 those files lived
+   in ONE FOLDER PER JOINERY ITEM:
+       Project Saves/Joinery Status/<Level> - <Room> - <Code>/<name> - <stamp> - status.json
+   so a schedule had to list hundreds of folders, and on Andrew's tablet every
+   folder costs about a quarter of a second. v2 keeps the same files and the
+   same contents in ONE FOLDER PER LEVEL:
+       Project Saves/UTZLINE Events/<Branch>/<Level>/<Level> - <Room> - <Code> -- <name> - <stamp> - status.json
+   A whole schedule is now one listing per level, not one per item.
+
+   Nothing in the apps' reading and folding had to change: UtzEvents.root()
+   hands an app a stand-in for the old branch folder. Listing it gives one
+   stand-in "item folder" per item (named with the app's own key), listing
+   one of those gives the item's files under their old names, and creating a
+   file in one writes it into the new level folder. Records still sitting in
+   the old per-item folders are read as well (merged into the same item, an
+   old copy of a moved file counted once), so nothing disappears while
+   devices are updated. Old folders' file lists are remembered on the device
+   for 12 hours (they only change when a device that hasn't been updated
+   writes there); UtzEvents.refresh({ old: true }) forgets that.
+
+   UtzEvents.tidy() (UTZLINE Projects -> "Speed up this project") moves the
+   old per-item records into the new layout: copy, read back, then remove
+   the old file; an old item folder is removed once empty. Safe to repeat,
+   safe on two PCs at once. Run it only when every device has the v2 apps.
+
+   Generated into each app between UTZLINE-EVENT-STORE markers from
+   shared/event-store/event-store.js -- edit it there. */
+(function(){
+  "use strict";
+  var ROOT = "UTZLINE Events", SEP = " -- ";
+  var BRANCHES = ["Joinery Status", "Joinery Schedule", "Machining Flags", "Solid Surface Completion", "Solid Surface Schedule", "Joinery Cutting File", "Joinery Notes"];
+  var MEMO_MS = 4000, LEGACY_TTL = 12 * 3600 * 1000, MISS_MS = 5000, LEG_MISS_MS = 60000, NAME_KEY_MAX = 150;
+
+  // ---------- names ----------
+  function sanitize(name, max, fallback){
+    var cleaned = String(name == null ? "" : name).replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().replace(/^[._]+|[._\s]+$/g, "");
+    return cleaned.slice(0, max) || fallback;
+  }
+  // The key every UTZLINE app has always used for an item's folder
+  // (Site Measure / the schedules / Projects: 120 characters, "plan"), with
+  // any "--" run made "-" so " -- " only ever separates key from name.
+  function canonSeg(s){ return sanitize(s, 120, "plan").replace(/-{2,}/g, "-"); }
+  function itemKey(level, room, code){
+    return canonSeg(level) + " - " + canonSeg(room) + (code ? " - " + canonSeg(code) : "");
+  }
+  // The ITPs' older 80-character key -- only used to find their old folders.
+  function itpKey(level, room, code){
+    function s(x){ return sanitize(x, 80, "item"); }
+    return s(level) + " - " + s(room) + (code ? " - " + s(code) : "");
+  }
+  function hash(str){
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
+    return ("0000000" + h.toString(16)).slice(-8);
+  }
+  // A key short enough to lead a file name (Windows caps a name at 255).
+  function nameKey(key){
+    key = String(key || "").replace(/-{2,}/g, "-");
+    if (key.length <= NAME_KEY_MAX) return key;
+    return key.slice(0, NAME_KEY_MAX - 12).replace(/[ .]+$/, "") + " ~" + hash(key);
+  }
+  function levelFolder(level){ return sanitize(level, 120, "No level"); }
+  function splitName(n){
+    var i = n.indexOf(SEP);
+    if (i <= 0) return null;
+    return { key: n.slice(0, i), base: n.slice(i + SEP.length) };
+  }
+
+  // Every key an app makes is remembered with the item it names, so a
+  // stand-in folder asked for by key knows its level and its canonical key.
+  var registry = {}, alias = {};
+  function remember(key, level, room, code){
+    if (!key || registry[key]) return key;
+    var canon = nameKey(itemKey(level, room, code));
+    registry[key] = { level: level == null ? "" : String(level), room: room == null ? "" : String(room), code: code == null ? "" : String(code), canon: canon };
+    if (key !== canon && !alias[canon]) alias[canon] = key;
+    return key;
+  }
+  function canonOf(key){ var r = registry[key]; return r ? r.canon : nameKey(key); }
+
+  // ---------- small helpers ----------
+  function isNotFound(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError")); }
+  function notFound(what){
+    var e;
+    try{ e = new DOMException(what + " not found", "NotFoundError"); }catch(x){ e = new Error(what + " not found"); e.name = "NotFoundError"; }
+    return e;
+  }
+  function softNull(err){ if (isNotFound(err)) return null; throw err; }
+  function listAll(dirH){
+    var out = [];
+    if (!dirH || typeof dirH.values !== "function") return Promise.resolve(out);
+    var it = dirH.values();
+    function step(){ return it.next().then(function(r){ if (r.done) return out; if (r.value) out.push(r.value); return step(); }); }
+    return step();
+  }
+  function iterOver(listP, map){
+    var items = null, i = 0, p = null;
+    var it = {
+      next: function(){
+        if (!p) p = Promise.resolve(listP()).then(function(l){ items = l; });
+        return p.then(function(){ return i < items.length ? { done: false, value: map(items[i++]) } : { done: true, value: undefined }; });
+      }
+    };
+    if (typeof Symbol !== "undefined" && Symbol.asyncIterator) it[Symbol.asyncIterator] = function(){ return it; };
+    return it;
+  }
+  function now(){ return Date.now(); }
+
+  // ---------- device cache of old folders' file lists (IndexedDB) ----------
+  var dbP = null;
+  function db(){
+    if (dbP) return dbP;
+    dbP = new Promise(function(res, rej){
+      if (typeof indexedDB === "undefined") return rej(new Error("no IndexedDB"));
+      var rq = indexedDB.open("utzline-event-store", 1);
+      rq.onupgradeneeded = function(){ rq.result.createObjectStore("kv"); };
+      rq.onsuccess = function(){ res(rq.result); };
+      rq.onerror = function(){ rej(rq.error); };
+    });
+    dbP.catch(function(){});
+    return dbP;
+  }
+  function idbGet(k){
+    return db().then(function(d){ return new Promise(function(res){
+      try{ var rq = d.transaction("kv", "readonly").objectStore("kv").get(k); rq.onsuccess = function(){ res(rq.result); }; rq.onerror = function(){ res(null); }; }catch(e){ res(null); }
+    }); }, function(){ return null; });
+  }
+  function idbSet(k, v){
+    return db().then(function(d){ return new Promise(function(res){
+      try{ var tx = d.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = function(){ res(true); }; tx.onerror = function(){ res(false); }; }catch(e){ res(false); }
+    }); }, function(){ return false; });
+  }
+  var legacyMem = {};
+  function legacyCache(id){
+    var L = legacyMem[id];
+    if (L) return L.p;
+    L = legacyMem[id] = { data: { folders: {}, rootAt: 0, rootNames: null }, timer: 0 };
+    L.p = idbGet("legacy\u0000" + id).then(function(v){
+      if (v && typeof v === "object" && v.folders) L.data = v;
+      return L;
+    });
+    return L.p;
+  }
+  function legacySave(L, id){
+    if (L.timer) return;
+    L.timer = setTimeout(function(){ L.timer = 0; idbSet("legacy\u0000" + id, L.data); }, 400);
+  }
+
+  // ---------- one project's branch ----------
+  var memos = {}, misses = {};
+  function memoKey(id, level){ return id + "\u0000" + (level == null ? "*" : levelFolder(level)); }
+  function freshMemo(k){ var m = memos[k]; return m && (now() - m.at) < MEMO_MS ? m : null; }
+  function recordWrite(id, lf, canon, base, rec){
+    Object.keys(memos).forEach(function(k){
+      if (k.indexOf(id + "\u0000") !== 0) return;
+      var m = memos[k], scope = k.slice(id.length + 1);
+      if (scope !== "*" && scope !== lf) return;
+      if (!m.groups) return;
+      var g = m.groups[canon] || (m.groups[canon] = newGroup(lf));
+      g.entries[base] = rec;
+    });
+  }
+  function newGroup(lf){ return { entries: {}, legacy: [], lf: lf || null }; }
+
+  function Ctx(o){
+    this.dir = o.dir;
+    this.branch = o.branch;
+    this.id = String(o.cacheId || "") + "\u0000" + o.branch;
+    this.force = !!o.force;
+  }
+  Ctx.prototype.levelDirs = function(newH){
+    // the level folders under the new branch folder, remembered briefly
+    var k = this.id + "\u0001levels", m = memos[k];
+    if (m && (now() - m.at) < MEMO_MS && !this.force) return m.p;
+    var p = newH ? listAll(newH).then(function(es){ return es.filter(function(e){ return e.kind === "directory"; }); }) : Promise.resolve([]);
+    memos[k] = { at: now(), p: p };
+    p.catch(function(){ delete memos[k]; });
+    return p;
+  };
+
+  // A level folder's handle, remembered on its branch folder's handle for
+  // the session (level folders are never removed).
+  function levelDir(newH, lf, create){
+    var c = newH.__utzLevels || (newH.__utzLevels = {});
+    if (c[lf]) return Promise.resolve(c[lf]);
+    return newH.getDirectoryHandle(lf, { create: !!create }).then(function(h){ c[lf] = h; return h; });
+  }
+  function scan(ctx, newH, legH, level){
+    var k = memoKey(ctx.id, level);
+    var m = !ctx.force && freshMemo(k);
+    if (m && m.newH === newH && m.legH === legH) return m.p;
+    var groups = {};
+    function addNew(levelDirH, files){
+      files.forEach(function(f){
+        if (f.kind !== "file") return;
+        var s = splitName(f.name);
+        if (!s) return;
+        var g = groups[s.key] || (groups[s.key] = newGroup(levelDirH.name));
+        g.lf = levelDirH.name;
+        g.entries[s.base] = { h: f, parent: levelDirH, real: f.name, layout: "new" };
+      });
+    }
+    var pNew;
+    if (!newH) pNew = Promise.resolve();
+    else if (level != null){
+      pNew = levelDir(newH, levelFolder(level), false).then(function(lh){
+        return listAll(lh).then(function(fs){ addNew(lh, fs); });
+      }, softNull);
+    } else {
+      pNew = ctx.levelDirs(newH).then(function(dirs){
+        return Promise.all(dirs.map(function(lh){ return listAll(lh).then(function(fs){ addNew(lh, fs); }); }));
+      });
+    }
+    var pLeg = !legH ? Promise.resolve() : Promise.all([listAll(legH), legacyCache(ctx.id)]).then(function(r){
+      var dirs = r[0].filter(function(e){ return e.kind === "directory"; }), L = r[1];
+      var names = {};
+      dirs.forEach(function(dh){
+        names[dh.name] = 1;
+        var c = canonOf(dh.name);
+        var g = groups[c] || (groups[c] = newGroup(null));
+        g.legacy.push(dh);
+      });
+      // forget folders that have gone (moved by a tidy-up)
+      Object.keys(L.data.folders).forEach(function(n){ if (!names[n]) delete L.data.folders[n]; });
+      L.data.rootNames = Object.keys(names); L.data.rootAt = now();
+      legacySave(L, ctx.id);
+    });
+    var p = Promise.all([pNew, pLeg]).then(function(){ return groups; });
+    memos[k] = { at: now(), p: p, groups: groups, newH: newH, legH: legH };
+    p.catch(function(){ if (memos[k] && memos[k].p === p) delete memos[k]; });
+    return p;
+  }
+
+  // An old per-item folder's file names: from the device cache while fresh,
+  // otherwise listed (and remembered).
+  function legacyEntries(ctx, dh){
+    return legacyCache(ctx.id).then(function(L){
+      var f = L.data.folders[dh.name];
+      if (f && !ctx.force && (now() - f.at) < LEGACY_TTL && Array.isArray(f.names)){
+        return f.names.map(function(n){ return { h: null, parent: dh, real: n, layout: "legacy", cacheId: ctx.id }; });
+      }
+      return listAll(dh).then(function(es){
+        var files = es.filter(function(e){ return e.kind === "file"; });
+        L.data.folders[dh.name] = { at: now(), names: files.map(function(e){ return e.name; }) };
+        legacySave(L, ctx.id);
+        return files.map(function(e){ return { h: e, parent: dh, real: e.name, layout: "legacy" }; });
+      });
+    });
+  }
+
+  // ---------- stand-in handles ----------
+  function FileWrap(base, rec){ this.kind = "file"; this.name = base; this._rec = rec; }
+  // An old folder's file known only from the device's remembered list may
+  // have been moved since (a tidy-up on another PC): it then reads as an
+  // empty file -- which every app already skips -- and that folder is
+  // listed afresh next time.
+  function goneFile(name){
+    var f;
+    try{ f = new File([], name); }catch(e){ f = new Blob([]); }
+    return { kind: "file", name: name, getFile: function(){ return Promise.resolve(f); }, createWritable: function(){ return Promise.reject(notFound(name)); } };
+  }
+  FileWrap.prototype._real = function(){
+    var rec = this._rec;
+    if (rec.h) return Promise.resolve(rec.h);
+    return rec.parent.getFileHandle(rec.real, { create: false }).then(function(h){ rec.h = h; return h; }, function(err){
+      if (!isNotFound(err) || rec.layout !== "legacy" || !rec.cacheId) throw err;
+      return legacyCache(rec.cacheId).then(function(L){
+        var f = L.data.folders[rec.parent.name]; if (f) f.at = 0;
+        return goneFile(rec.real);
+      });
+    });
+  };
+  FileWrap.prototype.getFile = function(){ return this._real().then(function(h){ return h.getFile(); }); };
+  FileWrap.prototype.createWritable = function(o){ return this._real().then(function(h){ return h.createWritable(o); }); };
+  FileWrap.prototype.isSameEntry = function(other){
+    return this._real().then(function(h){
+      if (other && other._rec) return other._real().then(function(o){ return h === o || (typeof h.isSameEntry === "function" ? h.isSameEntry(o) : false); });
+      return h === other || (typeof h.isSameEntry === "function" && other ? h.isSameEntry(other) : false);
+    });
+  };
+  FileWrap.prototype.queryPermission = function(){ return Promise.resolve("granted"); };
+
+  function ItemDir(root, canon, group, name){
+    this.kind = "directory";
+    this.name = name || alias[canon] || canon;
+    this._root = root; this._canon = canon; this._g = group;
+    this._listP = null;
+  }
+  ItemDir.prototype._merged = function(){
+    var self = this, g = this._g, ctx = this._root._ctx;
+    return Promise.all(g.legacy.map(function(dh){ return legacyEntries(ctx, dh); })).then(function(lists){
+      var out = {};
+      lists.forEach(function(l){ l.forEach(function(e){ if (!out[e.real]) out[e.real] = e; }); });
+      Object.keys(g.entries).forEach(function(b){ out[b] = g.entries[b]; });
+      self._last = out;
+      return out;
+    });
+  };
+  ItemDir.prototype._files = function(){
+    return this._merged().then(function(out){ return Object.keys(out).sort().map(function(b){ return new FileWrap(b, out[b]); }); });
+  };
+  ItemDir.prototype.values = function(){ var s = this; return iterOver(function(){ return s._files(); }, function(f){ return f; }); };
+  ItemDir.prototype.entries = function(){ var s = this; return iterOver(function(){ return s._files(); }, function(f){ return [f.name, f]; }); };
+  ItemDir.prototype.keys = function(){ var s = this; return iterOver(function(){ return s._files(); }, function(f){ return f.name; }); };
+  ItemDir.prototype.getDirectoryHandle = function(n){ return Promise.reject(notFound(n)); };
+  ItemDir.prototype.queryPermission = function(){ return Promise.resolve("granted"); };
+  ItemDir.prototype.requestPermission = function(){ return Promise.resolve("granted"); };
+  ItemDir.prototype._levelDir = function(create){
+    var root = this._root, g = this._g, lf = g.lf || root._lfFor(this._canon, this.name);
+    g.lf = lf;
+    return root._newRoot(create).then(function(nh){
+      if (!nh) throw notFound(root.name);
+      return levelDir(nh, lf, create);
+    });
+  };
+  ItemDir.prototype.getFileHandle = function(name, opts){
+    var self = this, create = !!(opts && opts.create), g = this._g;
+    return this._merged().then(function(out){
+      var rec = out[name];
+      if (rec) return new FileWrap(name, rec);
+      if (!create) throw notFound(name);
+      return self._levelDir(true).then(function(lh){
+        var real = self._canon + SEP + name;
+        return lh.getFileHandle(real, { create: true }).then(function(h){
+          var r = { h: h, parent: lh, real: real, layout: "new" };
+          g.entries[name] = r;
+          recordWrite(self._root._ctx.id, lh.name, self._canon, name, r);
+          return new FileWrap(name, r);
+        });
+      });
+    });
+  };
+  ItemDir.prototype.removeEntry = function(name){
+    var g = this._g;
+    return this._merged().then(function(out){
+      var rec = out[name];
+      if (!rec) throw notFound(name);
+      return rec.parent.removeEntry(rec.real).then(function(){ if (g.entries[name] === rec) delete g.entries[name]; });
+    });
+  };
+
+  function Root(ctx, newH, legH, o){
+    this.kind = "directory"; this.name = ctx.branch;
+    this._ctx = ctx; this._newH = newH; this._legH = legH;
+    this._level = o.level == null ? null : o.level;
+  }
+  Root.prototype._newRoot = function(create){
+    var self = this;
+    if (this._newH) return Promise.resolve(this._newH);
+    if (!create) return Promise.resolve(null);
+    return this._ctx.dir([ROOT, this._ctx.branch], true).then(function(h){ self._newH = h; delete misses[self._ctx.id + "\u0000new"]; return h; });
+  };
+  Root.prototype._groups = function(){ return scan(this._ctx, this._newH, this._legH, this._level); };
+  Root.prototype._dirs = function(){
+    var self = this;
+    return this._groups().then(function(groups){
+      return Object.keys(groups).sort().filter(function(c){ var g = groups[c]; return g.legacy.length || Object.keys(g.entries).length; })
+        .map(function(c){ return new ItemDir(self, c, groups[c]); });
+    });
+  };
+  Root.prototype.values = function(){ var s = this; return iterOver(function(){ return s._dirs(); }, function(d){ return d; }); };
+  Root.prototype.entries = function(){ var s = this; return iterOver(function(){ return s._dirs(); }, function(d){ return [d.name, d]; }); };
+  Root.prototype.keys = function(){ var s = this; return iterOver(function(){ return s._dirs(); }, function(d){ return d.name; }); };
+  Root.prototype.getFileHandle = function(n){ return Promise.reject(notFound(n)); };
+  Root.prototype.queryPermission = function(){ return Promise.resolve("granted"); };
+  Root.prototype.requestPermission = function(){ return Promise.resolve("granted"); };
+  // The level folder for an item the registry doesn't know: the existing
+  // level folder its key starts with, else the key's first part.
+  Root.prototype._lfFor = function(canon, key){
+    var r = registry[key] || null;
+    if (r) return levelFolder(r.level);
+    var m = memos[this._ctx.id + "\u0001levels"], best = null;
+    if (m && m.names) m.names.forEach(function(n){ if ((key.indexOf(n + " - ") === 0 || key === n) && (!best || n.length > best.length)) best = n; });
+    if (best) return best;
+    if (typeof console !== "undefined") console.warn("UTZLINE events: no level known for " + key);
+    return levelFolder(String(key).split(" - ")[0]);
+  };
+  Root.prototype.getDirectoryHandle = function(key, opts){
+    var self = this, ctx = this._ctx, create = !!(opts && opts.create);
+    var r = registry[key] || null, canon = canonOf(key);
+    var lf = r ? levelFolder(r.level) : null;
+    // the new-layout files: from a whole-branch or this level's listing
+    var all = !ctx.force && freshMemo(memoKey(ctx.id, null));
+    var groupsP;
+    if (all && all.newH === this._newH && all.legH === this._legH) groupsP = all.p;
+    else if (lf != null && this._newH) groupsP = scan(ctx, this._newH, null, r.level);
+    else if (this._newH){
+      groupsP = ctx.levelDirs(this._newH).then(function(dirs){
+        var m = memos[ctx.id + "\u0001levels"]; if (m) m.names = dirs.map(function(d){ return d.name; });
+        lf = self._lfFor(canon, key);
+        return scan(ctx, self._newH, null, lf);
+      });
+    } else groupsP = Promise.resolve({});
+    return groupsP.then(function(groups){
+      var g = groups[canon];
+      if (!g){ g = newGroup(lf); groups[canon] = g; }
+      if (lf && !g.lf) g.lf = lf;
+      // the item's old folder(s): the app's key, the canonical one, the ITPs' 80-character one
+      var cands = [key];
+      var full = r ? itemKey(r.level, r.room, r.code) : null;
+      if (full && cands.indexOf(full) < 0) cands.push(full);
+      if (r){ var k80 = itpKey(r.level, r.room, r.code); if (cands.indexOf(k80) < 0) cands.push(k80); }
+      var have = {}; g.legacy.forEach(function(dh){ have[dh.name] = 1; });
+      cands = cands.filter(function(n){ return !have[n]; });
+      if (!self._legH || !cands.length) return g;
+      return legacyCache(ctx.id).then(function(L){
+        var known = (!ctx.force && L.data.rootNames && (now() - L.data.rootAt) < LEGACY_TTL) ? L.data.rootNames : null;
+        if (known) cands = cands.filter(function(n){ return known.indexOf(n) >= 0; });
+        return Promise.all(cands.map(function(n){ return self._legH.getDirectoryHandle(n, { create: false }).then(null, softNull); }));
+      }).then(function(found){
+        (found || []).forEach(function(dh){ if (dh && !have[dh.name]){ have[dh.name] = 1; g.legacy.push(dh); } });
+        return g;
+      });
+    }).then(function(g){
+      if (!create && !g.legacy.length && !Object.keys(g.entries).length) throw notFound(key);
+      return new ItemDir(self, canon, g, key);
+    });
+  };
+  Root.prototype.removeEntry = function(key){
+    return this.getDirectoryHandle(key, { create: false }).then(function(d){
+      return d._files().then(function(fs){ return Promise.all(fs.map(function(f){ return d.removeEntry(f.name); })); });
+    });
+  };
+
+  // o: { dir(segments, create) -> Promise<dir handle> under "Project Saves",
+  //      branch, create, cacheId (project identity), level (optional: only
+  //      that level's new-layout folder is listed), force }
+  function root(o){
+    var ctx = new Ctx(o);
+    var mNew = ctx.id + "\u0000new", mLeg = ctx.id + "\u0000leg", t = now();
+    function look(segs, create){
+      return ctx.dir(segs, create).then(function(h){ return { h: h }; }, function(err){ if (isNotFound(err)) return { h: null, miss: true }; throw err; });
+    }
+    // A missing new-layout folder is asked again after a few seconds; a
+    // missing old-layout folder is only taken as read for a minute on a
+    // project that already has the new one (only an out-of-date app could
+    // still make it).
+    var newP = (!o.create && !ctx.force && misses[mNew] && t - misses[mNew] < MISS_MS) ? Promise.resolve({ h: null, miss: true, memo: true }) : look([ROOT, o.branch], !!o.create);
+    var legP = (!ctx.force && misses[mLeg] && t - misses[mLeg] < LEG_MISS_MS) ? Promise.resolve({ h: null, miss: true, memo: true }) : look([o.branch], false);
+    return Promise.all([newP, legP]).then(function(r){
+      if (!r[0].memo){ if (r[0].miss) misses[mNew] = now(); else delete misses[mNew]; }
+      if (!r[1].memo){ if (r[1].miss && r[0].h) misses[mLeg] = now(); else delete misses[mLeg]; }
+      if (!r[0].h && !r[1].h && !o.create) throw notFound(o.branch);
+      return new Root(ctx, r[0].h, r[1].h, o);
+    });
+  }
+
+
+  // Forget the short-lived listings; with { old: true } also the device's
+  // remembered lists of old folders (they are listed again next time).
+  function refresh(o){
+    memos = {}; misses = {};
+    if (!(o && o.old)) return;
+    Object.keys(legacyMem).forEach(function(id){
+      var L = legacyMem[id];
+      L.p.then(function(){ L.data.rootAt = 0; Object.keys(L.data.folders).forEach(function(n){ L.data.folders[n].at = 0; }); });
+    });
+  }
+
+  // ---------- tidy-up: move old per-item records into the level folders ----------
+  function readText(fh){ return fh.getFile().then(function(f){ return f.text().then(function(t){ return { size: f.size, text: t }; }); }); }
+  function writeText(dirH, name, text){
+    return dirH.getFileHandle(name, { create: true }).then(function(fh){
+      return fh.createWritable().then(function(w){ return w.write(text).then(function(){ return w.close(); }); }).then(function(){ return fh; });
+    });
+  }
+  // o: { dir, cacheId, branches (default all), onProgress({ branch, done, total, moved }) }
+  // -> { moved, removedFolders, left: [{ branch, folder, name, why }] }
+  function tidy(o){
+    var out = { moved: 0, removedFolders: 0, left: [] };
+    var branches = o.branches || BRANCHES;
+    var chain = Promise.resolve();
+    branches.forEach(function(branch){
+      chain = chain.then(function(){ return tidyBranch(o, branch, out); });
+    });
+    return chain.then(function(){ refresh({ old: true }); return out; });
+  }
+  function tidyBranch(o, branch, out){
+    var id = String(o.cacheId || "") + "\u0000" + branch;
+    return o.dir([branch], false).then(function(legH){
+      return o.dir([ROOT, branch], true).then(function(newH){
+        var levelDirs = {};
+        function levelDir(lf){ return levelDirs[lf] || (levelDirs[lf] = newH.getDirectoryHandle(lf, { create: true })); }
+        return listAll(legH).then(function(es){
+          var folders = es.filter(function(e){ return e.kind === "directory"; });
+          var done = 0, total = folders.length;
+          function report(){ if (o.onProgress) try{ o.onProgress({ branch: branch, done: done, total: total, moved: out.moved }); }catch(e){} }
+          report();
+          function oneFile(dh, fh){
+            if (!/\.json$/i.test(fh.name)){ out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: "not a record" }); return Promise.resolve(false); }
+            return readText(fh).then(function(r){
+              if (!r.size || !r.text){ out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: "empty -- a save that never finished" }); return false; }
+              var ev;
+              try{ ev = JSON.parse(r.text); }catch(e){ ev = null; }
+              if (!ev || typeof ev !== "object" || ev.level == null){ out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: "couldn't be read" }); return false; }
+              var canon = nameKey(itemKey(ev.level, ev.room, ev.joineryId));
+              var target = canon + SEP + fh.name;
+              return levelDir(levelFolder(ev.level)).then(function(lh){
+                return lh.getFileHandle(target, { create: false }).then(function(th){
+                  return readText(th).then(function(t){
+                    if (t.text === r.text) return true;
+                    if (!t.size) return writeText(lh, target, r.text).then(function(){ return readText(th); }).then(function(t2){ return t2.text === r.text; });
+                    out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: "a different record with the same name is already in the new place" });
+                    return false;
+                  });
+                }, function(err){
+                  if (!isNotFound(err)) throw err;
+                  return writeText(lh, target, r.text).then(function(th){ return readText(th); }).then(function(t){ return t.text === r.text; });
+                });
+              }).then(function(ok){
+                if (!ok) return false;
+                return dh.removeEntry(fh.name).then(function(){ out.moved++; return true; });
+              });
+            }).catch(function(err){
+              out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: (err && (err.name || err.message)) || "error" });
+              return false;
+            });
+          }
+          function oneFolder(dh){
+            return listAll(dh).then(function(fs){
+              var files = fs.filter(function(f){ return f.kind === "file"; });
+              var c = Promise.resolve();
+              files.forEach(function(fh){ c = c.then(function(){ return oneFile(dh, fh); }); });
+              return c.then(function(){ return listAll(dh); }).then(function(rest){
+                if (rest.length) return;
+                return legH.removeEntry(dh.name).then(function(){ out.removedFolders++; }, function(){});
+              });
+            }).catch(function(err){
+              out.left.push({ branch: branch, folder: dh.name, name: "", why: (err && (err.name || err.message)) || "error" });
+            }).then(function(){ done++; report(); });
+          }
+          var i = 0;
+          function lane(){ if (i >= folders.length) return Promise.resolve(); var dh = folders[i++]; return oneFolder(dh).then(lane); }
+          return Promise.all([lane(), lane(), lane(), lane()]);
+        });
+      });
+    }, function(err){ if (isNotFound(err)) return; throw err; }).then(function(){
+      return legacyCache(id).then(function(L){ L.data.folders = {}; L.data.rootAt = 0; L.data.rootNames = null; legacySave(L, id); });
+    });
+  }
+  // How many old per-item folders a project still has (for the Projects hint).
+  function countLegacy(o){
+    var n = 0;
+    return Promise.all((o.branches || BRANCHES).map(function(branch){
+      return o.dir([branch], false).then(function(h){
+        return listAll(h).then(function(es){ n += es.filter(function(e){ return e.kind === "directory"; }).length; });
+      }, function(err){ if (!isNotFound(err)) throw err; });
+    })).then(function(){ return n; });
+  }
+
+  // A Refresh button always reads the folders afresh (not the few-second
+  // listing the last read left behind).
+  if (typeof document !== "undefined" && document.addEventListener){
+    document.addEventListener("click", function(e){
+      var el = e.target && e.target.closest ? e.target.closest("button, a, [role=button]") : null;
+      if (el && (/refresh/i.test(el.id || "") || /^\s*(\u21bb\s*)?Refresh\s*$/i.test(el.textContent || ""))) refresh();
+    }, true);
+  }
+
+  window.UtzEvents = {
+    version: 2,
+    ROOT: ROOT, SEP: SEP, BRANCHES: BRANCHES,
+    itemKey: itemKey, nameKey: nameKey, levelFolder: levelFolder, itpKey: itpKey,
+    remember: remember, root: root, refresh: refresh, tidy: tidy, countLegacy: countLegacy,
+    _registry: registry, _memos: function(){ return memos; }
+  };
+})();
+</script>
+<!-- UTZLINE-EVENT-STORE END -->
 </head>
 <body>
 
@@ -2024,6 +2611,17 @@
       <p class="refresh-note" id="levelListRefreshNote" hidden>Refreshing levels…</p>
       <div class="list" id="levelListItems"></div>
       <div class="empty-note" id="levelListEmpty" hidden>No levels yet -- start one above.</div>
+    </div>
+    <!-- (v47, event layout v2) moving a project's old one-folder-per-item
+         records into one folder per level -- see runSpeedUp -->
+    <div class="card" id="speedUpCard" hidden>
+      <h2 class="section-title" style="margin-top:0;">Speed up this project</h2>
+      <p class="sub" id="speedUpText" style="margin-top:0;"></p>
+      <div class="row">
+        <button class="btn" id="speedUpBtn">Speed up this project</button>
+        <button class="btn secondary" id="speedUpCancelBtn" hidden>Cancel</button>
+      </div>
+      <p class="sub" id="speedUpStatus" hidden></p>
     </div>
   </section>
 
@@ -5005,6 +5603,18 @@
     });
   }
 
+  /* (v47, event layout v2) The event branches (Joinery Status, Joinery
+     Schedule, Machining Flags, Solid Surface Completion / Schedule, Cutting
+     File, Notes) are one folder per LEVEL now, not one per item:
+     Project Saves/UTZLINE Events/<branch>/<Level>/<key> -- <name>.json.
+     eventsRootDir hands back the event store's stand-in for the old
+     "Project Saves/<branch>" folder -- listing it still gives one folder per
+     item, old per-item folders are still read -- so the readers and writers
+     below are unchanged. See the UTZLINE-EVENT-STORE block in the page head. */
+  function eventsCacheId(projectHandle){ return (projectsRootName || "") + "\u0000" + ((projectHandle && projectHandle.name) || ""); }
+  function eventsRootDir(projectHandle, branch, create){
+    return UtzEvents.root({ dir: function(segs, c){ return projectDir(projectHandle, [projectSavesDirName()].concat(segs), c); }, branch: branch, create: !!create, cacheId: eventsCacheId(projectHandle) });
+  }
   function getFloorPlansDir(projectHandle, create){
     return projectDir(projectHandle, [projectSavesDirName(), floorPlansDirName()], !!create);
   }
@@ -6143,7 +6753,7 @@
      saved, deleted one by onr"; Projects "on its next update"). Shared code:
      the UTZLINE-ITEM-EXTRAS block in the page head. This app has its own History
      card, so the module's is off; History reads both folders itself. */
-  var itemExtras = UtzItemExtras.create({ app: "Projects", toast: showToast, keyFor: function(level, room, joineryId){ return joineryItemKey({ level: level, room: room, joineryId: joineryId }); },
+  var itemExtras = UtzItemExtras.create({ app: "Projects", toast: showToast, eventsCacheId: function(project, h){ return eventsCacheId(h); }, keyFor: function(level, room, joineryId){ return joineryItemKey({ level: level, room: room, joineryId: joineryId }); },
     writeFileText: writeFileText, getHandle: function(){ return activeProjectHandle; }, getUser: function(){ return deviceUserName; }, history: false });
   function showCropDialog(dataUrl, naturalW, naturalH){
     return new Promise(function(resolve){
@@ -6860,7 +7470,7 @@
   function joineryStatusEventsBranchName(){ return "Joinery Status"; }
   // Memoised per project (v23 sweep, getCachedDir) -- see projectDir.
   function getJoineryStatusEventsRootDir(projectHandle, create){
-    return projectDir(projectHandle, [projectSavesDirName(), joineryStatusEventsBranchName()], !!create);
+    return eventsRootDir(projectHandle, joineryStatusEventsBranchName(), create);
   }
   function getJoineryStatusItemDir(projectHandle, key, create){
     return getJoineryStatusEventsRootDir(projectHandle, create).then(function(rootH){
@@ -7160,7 +7770,7 @@
   function joineryScheduleFilename(){ return "joinery-schedule.json"; }
   function joineryScheduleEventsBranchName(){ return "Joinery Schedule"; }
   function getJoineryScheduleEventsRootDir(projectHandle, create){
-    return projectDir(projectHandle, [projectSavesDirName(), joineryScheduleEventsBranchName()], !!create);
+    return eventsRootDir(projectHandle, joineryScheduleEventsBranchName(), create);
   }
   function getJoineryScheduleItemDir(projectHandle, key, create){
     return getJoineryScheduleEventsRootDir(projectHandle, create).then(function(rootH){
@@ -7349,8 +7959,10 @@
      genuine collision, this shows whichever colliding item saved under the
      plain key. No stable per-item ID exists anywhere in this ecosystem yet
      to do better (see the Unified Implementation Brief's own note on this). */
+  // (event layout v2) every key is remembered with its item, so the event
+  // store knows the level folder and the shared key (see UTZLINE-EVENT-STORE).
   function joineryItemKey(item){
-    return sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + (item.joineryId ? " - " + sanitizeFileBase(item.joineryId) : "");
+    return UtzEvents.remember(sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + (item.joineryId ? " - " + sanitizeFileBase(item.joineryId) : ""), item.level, item.room, item.joineryId);
   }
   // Every file (optionally filtered) directly inside a directory handle,
   // sorted newest-name-first (every filename convention in this family
@@ -7933,7 +8545,7 @@
      in this family already uses for this exact item. */
   function solidSurfaceCompletionBranchName(){ return "Solid Surface Completion"; }
   function getSolidSurfaceCompletionEventsRootDir(projectHandle, create){
-    return projectDir(projectHandle, [projectSavesDirName(), solidSurfaceCompletionBranchName()], !!create);
+    return eventsRootDir(projectHandle, solidSurfaceCompletionBranchName(), create);
   }
   // Mirrors Machine Schedule's own foldMachiningFlags exactly (schema sec 1
   // gives this verbatim), substituting cutType -> flag and the two values
@@ -9978,7 +10590,7 @@
   // error's name (locked / gone). Nothing is guessed to be "syncing".
   var HIST_READ_RETRY_MS = [600, 1500]; // (v44) was READ_RETRY_MS -- which clobbered the app's own READ_RETRY_MS (600) below/above: every strict read retried after 0 ms
   function readItemEventFolder(projectHandle, branch, key){
-    return projectDir(projectHandle, [projectSavesDirName(), branch, key], false).then(function(dirH){
+    return eventsRootDir(projectHandle, branch, false).then(function(rootH){ return rootH.getDirectoryHandle(key, { create: false }); }).then(function(dirH){
       return listFilesInDir(dirH, function(n){ return /\.json$/i.test(n); }).then(function(files){
         var out = []; out.skipped = 0; out.failed = []; out.branch = branch;
         function readOne(f){
@@ -10900,6 +11512,93 @@
     });
   }
 
+  /* ============================== (v47) "Speed up this project" ==============================
+     Event layout v2 (see the UTZLINE-EVENT-STORE block): the apps read and
+     write every status / schedule / cut / completion / cutting file / note
+     record in one folder per LEVEL; a project started before that still has
+     its older records in one folder per joinery item, which every app still
+     reads -- but that is exactly what made a schedule slow on a tablet
+     (hundreds of folders at a quarter of a second each). This card appears
+     on a project that still has such folders and moves them: each record is
+     copied into its level folder, read back and compared, and only then is
+     the old copy removed; an old item folder goes once it's empty. It can be
+     stopped and run again, and two PCs running it at once is harmless.
+     Only once every device has this version: an older app doesn't look in
+     the level folders, so it would stop seeing the moved records. */
+  var speedUpCard = document.getElementById("speedUpCard");
+  var speedUpText = document.getElementById("speedUpText");
+  var speedUpBtn = document.getElementById("speedUpBtn");
+  var speedUpCancelBtn = document.getElementById("speedUpCancelBtn");
+  var speedUpStatus = document.getElementById("speedUpStatus");
+  var speedUpState = { project: null, handle: null, count: 0, armed: false, running: false };
+  var SPEED_UP_LABEL = "Speed up this project";
+  function speedUpDir(projHandle){ return function(segs, c){ return projectDir(projHandle, [projectSavesDirName()].concat(segs), c); }; }
+  function speedUpExplain(n){
+    return "This project still keeps some of its records the old way, one folder per joinery item (" + n + " folder" + (n === 1 ? "" : "s") + "). " +
+      "The schedules and ITPs open it much faster, above all on a tablet, once they're moved into one folder per level. " +
+      "Only do this once every tablet and PC has this version (RC 1.0 of 30 Sep 2026 or later) -- an older app won't see the records after they move. " +
+      "Nothing is lost: every record is copied, checked, and only then its old copy removed.";
+  }
+  function checkSpeedUpCard(projHandle, projName){
+    if (speedUpState.running) return;
+    speedUpState = { project: projName, handle: projHandle, count: 0, armed: false, running: false };
+    speedUpCard.hidden = true; speedUpStatus.hidden = true; speedUpCancelBtn.hidden = true;
+    speedUpBtn.hidden = false; speedUpBtn.disabled = false; speedUpBtn.textContent = SPEED_UP_LABEL;
+    if (!projHandle) return;
+    UtzEvents.countLegacy({ dir: speedUpDir(projHandle) }).then(function(n){
+      if (activeProjectName !== projName || speedUpState.project !== projName) return;
+      speedUpState.count = n;
+      if (!n) return;
+      speedUpText.textContent = speedUpExplain(n);
+      speedUpCard.hidden = false;
+    }, function(err){ console.warn("Couldn't count the old record folders:", err); });
+  }
+  speedUpBtn.addEventListener("click", function(){
+    if (speedUpState.running) return;
+    if (!speedUpState.armed){
+      speedUpState.armed = true;
+      speedUpBtn.textContent = "Yes -- every device is updated, move them now";
+      speedUpCancelBtn.hidden = false;
+      return;
+    }
+    runSpeedUp();
+  });
+  speedUpCancelBtn.addEventListener("click", function(){
+    speedUpState.armed = false; speedUpBtn.textContent = SPEED_UP_LABEL; speedUpCancelBtn.hidden = true;
+  });
+  function runSpeedUp(){
+    var st = speedUpState;
+    if (!st.handle || st.running) return Promise.resolve(null);
+    st.running = true; st.armed = false;
+    speedUpBtn.disabled = true; speedUpCancelBtn.hidden = true;
+    speedUpStatus.hidden = false;
+    speedUpStatus.textContent = "Moving records… keep this window open.";
+    return UtzEvents.tidy({ dir: speedUpDir(st.handle), cacheId: eventsCacheId(st.handle), onProgress: function(p){
+      speedUpStatus.textContent = "Moving records… " + p.branch + ": " + p.done + " of " + p.total + " folders (" + p.moved + " records moved so far). Keep this window open.";
+    } }).then(function(res){
+      st.running = false; speedUpBtn.disabled = false; speedUpBtn.textContent = SPEED_UP_LABEL;
+      var msg = "Done -- " + res.moved + " record" + (res.moved === 1 ? "" : "s") + " moved.";
+      if (res.left.length){
+        msg += " " + res.left.length + " file" + (res.left.length === 1 ? "" : "s") + " stayed where " + (res.left.length === 1 ? "it was" : "they were") + " (the apps still read " + (res.left.length === 1 ? "it" : "them") + "): " +
+          res.left.slice(0, 5).map(function(l){ return l.branch + " › " + l.folder + (l.name ? " › " + l.name : "") + " (" + l.why + ")"; }).join("; ") + (res.left.length > 5 ? "; …" : "") +
+          ". Press " + SPEED_UP_LABEL + " again later to try " + (res.left.length === 1 ? "it" : "them") + " again.";
+      }
+      speedUpStatus.textContent = msg;
+      showToast("Project sped up -- " + res.moved + " record" + (res.moved === 1 ? "" : "s") + " moved.", 4000);
+      return UtzEvents.countLegacy({ dir: speedUpDir(st.handle) }).then(function(n){
+        st.count = n;
+        if (n) speedUpText.textContent = speedUpExplain(n);
+        else { speedUpText.textContent = "All of this project's records are in one folder per level now."; speedUpBtn.hidden = true; }
+        return res;
+      }, function(){ return res; });
+    }, function(err){
+      st.running = false; speedUpBtn.disabled = false; speedUpBtn.textContent = SPEED_UP_LABEL;
+      console.error("Speed up failed:", err);
+      speedUpStatus.textContent = "Stopped (" + ((err && (err.name || err.message)) || "error") + "). Nothing already moved is lost -- press " + SPEED_UP_LABEL + " again to carry on.";
+      return null;
+    });
+  }
+
   /* ============================== level list ============================== */
   var levelsProjectLabel = document.getElementById("levelsProjectLabel");
   var levelListItems = document.getElementById("levelListItems");
@@ -10941,6 +11640,7 @@
     var seq = ++levelListLoadSeq;
     var projName = activeProjectName, projHandle = activeProjectHandle;
     levelsProjectLabel.textContent = projName;
+    checkSpeedUpCard(projHandle, projName); // (v47) old-layout records still here?
     if (levelListRenderedFor === projName){
       showScreen("levels");
       levelListRefreshNote.hidden = false;
@@ -13901,6 +14601,8 @@
   }
 
   window.__testHooks = {
+    speedUpForTest: function(){ return runSpeedUp(); }, // (v47) skips the confirm step
+    speedUpStateForTest: function(){ return { count: speedUpState.count, running: speedUpState.running, shown: !speedUpCard.hidden, text: speedUpText.textContent, status: speedUpStatus.textContent }; },
     itemExtrasForTest: function(){ return itemExtras; }, // (v45)
     setUserForItemExtrasTest: function(n){ deviceUserName = n || ""; },
     // (v31) work order import + pin-drop
