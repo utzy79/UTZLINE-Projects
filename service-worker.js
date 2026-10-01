@@ -561,7 +561,9 @@ var ICON_VERSION = "v1";
 // v48 (2026-09-30): RC 1.0 -- sign in on open (tablets / phones), change-folder button.
 // v49 (2026-09-30): RC 1.0 -- builders with logos, status icons on the plan (blue, 25% smaller, zoom buttons), merge pins into one drawing, tick-box status filter, hide / rearrange register columns, day / night mode.
 // v50 (2026-09-30): RC 1.0 -- Set up floor plans & report: several plans dropped at once -> levels (and zones), then the report -> items + markers
-var CACHE_NAME = "utzline-projects-cache-v58";
+// v51 (2026-10-01): RC 1.0 -- the PC date lands on every new item even when one save fails; light-mode leftovers
+// v52 (2026-10-01): RC 1.0 -- the work-order import finds each zone's level from the plans' room labels
+var CACHE_NAME = "utzline-projects-cache-v60";
 
 var PRECACHE_URLS = [
   "./",

@@ -179,7 +179,7 @@
   .utz-theme-btn:hover, .utz-theme-btn:focus{ opacity: 1; outline: none; }
   header:has(.utz-theme-btn){ padding-right: 60px; }
   /* light palette (day mode) */
-  :root[data-theme="light"]{ --bg: #f6f2f1; --panel: #ffffff; --panel2: #f1e9e8; --border: #dccfcd; --text: #1d1414; --muted: #6e5a5a; --muted2: #937e7e; --accent: #d12b2b; --accent-ink: #ffffff; --accent-soft: #fbe3e3; --danger: #d12b2b; --utz-header: #ffffff; --utz-deep: #efe6e5; }
+  :root[data-theme="light"]{ --bg: #f6f2f1; --panel: #ffffff; --panel2: #f1e9e8; --border: #dccfcd; --text: #1d1414; --muted: #6e5a5a; --muted2: #937e7e; --accent: #d12b2b; --accent-ink: #ffffff; --accent-soft: #fbe3e3; --danger: #d12b2b; --utz-header: #ffffff; --utz-deep: #efe6e5; --utz-stage: #e9e2e1; --utz-undo-bg: #dff1e5; --utz-move-bg: #f6ead0; }
   :root[data-theme="light"] select, :root[data-theme="light"] input, :root[data-theme="light"] textarea{ color-scheme: light; }
 </style>
 <!-- UTZLINE-THEME END -->
@@ -444,7 +444,7 @@
     overflow: hidden;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: #0b0707;
+    background: var(--utz-stage, #0b0707);
     margin-top: 10px;
   }
   .plan-preview img.single{ display:block; width: 100%; height: auto; }
@@ -506,7 +506,7 @@
     position: fixed; inset: 0; z-index: 30;
     width: auto; max-width: none; /* override .screen's max-width:640px -- this one must fill the whole viewport, not sit capped to main's content column width */
     display: flex; flex-direction: column;
-    background: #0b0707;
+    background: var(--utz-stage, #0b0707); /* (v51) light mode: a light stage */
   }
   .plan-canvas-screen[hidden]{ display: none; }
   .plan-canvas-topbar{
@@ -567,6 +567,7 @@
   .wo-zones{ display:flex; flex-direction:column; gap:8px; margin: 0 0 12px; }
   .wo-zone-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size: 14px; }
   .wo-zone-row select{ background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 14px; min-width: 180px; }
+  .wo-zone-how{ font-size: 12px; color: var(--ok); }
   .wo-preview{ max-height: 48vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 4px 10px; margin-bottom: 12px; }
   .wo-group{ padding: 8px 0; border-bottom: 1px solid var(--border); }
   .wo-group:last-child{ border-bottom: none; }
@@ -608,7 +609,7 @@
   .plan-unplaced-panel.dragging{ opacity: .35; }
   .plan-drag-ghost{ position: fixed; z-index: 90; pointer-events: none; transform: translate(-50%, -130%); background: var(--panel); color: var(--text); border: 2px dashed var(--muted); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
   .plan-drag-ghost.over-plan{ border-color: #ff5b5b; background: var(--utz-deep, var(--utz-deep, var(--utz-deep, #2a1414))); }
-  .plan-undo-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #142a1b; border-top: 1px solid var(--border); font-size: 14px; }
+  .plan-undo-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--utz-undo-bg, #142a1b); border-top: 1px solid var(--border); font-size: 14px; }
   .plan-undo-bar[hidden]{ display: none; }
   .pc-note{ display:inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(240,178,62,.16); color: #f0b23e; vertical-align: 1px; } /* (v35) */
   /* (v34) placed from the plan's labels: amber ring until someone's checked it; Move mode */
@@ -616,7 +617,7 @@
   .marker-group-ring.picked{ stroke: #ffd166; stroke-dasharray: none; fill: rgba(255,209,102,.18); }
   .plan-merge-bar{ background: rgba(255,209,102,.14); }
   .marker-check-ring{ fill: none; stroke: #f0b23e; stroke-dasharray: 7 5; pointer-events: none; }
-  .plan-move-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #2a2210; border-top: 1px solid var(--border); font-size: 14px; }
+  .plan-move-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--utz-move-bg, #2a2210); border-top: 1px solid var(--border); font-size: 14px; }
   .plan-move-bar[hidden]{ display: none; }
   .plan-move-bar-btns{ display:flex; gap: 8px; flex-wrap: wrap; }
   .plan-canvas-screen.moving .plan-canvas-stage svg{ cursor: move; }
@@ -2166,6 +2167,27 @@
    removed from UTZLINE Projects in v48, 2026-09-30, once Andrew's jobs were
    moved): the apps simply keep reading both layouts.
 
+   v2.1 (2026-10-01) -- Windows' 260-character path limit. Andrew: "some get
+   corrupted from the import ... then i cant change them in the schedule" /
+   "Couldn't save this schedule". His pilot project sits in
+   C:\Users\andrewu\OneDrive - Metro Joinery\UTZLINE Pilot\3756 - Jones Radiology Mt Barker\
+   and a record for a long room name ("G.42 - MRI & CT Subwait Seating")
+   reached 255 characters in full; Chrome writes through a "<name>.crswap"
+   swap file (7 more), so anything from 253 up was left as an EMPTY file and
+   the save reported a failure. Now:
+     - a new record's name no longer repeats the level that its folder already
+       names:  <Level>/<Room> - <Code> -- <name> - <stamp> - <kind>.json
+       (the room-and-code part is capped at 70 characters, "~hash" when cut);
+       every file already on disk under the long name still reads;
+     - when even that can't be written (the empty file is removed first), the
+       record goes under a 9-character "~hash" name instead, and a banner
+       tells the user the folder path is the reason;
+     - on Windows, the first write to a project measures how many characters
+       its folder path leaves (a few empty probe files, created and removed
+       again under UTZLINE Events), and the banner shows early when that is
+       less than long room names need; UtzEvents.pathBudget() gives the
+       number to an app (UTZLINE Projects shows it when a project is opened).
+
    Generated into each app between UTZLINE-EVENT-STORE markers from
    shared/event-store/event-store.js -- edit it there. */
 (function(){
@@ -2173,6 +2195,10 @@
   var ROOT = "UTZLINE Events", SEP = " -- ";
   var BRANCHES = ["Joinery Status", "Joinery Schedule", "Machining Flags", "Solid Surface Completion", "Solid Surface Schedule", "Joinery Cutting File", "Joinery Notes"];
   var MEMO_MS = 4000, LEGACY_TTL = 12 * 3600 * 1000, MISS_MS = 5000, LEG_MISS_MS = 60000, NAME_KEY_MAX = 150;
+  // The room-and-code part that leads a new record's name (the level is its
+  // folder), and what long room names need of a Windows path after the
+  // project folder (branch + level folder + record name, with the swap file).
+  var ITEM_MAX = 70, NEEDS_REL = 170, WIN_FULL = 252;
 
   // ---------- names ----------
   function sanitize(name, max, fallback){
@@ -2209,17 +2235,44 @@
     return { key: n.slice(0, i), base: n.slice(i + SEP.length) };
   }
 
+  // The part of a canonical key after its level: what leads a new record's
+  // name inside the level folder (capped, "~hash" of the whole key when cut).
+  function shortOf(canon, lf){
+    var s = canon;
+    if (lf && (canon.indexOf(lf + " - ") === 0)) s = canon.slice(lf.length + 3);
+    else if (lf === "No level" && canon.indexOf("plan - ") === 0) s = canon.slice(7);
+    if (!s) s = canon;
+    if (s.length <= ITEM_MAX) return s;
+    return s.slice(0, ITEM_MAX - 10).replace(/[ .]+$/, "") + " ~" + hash(canon);
+  }
+  function tinyOf(canon){ return "~" + hash(canon); }
+
   // Every key an app makes is remembered with the item it names, so a
-  // stand-in folder asked for by key knows its level and its canonical key.
-  var registry = {}, alias = {};
+  // stand-in folder asked for by key knows its level and its canonical key,
+  // and a record file's leading part (long, short or "~hash") finds its item.
+  var registry = {}, alias = {}, canonKnown = {}, byShort = {}, byTiny = {}, regVersion = 0;
   function remember(key, level, room, code){
     if (!key || registry[key]) return key;
-    var canon = nameKey(itemKey(level, room, code));
-    registry[key] = { level: level == null ? "" : String(level), room: room == null ? "" : String(room), code: code == null ? "" : String(code), canon: canon };
+    var canon = nameKey(itemKey(level, room, code)), lf = levelFolder(level), short = shortOf(canon, lf), tiny = tinyOf(canon);
+    registry[key] = { level: level == null ? "" : String(level), room: room == null ? "" : String(room), code: code == null ? "" : String(code), canon: canon, lf: lf, short: short, tiny: tiny };
     if (key !== canon && !alias[canon]) alias[canon] = key;
+    canonKnown[canon] = 1; byShort[lf + "\u0000" + short] = canon; byTiny[tiny] = canon;
+    regVersion++;
     return key;
   }
   function canonOf(key){ var r = registry[key]; return r ? r.canon : nameKey(key); }
+  // The item (canonical key) a record file in level folder lf belongs to,
+  // from the part before " -- ": an old level-led name, a new short name, a
+  // "~hash" name, or -- for an item no app has named yet -- the level folder
+  // put back in front of a short name.
+  function resolvePrefix(lf, prefix){
+    var c = byShort[lf + "\u0000" + prefix];
+    if (c) return c;
+    if (canonKnown[prefix]) return prefix;
+    if (prefix.charAt(0) === "~") return byTiny[prefix] || prefix;
+    if (prefix === lf || prefix.indexOf(lf + " - ") === 0) return prefix;
+    return nameKey((lf === "No level" ? "plan" : lf) + " - " + prefix);
+  }
 
   // ---------- small helpers ----------
   function isNotFound(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError")); }
@@ -2298,12 +2351,33 @@
       if (k.indexOf(id + "\u0000") !== 0) return;
       var m = memos[k], scope = k.slice(id.length + 1);
       if (scope !== "*" && scope !== lf) return;
-      if (!m.groups) return;
-      var g = m.groups[canon] || (m.groups[canon] = newGroup(lf));
-      g.entries[base] = rec;
+      if (!m.raw) return;
+      m.raw.push({ lf: lf, prefix: null, canon: canon, base: base, rec: rec });
+      if (m.g){ var g = m.g[canon] || (m.g[canon] = newGroup(lf)); g.entries[base] = rec; }
     });
   }
   function newGroup(lf){ return { entries: {}, legacy: [], lf: lf || null }; }
+  // A listing's files grouped per item. The grouping is redone when an app
+  // has named more items since (registry), so a short or "~hash" record
+  // name listed before its item was known still lands with its item.
+  function groupsOf(m){
+    if (m.g && m.ver === regVersion) return m.g;
+    var groups = {};
+    m.raw.forEach(function(e){
+      var c = e.canon || resolvePrefix(e.lf, e.prefix);
+      var g = groups[c] || (groups[c] = newGroup(e.lf));
+      g.lf = e.lf;
+      g.entries[e.base] = e.rec;
+    });
+    m.legacy.forEach(function(e){
+      var c = e.canon || canonOf(e.dh.name);
+      var g = groups[c] || (groups[c] = newGroup(null));
+      if (g.legacy.indexOf(e.dh) < 0) g.legacy.push(e.dh);
+    });
+    Object.keys(m.made).forEach(function(c){ if (!groups[c]) groups[c] = newGroup(m.made[c]); else if (!groups[c].lf) groups[c].lf = m.made[c]; });
+    m.g = groups; m.ver = regVersion;
+    return groups;
+  }
 
   function Ctx(o){
     this.dir = o.dir;
@@ -2328,19 +2402,19 @@
     if (c[lf]) return Promise.resolve(c[lf]);
     return newH.getDirectoryHandle(lf, { create: !!create }).then(function(h){ c[lf] = h; return h; });
   }
+  // -> Promise<memo>; memo.groups() is the listing grouped per item.
   function scan(ctx, newH, legH, level){
     var k = memoKey(ctx.id, level);
     var m = !ctx.force && freshMemo(k);
     if (m && m.newH === newH && m.legH === legH) return m.p;
-    var groups = {};
+    m = { at: now(), p: null, raw: [], legacy: [], made: {}, g: null, ver: -1, newH: newH, legH: legH };
+    m.groups = function(){ return groupsOf(m); };
     function addNew(levelDirH, files){
       files.forEach(function(f){
         if (f.kind !== "file") return;
         var s = splitName(f.name);
         if (!s) return;
-        var g = groups[s.key] || (groups[s.key] = newGroup(levelDirH.name));
-        g.lf = levelDirH.name;
-        g.entries[s.base] = { h: f, parent: levelDirH, real: f.name, layout: "new" };
+        m.raw.push({ lf: levelDirH.name, prefix: s.key, canon: null, base: s.base, rec: { h: f, parent: levelDirH, real: f.name, layout: "new" } });
       });
     }
     var pNew;
@@ -2359,17 +2433,16 @@
       var names = {};
       dirs.forEach(function(dh){
         names[dh.name] = 1;
-        var c = canonOf(dh.name);
-        var g = groups[c] || (groups[c] = newGroup(null));
-        g.legacy.push(dh);
+        m.legacy.push({ dh: dh, canon: null });
       });
       // forget folders that have gone (moved by a tidy-up)
       Object.keys(L.data.folders).forEach(function(n){ if (!names[n]) delete L.data.folders[n]; });
       L.data.rootNames = Object.keys(names); L.data.rootAt = now();
       legacySave(L, ctx.id);
     });
-    var p = Promise.all([pNew, pLeg]).then(function(){ return groups; });
-    memos[k] = { at: now(), p: p, groups: groups, newH: newH, legH: legH };
+    var p = Promise.all([pNew, pLeg]).then(function(){ return m; });
+    m.p = p;
+    memos[k] = m;
     p.catch(function(){ if (memos[k] && memos[k].p === p) delete memos[k]; });
     return p;
   }
@@ -2389,6 +2462,92 @@
         return files.map(function(e){ return { h: e, parent: dh, real: e.name, layout: "legacy" }; });
       });
     });
+  }
+
+  // ---------- Windows' 260-character path limit ----------
+  var tinyNeeded = {}, probes = {}, warned = {};
+  var IS_WIN = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent || "");
+  var PROBE = "~ UTZLINE path check (safe to delete) ";
+  function projectOf(ctx){ return String(ctx.id).split("\u0000")[0]; }
+  function repeat(ch, n){ return n > 0 ? new Array(n + 1).join(ch) : ""; }
+  // How many characters a Windows path leaves after this project's folder
+  // for a file's full path (252: 259 less Chrome's ".crswap"): found from
+  // the longest name an empty probe file can be made with under
+  // Project Saves/UTZLINE Events (made and removed again, a few tries),
+  // kept for the session. Off Windows there is nothing to measure.
+  // -> Promise<{ rel: number|null, win: boolean }>  (rel null: no limit met)
+  function pathProbe(ctx, force){
+    var pid = projectOf(ctx);
+    if (probes[pid] && !force) return probes[pid].p;
+    var P = { p: null, rel: null, done: false };
+    probes[pid] = P;
+    if (!IS_WIN){ P.done = true; P.p = Promise.resolve({ rel: null, win: false }); return P.p; }
+    P.p = ctx.dir([ROOT], true).then(function(h){
+      function tryLen(n){
+        var name = PROBE + repeat("x", n);
+        return h.getFileHandle(name, { create: true }).then(function(){
+          return h.removeEntry(name).then(null, function(){}).then(function(){ return true; });
+        }, function(){ return false; });
+      }
+      var top = 255 - PROBE.length;              // the longest name a file can have
+      return tryLen(top).then(function(ok){
+        if (ok) return null;                      // fits: long paths are on, or the folder path is short
+        var lo = -1, hi = top;                    // lo fits (or nothing does), hi doesn't
+        function step(){
+          if (hi - lo <= 1) return lo;
+          var mid = (lo + hi) >> 1;
+          return tryLen(mid).then(function(fits){ if (fits) lo = mid; else hi = mid; return step(); });
+        }
+        return Promise.resolve(step()).then(function(best){
+          if (best < 0) return 0;
+          // probe's full path: X + "\Project Saves\UTZLINE Events\" (30) + name <= 259
+          var X = 259 - 30 - (PROBE.length + best);
+          return Math.max(0, WIN_FULL - X - 1);
+        });
+      });
+    }).then(function(rel){
+      P.rel = rel; P.done = true;
+      if (rel != null && rel < NEEDS_REL) pathWarn(ctx, "budget", rel);
+      return { rel: rel, win: true };
+    }, function(){ P.done = true; return { rel: null, win: true }; });
+    return P.p;
+  }
+  // Was a failed write to this record name plausibly the path limit? Only
+  // on Windows; when the probe has measured, only if the name is past what
+  // it left (a write that fails for another reason -- a file held by
+  // OneDrive, say -- is not retried under another name).
+  function lengthy(ctx, lf, real){
+    if (!IS_WIN) return false;
+    var P = probes[projectOf(ctx)];
+    if (!P || !P.done) return true;
+    if (P.rel == null) return false;
+    return (14 + ROOT.length + 1 + ctx.branch.length + 1 + lf.length + 1 + real.length) > P.rel;
+  }
+  var ADVICE = " Best fix: move the Projects folder nearer the drive root (for example C:\\UTZLINE Projects), or shorten the project folder's name.";
+  function pathWarn(ctx, why, rel){
+    var pid = projectOf(ctx);
+    if (warned[pid + "\u0000" + why]) return;
+    warned[pid + "\u0000" + why] = 1;
+    var msg;
+    if (why === "budget") msg = "Windows limits a file's full path to 260 characters, and this project's folder path leaves only " + rel + " for UTZLINE's own files (long room names need about " + NEEDS_REL + "). Records that don't fit are kept under short names, but PDFs and exports with long names can still fail." + ADVICE;
+    else if (why === "fallback") msg = "A record for an item with a long name didn't fit Windows' 260-character path limit here, so it was saved under a short name instead. PDFs and exports with long names can still fail." + ADVICE;
+    else msg = "A record couldn't be saved: its full path is past Windows' 260-character limit." + ADVICE;
+    try{ if (typeof console !== "undefined") console.warn("UTZLINE events: " + msg); }catch(e){}
+    banner(msg);
+    try{ window.dispatchEvent(new CustomEvent("utz-path-limit", { detail: { why: why, rel: rel == null ? null : rel, message: msg } })); }catch(e){}
+  }
+  function banner(msg){
+    if (typeof document === "undefined" || !document.body) return;
+    var old = document.getElementById("utzPathBanner"); if (old) old.parentNode.removeChild(old);
+    var bar = document.createElement("div"); bar.id = "utzPathBanner";
+    bar.setAttribute("role", "alert");
+    bar.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:3000;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:#3a2a00;color:#ffe9a8;border:1px solid #8a6a10;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35)";
+    var t = document.createElement("div"); t.style.flex = "1"; t.textContent = "\u26a0 " + msg;
+    var b = document.createElement("button"); b.type = "button"; b.textContent = "OK";
+    b.style.cssText = "font:inherit;font-weight:700;padding:6px 14px;border-radius:8px;border:1px solid #c9a227;background:transparent;color:inherit;cursor:pointer";
+    b.addEventListener("click", function(){ if (bar.parentNode) bar.parentNode.removeChild(bar); });
+    bar.appendChild(t); bar.appendChild(b);
+    document.body.appendChild(bar);
   }
 
   // ---------- stand-in handles ----------
@@ -2414,7 +2573,19 @@
     });
   };
   FileWrap.prototype.getFile = function(){ return this._real().then(function(h){ return h.getFile(); }); };
-  FileWrap.prototype.createWritable = function(o){ return this._real().then(function(h){ return h.createWritable(o); }); };
+  // A record file this session just created but whose writer can't be
+  // opened (on Windows: the full path, plus Chrome's ".crswap" swap file, is
+  // past 259 characters -- the file is left empty) is made again under its
+  // item's "~hash" name; the empty file goes first.
+  FileWrap.prototype.createWritable = function(o){
+    var rec = this._rec;
+    return this._real().then(function(h){
+      return h.createWritable(o).then(null, function(err){
+        if (!rec.fresh || rec.tiny || !rec.dir) throw err;
+        return rec.dir._retryTiny(rec, err).then(function(h2){ return h2.createWritable(o); });
+      });
+    });
+  };
   FileWrap.prototype.isSameEntry = function(other){
     return this._real().then(function(h){
       if (other && other._rec) return other._real().then(function(o){ return h === o || (typeof h.isSameEntry === "function" ? h.isSameEntry(o) : false); });
@@ -2456,20 +2627,65 @@
       return levelDir(nh, lf, create);
     });
   };
+  // The on-disk name of a new record: "<Room> - <Code> -- <name>" inside the
+  // level folder (the registry's short part, else the canonical key with the
+  // level folder taken off the front); "~hash -- <name>" when tiny.
+  ItemDir.prototype._realName = function(name, tiny){
+    var r = registry[this.name] || null, canon = this._canon, lf = this._g.lf;
+    if (tiny) return (r ? r.tiny : tinyOf(canon)) + SEP + name;
+    return (r ? r.short : shortOf(canon, lf)) + SEP + name;
+  };
   ItemDir.prototype.getFileHandle = function(name, opts){
     var self = this, create = !!(opts && opts.create), g = this._g;
     return this._merged().then(function(out){
       var rec = out[name];
       if (rec) return new FileWrap(name, rec);
       if (!create) throw notFound(name);
-      return self._levelDir(true).then(function(lh){
-        var real = self._canon + SEP + name;
-        return lh.getFileHandle(real, { create: true }).then(function(h){
-          var r = { h: h, parent: lh, real: real, layout: "new" };
+      return self._levelDir(true).then(null, function(err){
+        // on Windows a level folder that can't even be made is the path limit too
+        if (IS_WIN && !isNotFound(err) && lengthy(self._root._ctx, self._g.lf || "", "")) pathWarn(self._root._ctx, "failed");
+        throw err;
+      }).then(function(lh){
+        var ctx = self._root._ctx;
+        pathProbe(ctx);
+        var tiny = !!tinyNeeded[ctx.id + "\u0000" + self._canon];
+        function made(h, real, isTiny){
+          var r = { h: h, parent: lh, real: real, layout: "new", fresh: true, tiny: isTiny, dir: self, base: name };
           g.entries[name] = r;
-          recordWrite(self._root._ctx.id, lh.name, self._canon, name, r);
+          recordWrite(ctx.id, lh.name, self._canon, name, r);
           return new FileWrap(name, r);
+        }
+        var real = self._realName(name, tiny);
+        return lh.getFileHandle(real, { create: true }).then(function(h){ return made(h, real, tiny); }, function(err){
+          // not even the empty file could be made: straight to the "~hash" name
+          if (tiny || isNotFound(err) || !lengthy(ctx, lh.name, real)) throw err;
+          var real2 = self._realName(name, true);
+          return lh.getFileHandle(real2, { create: true }).then(function(h){
+            tinyNeeded[ctx.id + "\u0000" + self._canon] = 1;
+            pathWarn(ctx, "fallback");
+            return made(h, real2, true);
+          }, function(){ pathWarn(ctx, "failed"); throw err; });
         });
+      });
+    });
+  };
+  // createWritable failed on a record this session just made: if the file
+  // is empty (nothing was ever written), remove it and make the record
+  // under its "~hash" name instead -> that handle. Anything else rethrows.
+  ItemDir.prototype._retryTiny = function(rec, err){
+    var self = this, ctx = this._root._ctx, g = this._g;
+    if (!lengthy(ctx, rec.parent.name, rec.real)) return Promise.reject(err);
+    return rec.h.getFile().then(function(f){ return f.size === 0; }, function(){ return false; }).then(function(empty){
+      if (!empty) throw err;
+      return rec.parent.removeEntry(rec.real).then(null, function(){}).then(function(){
+        var real2 = self._realName(rec.base, true);
+        return rec.parent.getFileHandle(real2, { create: true }).then(function(h2){
+          rec.h = h2; rec.real = real2; rec.tiny = true;
+          g.entries[rec.base] = rec;
+          tinyNeeded[ctx.id + "\u0000" + self._canon] = 1;
+          pathWarn(ctx, "fallback");
+          return h2;
+        }, function(){ pathWarn(ctx, "failed"); throw err; });
       });
     });
   };
@@ -2493,7 +2709,7 @@
     if (!create) return Promise.resolve(null);
     return this._ctx.dir([ROOT, this._ctx.branch], true).then(function(h){ self._newH = h; delete misses[self._ctx.id + "\u0000new"]; return h; });
   };
-  Root.prototype._groups = function(){ return scan(this._ctx, this._newH, this._legH, this._level); };
+  Root.prototype._groups = function(){ return scan(this._ctx, this._newH, this._legH, this._level).then(function(m){ return m.groups(); }); };
   Root.prototype._dirs = function(){
     var self = this;
     return this._groups().then(function(groups){
@@ -2524,19 +2740,22 @@
     var lf = r ? levelFolder(r.level) : null;
     // the new-layout files: from a whole-branch or this level's listing
     var all = !ctx.force && freshMemo(memoKey(ctx.id, null));
-    var groupsP;
-    if (all && all.newH === this._newH && all.legH === this._legH) groupsP = all.p;
-    else if (lf != null && this._newH) groupsP = scan(ctx, this._newH, null, r.level);
+    var memoP;
+    if (all && all.newH === this._newH && all.legH === this._legH) memoP = all.p;
+    else if (lf != null && this._newH) memoP = scan(ctx, this._newH, null, r.level);
     else if (this._newH){
-      groupsP = ctx.levelDirs(this._newH).then(function(dirs){
+      memoP = ctx.levelDirs(this._newH).then(function(dirs){
         var m = memos[ctx.id + "\u0001levels"]; if (m) m.names = dirs.map(function(d){ return d.name; });
         lf = self._lfFor(canon, key);
         return scan(ctx, self._newH, null, lf);
       });
-    } else groupsP = Promise.resolve({});
-    return groupsP.then(function(groups){
+    } else memoP = Promise.resolve(null);
+    var memo = null;
+    return memoP.then(function(m){
+      memo = m;
+      var groups = m ? m.groups() : {};
       var g = groups[canon];
-      if (!g){ g = newGroup(lf); groups[canon] = g; }
+      if (!g){ g = newGroup(lf); groups[canon] = g; if (m) m.made[canon] = lf; }
       if (lf && !g.lf) g.lf = lf;
       // the item's old folder(s): the app's key, the canonical one, the ITPs' 80-character one
       var cands = [key];
@@ -2551,7 +2770,11 @@
         if (known) cands = cands.filter(function(n){ return known.indexOf(n) >= 0; });
         return Promise.all(cands.map(function(n){ return self._legH.getDirectoryHandle(n, { create: false }).then(null, softNull); }));
       }).then(function(found){
-        (found || []).forEach(function(dh){ if (dh && !have[dh.name]){ have[dh.name] = 1; g.legacy.push(dh); } });
+        (found || []).forEach(function(dh){
+          if (!dh || have[dh.name]) return;
+          have[dh.name] = 1; g.legacy.push(dh);
+          if (memo) memo.legacy.push({ dh: dh, canon: canon });
+        });
         return g;
       });
     }).then(function(g){
@@ -2636,19 +2859,23 @@
               var ev;
               try{ ev = JSON.parse(r.text); }catch(e){ ev = null; }
               if (!ev || typeof ev !== "object" || ev.level == null){ out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: "couldn't be read" }); return false; }
-              var canon = nameKey(itemKey(ev.level, ev.room, ev.joineryId));
-              var target = canon + SEP + fh.name;
-              return levelDir(levelFolder(ev.level)).then(function(lh){
-                return lh.getFileHandle(target, { create: false }).then(function(th){
-                  return readText(th).then(function(t){
-                    if (t.text === r.text) return true;
-                    if (!t.size) return writeText(lh, target, r.text).then(function(){ return readText(th); }).then(function(t2){ return t2.text === r.text; });
-                    out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: "a different record with the same name is already in the new place" });
-                    return false;
+              var canon = nameKey(itemKey(ev.level, ev.room, ev.joineryId)), lf = levelFolder(ev.level);
+              var target = shortOf(canon, lf) + SEP + fh.name, longName = canon + SEP + fh.name;
+              return levelDir(lf).then(function(lh){
+                // already moved under the long (pre-v2.1) name?
+                return lh.getFileHandle(longName, { create: false }).then(function(th){ return readText(th).then(function(t){ return t.text === r.text; }); }, function(err){ if (!isNotFound(err)) throw err; return false; }).then(function(there){
+                  if (there) return true;
+                  return lh.getFileHandle(target, { create: false }).then(function(th){
+                    return readText(th).then(function(t){
+                      if (t.text === r.text) return true;
+                      if (!t.size) return writeText(lh, target, r.text).then(function(){ return readText(th); }).then(function(t2){ return t2.text === r.text; });
+                      out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: "a different record with the same name is already in the new place" });
+                      return false;
+                    });
+                  }, function(err){
+                    if (!isNotFound(err)) throw err;
+                    return writeText(lh, target, r.text).then(function(th){ return readText(th); }).then(function(t){ return t.text === r.text; });
                   });
-                }, function(err){
-                  if (!isNotFound(err)) throw err;
-                  return writeText(lh, target, r.text).then(function(th){ return readText(th); }).then(function(t){ return t.text === r.text; });
                 });
               }).then(function(ok){
                 if (!ok) return false;
@@ -2700,12 +2927,17 @@
     }, true);
   }
 
+  // o: { dir, cacheId } -> Promise<{ rel, win }> (see pathProbe); { force }
+  // measures again. An app shows the banner itself only if it wants to --
+  // the probe already shows it once when rel is under what long names need.
+  function pathBudget(o){ return pathProbe(new Ctx({ dir: o.dir, branch: BRANCHES[0], cacheId: o.cacheId }), !!o.force); }
+
   window.UtzEvents = {
-    version: 2,
-    ROOT: ROOT, SEP: SEP, BRANCHES: BRANCHES,
-    itemKey: itemKey, nameKey: nameKey, levelFolder: levelFolder, itpKey: itpKey,
-    remember: remember, root: root, refresh: refresh, tidy: tidy, countLegacy: countLegacy,
-    _registry: registry, _memos: function(){ return memos; }
+    version: 2.1,
+    ROOT: ROOT, SEP: SEP, BRANCHES: BRANCHES, NEEDS_REL: NEEDS_REL, WIN_FULL: WIN_FULL,
+    itemKey: itemKey, nameKey: nameKey, levelFolder: levelFolder, itpKey: itpKey, shortOf: shortOf, tinyOf: tinyOf,
+    remember: remember, root: root, refresh: refresh, tidy: tidy, countLegacy: countLegacy, pathBudget: pathBudget,
+    _registry: registry, _memos: function(){ return memos; }, _probes: probes
   };
 })();
 </script>
@@ -3688,13 +3920,13 @@
       <div class="row">
         <div class="field" style="flex:1 1 160px; margin:0;">
           <label for="registerLevelFilter">Level</label>
-          <select id="registerLevelFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
+          <select id="registerLevelFilter" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
             <option value="">All levels</option>
           </select>
         </div>
         <div class="field" style="flex:1 1 160px; margin:0;">
           <label for="registerStatusFilter">Status</label>
-          <select id="registerStatusFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
+          <select id="registerStatusFilter" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
             <option value="">All statuses</option>
           </select>
         </div>
@@ -3755,13 +3987,13 @@
       <div class="row">
         <div class="field" style="flex:1 1 160px; margin:0;">
           <label for="reworkRegisterLevelFilter">Level</label>
-          <select id="reworkRegisterLevelFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
+          <select id="reworkRegisterLevelFilter" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
             <option value="">All levels</option>
           </select>
         </div>
         <div class="field" style="flex:1 1 160px; margin:0;">
           <label for="reworkRegisterReceivedFilter">State</label>
-          <select id="reworkRegisterReceivedFilter" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
+          <select id="reworkRegisterReceivedFilter" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;">
             <option value="">All</option>
             <option value="no">Not yet delivered</option>
             <option value="logged">Logged</option>
@@ -4173,7 +4405,7 @@
     <h2>Add joinery item</h2>
     <div class="field">
       <label for="addItemRoomSelect">Room</label>
-      <select id="addItemRoomSelect" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;"></select>
+      <select id="addItemRoomSelect" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;"></select>
     </div>
     <div class="field" id="addItemNewRoomField" hidden>
       <label for="addItemNewRoomInput">New room name</label>
@@ -4230,7 +4462,7 @@
     <!-- (v41) Andrew: "edit joinery item needs the room editable" -->
     <div class="field">
       <label for="editItemRoomSelect">Room</label>
-      <select id="editItemRoomSelect" style="width:100%;background:#140d0d;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;"></select>
+      <select id="editItemRoomSelect" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;"></select>
     </div>
     <div class="field" id="editItemNewRoomField" hidden>
       <label for="editItemNewRoomInput">New room name</label>
@@ -7783,13 +8015,14 @@
     }).then(function(res){
       var items = res[0], dirs = {};
       res[1].forEach(function(d){ dirs[d.name] = d; });
-      var seen = {};
+      var seen = {}, failedItems = [];
       var p = Promise.resolve();
-      items.forEach(function(it){
-        var key = joineryItemKey(it);
-        if (seen[key]) return; // the same key twice (a duplicate record) -- once is enough
-        seen[key] = true;
-        p = p.then(function(){
+      // (v51) Andrew: "importing into projects, not all dates were set to pc date" -- one item's failed save
+      // (a OneDrive / SharePoint read-back that didn't check out, a folder that wouldn't open) used to stop
+      // the whole run at that item. Now each item is on its own: a failure is logged, counted, retried once
+      // at the end, and reported; the rest still get their date.
+      function oneItem(it, key){
+        return Promise.resolve().then(function(){
           var dirH = dirs[key];
           if (!dirH){
             if (!pcDate) return;
@@ -7821,8 +8054,24 @@
             return writePcScheduleEvent(projectHandle, it, "set", pcDate, by, latest.manufactureLeadTimeDays).then(function(){ out.moved++; });
           });
         });
+      }
+      items.forEach(function(it){
+        var key = joineryItemKey(it);
+        if (seen[key]) return; // the same key twice (a duplicate record) -- once is enough
+        seen[key] = true;
+        p = p.then(function(){ return oneItem(it, key).catch(function(err){ console.error("PC date for " + key + " failed (will retry once):", err); failedItems.push({ it: it, key: key }); }); });
       });
-      return p.then(function(){ registerScheduleList = []; return out; });
+      return p.then(function(){
+        if (!failedItems.length) return;
+        var again = failedItems; failedItems = [];
+        var q = Promise.resolve();
+        again.forEach(function(f){ q = q.then(function(){ return oneItem(f.it, f.key).catch(function(err){ console.error("PC date for " + f.key + " failed again:", err); failedItems.push(f); }); }); });
+        return q;
+      }).then(function(){
+        out.failed = failedItems.length;
+        try{ var k = "utzline-projects:pcRecheck:" + (activeProjectName || ""); if (out.failed || out.skipped) localStorage.setItem(k, "1"); }catch(e){}
+        registerScheduleList = []; return out;
+      });
     });
   }
   function readJsonFileHandleStrictOrNull(fh){
@@ -7851,6 +8100,7 @@
     if (r.moved) bits.push(r.moved + " moved to the new PC date");
     if (r.cleared) bits.push(r.cleared + " cleared");
     if (r.skipped) bits.push(r.skipped + " couldn't be read just now — save again later to catch them up");
+    if (r.failed) bits.push(r.failed + " couldn't be saved — open Project info and press Save to catch them up");
     return bits.length ? " " + bits.join(", ") + "." : "";
   }
 
@@ -12875,11 +13125,22 @@
   }
   var companyLogoLoadedFor = null;
 
+  // (2026-10-01) Windows' 260-character path limit: on a PC, measure what this
+  // project's folder path leaves for UTZLINE's files (the event store shows
+  // its banner once when that is less than long room names need) -- in the
+  // background, nothing waits for it.
+  function checkPathBudget(dirH){
+    try{
+      if (!window.UtzEvents || !UtzEvents.pathBudget || !dirH) return;
+      UtzEvents.pathBudget({ dir: function(segs, c){ return projectDir(dirH, [projectSavesDirName()].concat(segs), c); }, cacheId: eventsCacheId(dirH) }).catch(function(){});
+    }catch(e){}
+  }
   function openProject(name){
     return projectsRootHandle.getDirectoryHandle(name, { create: false }).then(function(dirH){
       if (activeProjectName !== name) resetProjectScopedState();
       activeProjectHandle = dirH;
       activeProjectName = name;
+      checkPathBudget(dirH);
       return populateLevelList();
     }).catch(function(err){
       console.error("Opening project failed:", err);
@@ -14551,11 +14812,17 @@
         var zoneMap = {};
         // (v50) the level whose code matches the report's zone (Set up floor plans / a past import), then this device's last map, then a guess by the level number / Ground
         var allZones = woZonesOf(interp);
-        allZones.forEach(function(z){ zoneMap[z] = psLevelForZoneCode(z, ctx.levels, zonesMeta) || ((saved[z] && ctx.levels.indexOf(saved[z]) !== -1) ? saved[z] : "") || psGuessLevelForZone(z, ctx.levels, zonesMeta, allZones); });
+        var found = woFindZonesFromPlans(interp, ctx), zoneHow = {}; // (v52) the plans' own room labels find the zones
+        allZones.forEach(function(z){
+          var v = psLevelForZoneCode(z, ctx.levels, zonesMeta); if (v){ zoneMap[z] = v; zoneHow[z] = "its code"; return; }
+          v = (saved[z] && ctx.levels.indexOf(saved[z]) !== -1) ? saved[z] : ""; if (v){ zoneMap[z] = v; zoneHow[z] = "last time"; return; }
+          v = found.map[z] || ""; if (v){ zoneMap[z] = v; zoneHow[z] = found.why[z]; return; }
+          v = psGuessLevelForZone(z, ctx.levels, zonesMeta, allZones); zoneMap[z] = v; if (v) zoneHow[z] = "the level number";
+        });
         // (v35) a blank field is filled from the report; one that already says something else is only replaced if ticked
         var jobInfoUse = {};
         woJobInfoRows(header, mr.meta).forEach(function(r){ jobInfoUse[r.key] = (r.state === "fill"); });
-        woImportState = { fileName: file.name, interp: interp, levels: ctx.levels, levelRooms: ctx.levelRooms, items: ctx.items, woList: ctx.woList, zoneMap: zoneMap, plan: [],
+        woImportState = { fileName: file.name, interp: interp, levels: ctx.levels, levelRooms: ctx.levelRooms, levelFileRooms: ctx.levelFileRooms, unreadableLevels: ctx.unreadableLevels || [], levelLabels: ctx.levelLabels, items: ctx.items, woList: ctx.woList, zoneMap: zoneMap, zoneHow: zoneHow, plan: [],
           costRows: costRows, fmt: costFmt, // (v37)
           header: header, meta: mr.meta, metaFailed: mr.failed, jobInfoUse: jobInfoUse };
         woRenderImportDialog();
@@ -14574,13 +14841,45 @@
     return z.sort();
   }
   // Levels, each level's rooms, and joinery-items.json -- strictly.
+  // (v52) Andrew: "the import is broken now with the multiple file pdf imports" (the SharePoint test build:
+  // the plans step had just written several multi-MB level files that OneDrive was still uploading). A level
+  // file that can't be read right now no longer stops the whole import: it is listed by its file name, its
+  // rooms come from its items, and its room list is simply not updated this time (unreadableLevels).
+  function woListLevelsTolerant(){
+    return listExistingLevelsStrict(activeProjectHandle).then(function(levels){ return { levels: levels, unreadable: [] }; }, function(err){
+      if (!isReadFailed(err)) return Promise.reject(err);
+      return listLevelFileHandles(activeProjectHandle).then(function(handles){
+        return listLevelNames(activeProjectHandle).then(function(res){
+          var names = res.names.slice(), bad = [];
+          var prefix = (sanitizeFileBase(activeProjectName) + " - ").toLowerCase();
+          res.unreadable.forEach(function(fname){
+            var base = fname.replace(/\.json$/i, "");
+            var nm = base.toLowerCase().indexOf(prefix) === 0 ? base.slice(prefix.length) : base;
+            if (names.indexOf(nm) === -1){ names.push(nm); bad.push(nm); }
+          });
+          names.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+          console.warn("Import: level files that couldn't be read just now:", bad);
+          return { levels: names, unreadable: bad };
+        });
+      });
+    });
+  }
   function woLoadProjectContext(){
-    return listExistingLevelsStrict(activeProjectHandle).then(function(levels){
-      var levelRooms = {};
+    return woListLevelsTolerant().then(function(lres){
+      var levels = lres.levels, unreadableLevels = lres.unreadable.slice();
+      var levelRooms = {}, levelFileRooms = {}; // levelFileRooms: only what the level file lists (v52: a missed room list is caught up)
       var p = Promise.resolve();
+      var levelLabels = {}; // (v52) the room / code labels read off each level's plan PDF -- what finds the report's zones
       levels.forEach(function(lv){
         p = p.then(function(){
-          return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){ levelRooms[lv] = level ? level.rooms.map(function(r){ return r.name; }) : []; });
+          if (unreadableLevels.indexOf(lv) !== -1){ levelRooms[lv] = []; return; }
+          return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){ levelRooms[lv] = level ? level.rooms.map(function(r){ return r.name; }) : []; levelFileRooms[lv] = levelRooms[lv].slice(); }, function(err){
+            if (!isReadFailed(err)) return Promise.reject(err);
+            console.warn("Import: " + lv + "'s level file couldn't be read just now:", err);
+            levelRooms[lv] = []; unreadableLevels.push(lv);
+          });
+        }).then(function(){
+          return readPlanLabels(activeProjectHandle, activeProjectName, lv).then(function(pl){ levelLabels[lv] = pl && pl.labels ? pl.labels.map(function(l){ return String(l[0] || ""); }) : []; }, function(){ levelLabels[lv] = []; });
         });
       });
       return p.then(function(){ return Promise.all([readJoineryItems(activeProjectHandle), woListRead(activeProjectHandle)]); }).then(function(res){
@@ -14590,9 +14889,45 @@
           if (!levelRooms[it.level]) return;
           if (it.room && levelRooms[it.level].indexOf(it.room) === -1) levelRooms[it.level].push(it.room);
         });
-        return { levels: levels, levelRooms: levelRooms, items: items, woList: res[1] };
+        return { levels: levels, levelRooms: levelRooms, levelFileRooms: levelFileRooms, levelLabels: levelLabels, unreadableLevels: unreadableLevels, items: items, woList: res[1] };
       });
     });
+  }
+  /* (v52) Andrew (the zone -> level pickers, all needing a hand): "the app should find these not request them".
+     A zone's rooms are on exactly one level's plan: the report says zone H1 holds AH.002, AH.010, …; the plan
+     PDF imported for "Level 1 (North)" carries those very labels (Plan Labels, v34), and its level file lists
+     the rooms already set up. So each zone is scored against each level by how many of its room numbers that
+     level knows (plan labels + room names + items' rooms); the best level wins when it is clearly ahead
+     (at least one room, and more than any other level). Codes typed in Set up floor plans and the map
+     confirmed in an earlier import still come first; the number guess (H2 -> Level 2) is the last resort. */
+  function woRoomToken(name){
+    var t = String(name || "").trim().split(/\s+/)[0] || "";
+    return t.replace(/[,;:]+$/, "").toUpperCase();
+  }
+  function woFindZonesFromPlans(interp, ctx){
+    var byLevel = {};
+    (ctx.levels || []).forEach(function(lv){
+      var set = {};
+      (ctx.levelLabels && ctx.levelLabels[lv] || []).forEach(function(t){ var k = String(t || "").trim().toUpperCase(); if (k) set[k] = true; });
+      (ctx.levelRooms && ctx.levelRooms[lv] || []).forEach(function(r){ var k = woRoomToken(r); if (k) set[k] = true; });
+      byLevel[lv] = set;
+    });
+    var out = {}, why = {};
+    woZonesOf(interp).forEach(function(z){
+      var rooms = interp.rooms.filter(function(r){ return r.zone === z; });
+      var tokens = {};
+      rooms.forEach(function(r){ woRoomNumberKeysFor(r).forEach(function(k){ k = woRoomToken(k); if (k) tokens[k] = true; }); }); // the room numbers (AH.002), any report shape
+      var keys = Object.keys(tokens);
+      if (!keys.length) return;
+      var best = null, second = 0;
+      (ctx.levels || []).forEach(function(lv){
+        var n = 0; keys.forEach(function(k){ if (byLevel[lv][k]) n++; });
+        if (!best || n > best.n){ second = best ? best.n : 0; best = { lv: lv, n: n }; }
+        else if (n > second) second = n;
+      });
+      if (best && best.n > 0 && best.n > second){ out[z] = best.lv; why[z] = best.n + " of " + keys.length + " room" + (keys.length === 1 ? "" : "s") + " on its plan"; }
+    });
+    return { map: out, why: why };
   }
   var WO_ACTION_LABELS = { "new": "New — to place", "fill": "Adds WO #", "same": "Already there", "differs": "WO # differs — kept", "skip-zone": "Zone not mapped", "out": "Left out" };
   // (v40) Andrew: "i have had a double up, we need an option to remove on
@@ -14671,7 +15006,8 @@
       st.interp.roomless = st.interp.roomless || [];
       var saved = woLoadZoneMap(), zm = {};
       var allZones = woZonesOf(st.interp);
-      allZones.forEach(function(z){ zm[z] = st.zoneMap[z] || psLevelForZoneCode(z, st.levels, psZonesMetaFor()) || ((saved[z] && st.levels.indexOf(saved[z]) !== -1) ? saved[z] : "") || psGuessLevelForZone(z, st.levels, psZonesMetaFor(), allZones); }); // (v50)
+      var found = woFindZonesFromPlans(st.interp, st); // (v52)
+      allZones.forEach(function(z){ zm[z] = st.zoneMap[z] || psLevelForZoneCode(z, st.levels, psZonesMetaFor()) || ((saved[z] && st.levels.indexOf(saved[z]) !== -1) ? saved[z] : "") || found.map[z] || psGuessLevelForZone(z, st.levels, psZonesMetaFor(), allZones); }); // (v50/v52)
       st.zoneMap = zm;
       woRenderImportDialog();
     }
@@ -14750,6 +15086,7 @@
       (dropNew ? " · <span class=\"wo-count drop\">" + dropNew + " to drag onto the plan</span>" : "") +
       (nOut ? " · <span class=\"wo-count out\">" + nOut + " left out</span>" : "") +
       (listChanged ? " · " + listChanged + " price/description update" + (listChanged === 1 ? "" : "s") : "");
+    if (st.unreadableLevels && st.unreadableLevels.length) woImportSummaryEl.innerHTML += " <span class=\"wo-count skip\">· " + escapeHtml(st.unreadableLevels.join(", ")) + (st.unreadableLevels.length === 1 ? " couldn't be read just now — its items import, its room list is left for next time" : " couldn't be read just now — their items import, their room lists are left for next time") + "</span>"; // (v52)
     woRenderJobInfo(st); // (v35)
     woRenderFormat(st); // (v37)
     // zone -> level
@@ -14762,8 +15099,14 @@
       var sel = document.createElement("select"); sel.setAttribute("data-zone", z);
       sel.innerHTML = "<option value=\"\">— don't import —</option>" + st.levels.map(function(lv){ return "<option value=\"" + escapeHtml(lv) + "\">" + escapeHtml(lv) + "</option>"; }).join("");
       sel.value = st.zoneMap[z] || "";
-      sel.addEventListener("change", function(){ st.zoneMap[z] = sel.value; woRenderImportDialog(); });
+      sel.addEventListener("change", function(){ st.zoneMap[z] = sel.value; if (st.zoneHow) st.zoneHow[z] = sel.value ? "picked" : ""; woRenderImportDialog(); });
       row.appendChild(lab); row.appendChild(sel);
+      // (v52) found, not asked: where the pick came from
+      if (st.zoneMap[z] && st.zoneHow && st.zoneHow[z] && st.zoneHow[z] !== "picked"){
+        var how = document.createElement("span"); how.className = "wo-zone-how";
+        how.textContent = /room/.test(st.zoneHow[z]) ? "found: " + st.zoneHow[z] : "from " + st.zoneHow[z];
+        row.appendChild(how);
+      }
       woImportZonesEl.appendChild(row);
     });
     // preview, grouped by heading
@@ -14828,10 +15171,13 @@
     var todo = (counts["new"] || 0) + (counts.fill || 0);
     var infoN = woJobInfoChanges(st).length; // (v35)
     var anything = todo + (st.listChanges || 0);
-    woImportConfirmBtn.disabled = !(anything || infoN);
+    // (v52) rooms a level file is missing (an earlier import's room list that couldn't be saved) -- caught up by an import
+    var miss = woRoomsMissingFromLevels(st.plan || [], st.levelFileRooms), missN = 0;
+    Object.keys(miss).forEach(function(lv){ missN += miss[lv].filter(function(n){ return !(st.plan || []).some(function(r){ return r.action === "new" && r.level === lv && r.room === n; }); }).length; });
+    woImportConfirmBtn.disabled = !(anything || infoN || missN);
     woImportConfirmBtn.textContent = todo ? "Import " + todo + " item" + (todo === 1 ? "" : "s") + (dropNew ? " + " + dropNew + " to place" : "")
       : dropNew ? "Import " + dropNew + " to place" : anything ? "Update " + anything + " work order" + (anything === 1 ? "" : "s")
-      : infoN ? "Update project info" : "Nothing to import";
+      : missN ? "Add " + missN + " missing room" + (missN === 1 ? "" : "s") : infoN ? "Update project info" : "Nothing to import";
   }
   function woCloseImportDialog(){ woImportBackdrop.hidden = true; woImportState = null; }
   if (woImportCancelBtn) woImportCancelBtn.addEventListener("click", woCloseImportDialog);
@@ -14862,15 +15208,23 @@
             if (typeof populateLevelList === "function") populateLevelList();
             return;
           }
-          showToast("Imported: " + res.added + " new item" + (res.added === 1 ? "" : "s") + ", " + res.filled + " WO # added" +
+          var importMsg = ("Imported: " + res.added + " new item" + (res.added === 1 ? "" : "s") + ", " + res.filled + " WO # added" +
             (res.valued ? ", " + res.valued + " value" + (res.valued === 1 ? "" : "s") + " set from the sell price" : "") +
             (res.toDrop ? ", " + res.toDrop + " with no room yet" : "") +
             (res.autoPlaced ? ", " + res.autoPlaced + " placed from the plan's labels (" + (res.autoByRoom ? res.autoByRoom + " on the room label; " : "") + "check them — amber on the plan)" : "") +
             (res.pcSet ? ", " + res.pcSet + " given the PC date as their required delivery date" : "") +
+            (res.pcFailed ? ", " + res.pcFailed + " couldn't be given the PC date — open Project info and press Save to catch them up" : "") +
+            (res.roomsFailed && res.roomsFailed.length ? ", but the room list of " + res.roomsFailed.join(", ") + " couldn't be updated just now (the items are in; importing the report again adds the rooms)" : "") +
+            (!res.added && !res.filled && res.roomsAdded ? ", " + res.roomsAdded + " missing room" + (res.roomsAdded === 1 ? "" : "s") + " added to the level lists" : "") +
             (res.info && res.info.length ? ", project info filled in from the report (" + res.info.join(", ") + ")" : "") +
             (res.infoFailed ? ", but the project info couldn't be updated just now — fill it in Project info" : "") +
-            ((res.added || res.toDrop) ? ". Open a level's plan (Place joinery items) and drag the rest from “To place” into position." : "."), 11000);
-          if (typeof populateLevelList === "function") populateLevelList();
+            ((res.added || res.toDrop) ? ". Open a level's plan (Place joinery items) and drag the rest from “To place” into position." : "."));
+          // (v52) the import's own message last: the Levels list repaint may toast first (a level file still syncing)
+          // the summary shows at once, and again once the level list has re-read (its own
+          // "couldn't read a level file" toast must not be the last word)
+          var showImportMsg = function(){ showToast(importMsg, 11000); };
+          showImportMsg();
+          if (typeof populateLevelList === "function"){ var pl = populateLevelList(); if (pl && pl.then) pl.then(showImportMsg, showImportMsg); }
         });
       });
     }).catch(function(err){
@@ -14901,6 +15255,20 @@
       });
     });
   }
+  // (v52) the rooms a plan needs that the level FILE doesn't list yet (an earlier import's room list that couldn't be saved)
+  function woRoomsMissingFromLevels(plan, levelFileRooms){
+    var out = {};
+    plan.forEach(function(r){
+      if (!r.level || r.action === "skip-zone" || r.action === "out" || !r.room) return;
+      var fr = levelFileRooms && levelFileRooms[r.level];
+      if (!fr) return; // a level file that couldn't be read: left alone
+      var low = fr.map(function(x){ return String(x).toLowerCase(); });
+      if (low.indexOf(String(r.room).toLowerCase()) !== -1) return;
+      (out[r.level] = out[r.level] || []);
+      if (out[r.level].indexOf(r.room) === -1) out[r.level].push(r.room);
+    });
+    return out;
+  }
   // Re-reads everything strictly, re-plans against what's on disk NOW,
   // writes each changed level file, then joinery-items.json once.
   function woApplyImportItems(st, who){
@@ -14930,23 +15298,45 @@
       var listed = 0;
       woListRecordsFor(st, plan, at, who).forEach(function(rec){ if (woListRecordState(ctx.woList || { workOrders: [] }, rec) !== "same") listed++; });
       var valued = woResplitValues(items, list, who, "Imported from " + st.fileName);
-      if (!added && !filled && !listed && !valued) return { added: 0, filled: 0, listed: 0, valued: 0 };
-      var levels = Object.keys(newRoomsByLevel);
-      var p = migrateLegacyLevelsIfNeeded(activeProjectHandle);
-      levels.forEach(function(lv){
-        p = p.then(function(){
-          return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){
-            var entry = level || { name: lv, imageDataURL: null, imageTiles: null, imageW: 0, imageH: 0, rooms: [], markers: [] };
-            var have = entry.rooms.map(function(r){ return r.name.toLowerCase(); });
-            newRoomsByLevel[lv].forEach(function(name){ if (have.indexOf(name.toLowerCase()) === -1){ entry.rooms.push({ name: name }); have.push(name.toLowerCase()); } });
-            return writeLevelFile(activeProjectHandle, activeProjectName, lv, entry);
+      var missing = woRoomsMissingFromLevels(plan, ctx.levelFileRooms); // (v52)
+      Object.keys(missing).forEach(function(lv){ newRoomsByLevel[lv] = newRoomsByLevel[lv] || []; missing[lv].forEach(function(n){ if (newRoomsByLevel[lv].indexOf(n) === -1) newRoomsByLevel[lv].push(n); }); });
+      var itemsChanged = !!(added || filled || listed || valued);
+      if (!itemsChanged && !Object.keys(newRoomsByLevel).length) return { added: 0, filled: 0, listed: 0, valued: 0 };
+      // (v52) joinery-items.json first -- the import itself. Each level's room list is then added one level at a
+      // time and never fails the import: rooms are only the Rooms-screen list (every app already counts a room
+      // named on an item as existing), and a level file that won't read or save right now (OneDrive still
+      // uploading the plan the Set up step just wrote, the SharePoint test's "changed by someone else") is
+      // retried once and otherwise left for the next import, which adds the missing rooms by itself.
+      var levels = Object.keys(newRoomsByLevel), roomsFailed = [];
+      function addRooms(lv){
+        if ((ctx.unreadableLevels || []).indexOf(lv) !== -1) return Promise.reject(new Error("level file unreadable at the start"));
+        return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){
+          if (!level) return Promise.reject(new Error("no level file"));
+          var have = level.rooms.map(function(r){ return r.name.toLowerCase(); }), n = 0;
+          newRoomsByLevel[lv].forEach(function(name){ if (have.indexOf(name.toLowerCase()) === -1){ level.rooms.push({ name: name }); have.push(name.toLowerCase()); n++; } });
+          if (!n) return;
+          return writeLevelFile(activeProjectHandle, activeProjectName, lv, level).then(function(){ roomsAdded += n; });
+        });
+      }
+      var roomsAdded = 0;
+      return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){ return itemsChanged ? writeJoineryItems(activeProjectHandle, items) : null; }).then(function(){
+        return itemsChanged ? woListWrite(activeProjectHandle, list) : null;
+      }).then(function(){
+        var r = Promise.resolve();
+        levels.forEach(function(lv){
+          r = r.then(function(){
+            return addRooms(lv).catch(function(err){
+              console.warn("Adding the rooms to " + lv + " failed (retrying once):", err);
+              return new Promise(function(res){ setTimeout(res, 1500); }).then(function(){ return addRooms(lv); }).catch(function(err2){
+                console.error("Adding the rooms to " + lv + " failed again:", err2);
+                roomsFailed.push(lv);
+              });
+            });
           });
         });
-      });
-      return p.then(function(){ return writeJoineryItems(activeProjectHandle, items); }).then(function(){
-        return woListWrite(activeProjectHandle, list);
+        return r;
       }).then(function(){
-        var out = { added: added, filled: filled, listed: listed, valued: valued, toDrop: list.workOrders.filter(function(w){ return !items.some(function(it){ return String(it.workOrderNo || "").trim() === w.wo; }); }).length, autoPlaced: 0, autoByRoom: 0 };
+        var out = { roomsFailed: roomsFailed, roomsAdded: roomsAdded, added: added, filled: filled, listed: listed, valued: valued, toDrop: list.workOrders.filter(function(w){ return !items.some(function(it){ return String(it.workOrderNo || "").trim() === w.wo; }); }).length, autoPlaced: 0, autoByRoom: 0 };
         // (v34) each level whose plan has labels: its new items go straight onto them
         var lvls = [];
         plan.forEach(function(r){ if (r.level && lvls.indexOf(r.level) === -1) lvls.push(r.level); });
@@ -14957,7 +15347,7 @@
           }, function(err){ console.error("Placing from " + lv + "'s plan labels failed:", err); });
         });
         // (v35) the new items get the project's PC date as their required delivery date
-        q = q.then(function(){ return applyPcDateToNewItems(); }).then(function(r){ out.pcSet = r ? r.set : 0; });
+        q = q.then(function(){ return applyPcDateToNewItems(); }).then(function(r){ out.pcSet = r ? r.set : 0; out.pcFailed = r ? (r.failed || 0) : 0; });
         return q.then(function(){ return out; });
       });
     });
@@ -16565,6 +16955,8 @@
     // (v35) PC date
     addJoineryItemForTest: function(item){ return addJoineryItem(activeProjectHandle, item); }, // (v36)
     applyPcDateToItemsForTest: function(pc, recheck){ return applyPcDateToItems(activeProjectHandle, pc, { recheck: !!recheck }); },
+    pcDateSummaryForTest: function(r, pc){ return pcDateSummary(r, pc); }, // (v51)
+    woFindZonesFromPlansForTest: function(interp, ctx){ return woFindZonesFromPlans(interp, ctx); }, // (v52)
     pcSubtractBusinessDaysForTest: function(d, n){ return pcSubtractBusinessDays(d, n); },
     planMoveModeForTest: function(){ return planMoveMode; },
     planMarkersForTest: function(){ return ((planSaved && planSaved.objects) || []).filter(function(o){ return o.type === "roomlink"; }).map(function(o){ return { id: o.id, room: o.roomName, code: o.joineryCode, x: o.x, y: o.y, autoPlaced: o.autoPlaced || null }; }); },
