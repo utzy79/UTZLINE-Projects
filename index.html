@@ -1650,10 +1650,14 @@
         .then(function(itemDir){
           return listDir(itemDir).then(function(groups){
             return Promise.all(groups.filter(function(g){ return g.kind === "directory"; }).map(function(g){
-              return Promise.all([listPart(g), g.getDirectoryHandle("Returned", { create: false }).then(listPart, function(){ return []; })]).then(function(r){
+              // (2026-10-01) Andrew: "the returned need to be split to returned to resubmit, or approved" --
+              // Returned/ is "Returned to resubmit", Approved/ (new) is "Approved"
+              return Promise.all([listPart(g), g.getDirectoryHandle("Returned", { create: false }).then(listPart, function(){ return []; }),
+                g.getDirectoryHandle("Approved", { create: false }).then(listPart, function(){ return []; })]).then(function(r){
                 var sent = labelRevisions(r[0]), out = [];
                 sent.forEach(function(x){ out.push({ at: (x.info && x.info.at) || stampToIso(x.stamp), by: (x.info && x.info.by) || "", cat: "Shop drawing", cls: "", text: "Sent " + x.revLabel, detail: [esc(x.displayName)] }); });
-                r[1].forEach(function(x){ out.push({ at: (x.info && x.info.at) || stampToIso(x.stamp), by: (x.info && x.info.by) || "", cat: "Shop drawing", cls: "", text: "Returned " + labelReturned(x, sent), detail: [esc(x.displayName)] }); });
+                r[1].forEach(function(x){ out.push({ at: (x.info && x.info.at) || stampToIso(x.stamp), by: (x.info && x.info.by) || "", cat: "Shop drawing", cls: "", text: "Returned to resubmit " + labelReturned(x, sent), detail: [esc(x.displayName)] }); });
+                r[2].forEach(function(x){ out.push({ at: (x.info && x.info.at) || stampToIso(x.stamp), by: (x.info && x.info.by) || "", cat: "Shop drawing", cls: "c-created", text: "Approved " + labelReturned(x, sent), detail: [esc(x.displayName)] }); });
                 return out;
               });
             }));
@@ -1690,8 +1694,10 @@
     }
     function attachJobNoteNames(entries, notes){
       var files = (notes || []).map(function(n){
-        var m = / - (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.pdf$/i.exec(n.fileName || "");
-        return { name: n.fileName, at: m ? stampToIso(m[1]) : "", used: false };
+        // (2026-10-01, code-only file names) "Job note - <stamp> - <code>.pdf" (the original name is in the
+        // sidecar the app passes as `original`); older notes "<original> - <stamp>.pdf"
+        var m = /(\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})/.exec(n.fileName || "");
+        return { name: n.original || n.displayName || n.fileName, at: m ? stampToIso(m[1]) : "", used: false };
       });
       entries.filter(function(e){ return e.jobNote; }).forEach(function(e){
         var t = new Date(e.at).getTime(), best = null, bestD = Infinity;
@@ -1807,9 +1813,11 @@
    is that every save ALSO writes one small, never-rewritten event file
    holding just what that save changed:
 
-     flat:   Project Saves/UTZLINE ITP/<App> Log/<Level> - <Room> - <Code>/
+     flat:   Project Saves/UTZLINE ITP/<App> Log/<file name>/
+             (2026-10-01: the item's FILE NAME -- its joinery code, UtzItemFiles --
+             was "<Level> - <Room> - <Code>"; Windows' 260-character path limit)
      legacy: <app's room folder>/<Code> log/
-       "<name> - <YYYY-MM-DD HH-mm-ss-mmm> - change.json"
+       "<initials> - <yy-mm-dd HH-mm-ss-mmm> - change.json"   (2026-10-01; was "<name> - <YYYY-...>")
        { kind: "change", app, by, at, level, room, joineryId, fileBase,
          rows?: { "<index>": row }, signoff?: { "<role>": obj|null },
          fields?: { "<key>": value }, removed?: [key],
@@ -1934,7 +1942,10 @@
     var ev = { kind: "change", app: meta.app || "", by: meta.by || "", at: d.toISOString(),
       level: meta.level || "", room: meta.room || "", joineryId: meta.joineryId || "", fileBase: meta.fileBase || "" };
     Object.keys(ch).forEach(function(k){ ev[k] = ch[k]; });
-    return { name: userSlug(meta.by) + " - " + stamp(d) + " - change.json", ev: ev };
+    // (2026-10-01) initials and a two-digit year -- the body keeps the full name and time
+    var who = global.UtzItemFiles ? global.UtzItemFiles.initials(meta.by) : userSlug(meta.by);
+    var when = global.UtzItemFiles ? global.UtzItemFiles.stamp(d, true) : stamp(d);
+    return { name: who + " - " + when + " - change.json", ev: ev };
   }
   // After the event file has landed: the base about to be written records
   // it as seen and as the latest writer of every part it changed.
@@ -2135,6 +2146,137 @@
 })(window);
 </script>
 <!-- UTZLINE-ITP-LOG END -->
+<!-- UTZLINE-ITEM-FILES BEGIN (generated from shared/item-files -- don't edit here) -->
+<script>
+/* ============================== UTZLINE item file names (2026-10-01) ==============================
+   Andrew: "have a real good think about how we can minimise filepaths, maybe we
+   need to lose the joinery descriptions and just have joinery codes. give me a
+   solid solution" -- then "I have no actual current files so dont care if I
+   need to start again".
+
+   Every folder and file an app keeps for ONE joinery item is named by that
+   item's FILE NAME ("fileKey"): its joinery code, e.g.
+       Project Saves/Shop Drawings/JG.33.1/...
+       Project Saves/UTZLINE Events/Joinery Schedule/Ground Floor/JG.33.1 -- AU - 26-10-01 16-25-35-281 - set.json
+   instead of "<Level> - <Room> - <Code>" (64 characters for the pilot's
+   "Ground Floor - G.33 - Change Cubical & Patient Consent - JG.33.1"). The
+   level, room and description stay inside the records and joinery-items.json,
+   so every screen still shows them.
+
+   The file name is chosen ONCE, by UTZLINE Projects, when the item is made
+   (or imported), and saved on the item in joinery-items.json ("fileKey"):
+     - the code, cleaned of the characters Windows refuses and cut to 40;
+     - a code the project already uses (one work order dropped in two rooms,
+       which Projects allows) gets " (2)", " (3)" ...; Windows sees "JG.1"
+       and "jg.1" as one name, so the check ignores case;
+     - an item with no code: its room, else "Item".
+   It never changes afterwards -- an item moved to another room, or a code
+   edited later, keeps its file name, so nothing is ever left behind.
+
+   Every other app reads joinery-items.json and register()s it; fileKey()
+   then gives an item's file name from its level, room and code. An item it
+   doesn't know (an older joinery-items.json without file names) gets the
+   same rule as Projects' first choice -- the cleaned code.
+
+   Generated into each app between UTZLINE-ITEM-FILES markers from
+   shared/item-files/item-files.js -- edit it there. */
+(function(){
+  "use strict";
+  var MAX = 40;
+  function clean(s, max){
+    var c = String(s == null ? "" : s).replace(/[<>:"/\\|?*\x00-\x1f]/g, "").replace(/\s+/g, " ").trim()
+      .replace(/^[._ ]+|[._ ]+$/g, "").replace(/-{2,}/g, "-");
+    max = max || MAX;
+    if (c.length > max) c = c.slice(0, max).replace(/[ ._-]+$/, "");
+    return c;
+  }
+  // The file name an item would get if nothing else in the project had it.
+  function baseOf(code, room){ return clean(code) || clean(room, 30) || "Item"; }
+  function low(s){ return String(s == null ? "" : s).trim().toLowerCase(); }
+  function tripleKey(level, room, code){ return low(level) + "\u0000" + low(room) + "\u0000" + low(code); }
+  // A file name that can go on disk as given (what assign() would have made).
+  function valid(k){ return typeof k === "string" && k.length > 0 && k.length <= MAX + 6 && clean(k, MAX + 6) === k; }
+
+  // UTZLINE Projects: give every item that has none its file name (in the
+  // order the items are listed). Items that already have one keep it.
+  // -> how many were given one.
+  function assign(items){
+    if (!Array.isArray(items)) return 0;
+    var used = {}, byTriple = {}, n = 0;
+    // a file name two DIFFERENT items both carry (a deleted item put back
+    // after its name was given out again): the later one gets a fresh name.
+    // The same item twice (same level, room and code -- an import's
+    // duplicate record) is one item to every app, so it keeps one name.
+    items.forEach(function(it){
+      if (!it || !valid(it.fileKey)) return;
+      var k = it.fileKey.toLowerCase(), t = tripleKey(it.level, it.room, it.joineryId);
+      if (used[k] && used[k] !== t) it.fileKey = ""; else { used[k] = t; if (!byTriple[t]) byTriple[t] = it.fileKey; }
+    });
+    items.forEach(function(it){
+      if (!it || typeof it !== "object" || valid(it.fileKey)) return;
+      var t = tripleKey(it.level, it.room, it.joineryId);
+      if (byTriple[t]){ it.fileKey = byTriple[t]; n++; return; }
+      var b = baseOf(it.joineryId, it.room), k = b, i = 2;
+      while (used[k.toLowerCase()]){ k = b + " (" + i + ")"; i++; }
+      it.fileKey = k; used[k.toLowerCase()] = t; byTriple[t] = k; n++;
+    });
+    return n;
+  }
+
+  // Each project's items, as read by the app: project (its folder name) ->
+  // { triple -> fileKey }. The project read last is the "current" one.
+  var maps = {}, current = null;
+  function register(project, items){
+    var m = {};
+    (Array.isArray(items) ? items : []).forEach(function(it){
+      if (!it || typeof it !== "object") return;
+      var t = tripleKey(it.level, it.room, it.joineryId);
+      if (!(t in m)) m[t] = valid(it.fileKey) ? it.fileKey : baseOf(it.joineryId, it.room); // the first of a duplicated record decides
+    });
+    project = String(project || "");
+    maps[project] = m; current = project;
+    return m;
+  }
+  // An item's file name from its level, room and code (project: its folder
+  // name, when the app knows it -- the schedules' Overall views hold several).
+  function fileKey(level, room, code, project){
+    var t = tripleKey(level, room, code), hit;
+    if (project != null && maps[String(project)]){
+      hit = maps[String(project)][t];
+      if (hit) return hit;
+    } else {
+      if (current != null && maps[current] && maps[current][t]) return maps[current][t];
+      var found = null, clash = false;
+      Object.keys(maps).forEach(function(p){ var v = maps[p][t]; if (v){ if (found && found !== v) clash = true; found = found || v; } });
+      if (found && !clash) return found;
+    }
+    return baseOf(code, room);
+  }
+
+  // A user's initials for a file name: the first letter of up to three
+  // words ("Andrew Utz" -> "AU"); a one-word name keeps its first three
+  // letters ("Cara" -> "Car"); none -> "U".
+  function initials(name){
+    var words = String(name || "").split(/[\s_-]+/).filter(function(w){ return /[A-Za-z0-9]/.test(w); });
+    var ini = words.length >= 2 ? words.slice(0, 3).map(function(w){ return w.charAt(0).toUpperCase(); }).join("") : (words[0] || "U").slice(0, 3);
+    return clean(ini, 3) || "U";
+  }
+  // "26-10-01 16-25-35" (+ "-281" with ms) -- local time, two-digit year.
+  function stamp(d, ms){
+    d = d || new Date();
+    function p(n, w){ n = String(n); while (n.length < (w || 2)) n = "0" + n; return n; }
+    return p(d.getFullYear() % 100) + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + "-" + p(d.getMinutes()) + "-" + p(d.getSeconds()) + (ms ? "-" + p(d.getMilliseconds(), 3) : "");
+  }
+
+  window.UtzItemFiles = {
+    version: 1, MAX: MAX,
+    clean: clean, baseOf: baseOf, valid: valid, assign: assign, register: register, fileKey: fileKey,
+    initials: initials, stamp: stamp, tripleKey: tripleKey,
+    _maps: function(){ return maps; }
+  };
+})();
+</script>
+<!-- UTZLINE-ITEM-FILES END -->
 <!-- UTZLINE-EVENT-STORE BEGIN (generated from shared/event-store -- don't edit here) -->
 <script>
 /* ============================== UTZLINE event store v2 (2026-09-30) ==============================
@@ -2177,16 +2319,46 @@
    the save reported a failure. Now:
      - a new record's name no longer repeats the level that its folder already
        names:  <Level>/<Room> - <Code> -- <name> - <stamp> - <kind>.json
-       (the room-and-code part is capped at 70 characters, "~hash" when cut);
-       every file already on disk under the long name still reads;
+       (the room-and-code part is capped at 70 characters, "_hash" when cut),
+       and the name part an app gives is compacted: the user's initials, a
+       two-digit year ("AU - 26-10-01 13-09-18-862 - set.json"; Andrew:
+       "change usernames to initials, year from 2026 to 26") -- the body
+       still carries the full name and time; every file already on disk
+       under the long name still reads;
      - when even that can't be written (the empty file is removed first), the
-       record goes under a 9-character "~hash" name instead, and a banner
-       tells the user the folder path is the reason;
+       record goes under a 9-character "_hash" name instead -- quietly: it is
+       saved and read like any other (a "utz-path-limit" event and a console
+       note, no banner); only a record that can't be saved at all raises the
+       banner;
      - on Windows, the first write to a project measures how many characters
        its folder path leaves (a few empty probe files, created and removed
-       again under UTZLINE Events), and the banner shows early when that is
-       less than long room names need; UtzEvents.pathBudget() gives the
-       number to an app (UTZLINE Projects shows it when a project is opened).
+       again under UTZLINE Events); the banner shows early only when that is
+       less than even the shortest names need (NEEDS_REL = 135; Andrew's
+       pilot folder leaves 163 and shows nothing -- "what can we do, im
+       already in the root folder for onedrive");
+       UtzEvents.pathBudget() gives the number to an app (UTZLINE Projects
+       measures it when a project is opened).
+
+   Note: Chrome's File System Access API refuses any name with a "~" in it
+   (base::i18n::IsFilenameLegal treats the tilde as reserved on Windows), so
+   the markers here are "_", never "~".
+
+   v3 (2026-10-01) -- names by joinery code. Andrew: "have a real good think
+   about how we can minimise filepaths, maybe we need to lose the joinery
+   descriptions and just have joinery codes. give me a solid solution", then
+   "I have no actual current files so dont care if I need to start again".
+   The key an app remembers an item by IS now the item's file name -- its
+   joinery code, chosen once by UTZLINE Projects (UtzItemFiles, saved as
+   "fileKey" in joinery-items.json) -- and a record's name is
+       <Level>/<file name> -- <initials> - <yy-mm-dd hh-mm-ss-mmm> - <kind>.json
+       Ground Floor/JG.33.1 -- AU - 26-10-01 16-25-35-281 - set.json
+   (121 characters after the project folder for the longest branch, was
+   163). The level folder is cut to 30 characters. A record whose leading
+   part no app has named yet belongs to the item of that name (no level is
+   put in front any more), and an item the app hasn't named is looked for in
+   every level folder. The old layouts are still read as before, but their
+   items keep their old long keys (a clean start: Andrew's pilot is set up
+   again).
 
    Generated into each app between UTZLINE-EVENT-STORE markers from
    shared/event-store/event-store.js -- edit it there. */
@@ -2196,9 +2368,15 @@
   var BRANCHES = ["Joinery Status", "Joinery Schedule", "Machining Flags", "Solid Surface Completion", "Solid Surface Schedule", "Joinery Cutting File", "Joinery Notes"];
   var MEMO_MS = 4000, LEGACY_TTL = 12 * 3600 * 1000, MISS_MS = 5000, LEG_MISS_MS = 60000, NAME_KEY_MAX = 150;
   // The room-and-code part that leads a new record's name (the level is its
-  // folder), and what long room names need of a Windows path after the
-  // project folder (branch + level folder + record name, with the swap file).
-  var ITEM_MAX = 70, NEEDS_REL = 170, WIN_FULL = 252;
+  // folder), and what the shortest record names need of a Windows path after
+  // the project folder: "Project Saves\UTZLINE Events\" (29) + the longest
+  // branch (24) + a 20-character level folder + the "_hash" record name
+  // (about 56) = about 135. A typical record (room and code 30-60 characters)
+  // needs 120-165, and one that doesn't fit takes the "_hash" name by itself,
+  // so only a project folder leaving less than 135 is worth a warning.
+  var ITEM_MAX = 70, NEEDS_REL = 135, WIN_FULL = 252;
+  // v3: a level folder's name is cut to this (a "_hash" of the whole name at the end)
+  var LEVEL_MAX = 30;
 
   // ---------- names ----------
   function sanitize(name, max, fallback){
@@ -2226,9 +2404,19 @@
   function nameKey(key){
     key = String(key || "").replace(/-{2,}/g, "-");
     if (key.length <= NAME_KEY_MAX) return key;
-    return key.slice(0, NAME_KEY_MAX - 12).replace(/[ .]+$/, "") + " ~" + hash(key);
+    return key.slice(0, NAME_KEY_MAX - 12).replace(/[ .]+$/, "") + " _" + hash(key);
   }
-  function levelFolder(level){ return sanitize(level, 120, "No level"); }
+  function levelFolder(level){
+    var s = sanitize(level, 120, "No level");
+    if (s.length <= LEVEL_MAX) return s;
+    return s.slice(0, LEVEL_MAX - 10).replace(/[ .]+$/, "") + " _" + hash(s);
+  }
+  // v3: what leads a record's name for an item -- its key (the item's file
+  // name), cut to ITEM_MAX with a "_hash" of the whole key when longer.
+  function leadOf(canon){
+    if (canon.length <= ITEM_MAX) return canon;
+    return canon.slice(0, ITEM_MAX - 10).replace(/[ .]+$/, "") + " _" + hash(canon);
+  }
   function splitName(n){
     var i = n.indexOf(SEP);
     if (i <= 0) return null;
@@ -2236,24 +2424,46 @@
   }
 
   // The part of a canonical key after its level: what leads a new record's
-  // name inside the level folder (capped, "~hash" of the whole key when cut).
+  // name inside the level folder (capped, "_hash" of the whole key when cut).
   function shortOf(canon, lf){
     var s = canon;
     if (lf && (canon.indexOf(lf + " - ") === 0)) s = canon.slice(lf.length + 3);
     else if (lf === "No level" && canon.indexOf("plan - ") === 0) s = canon.slice(7);
     if (!s) s = canon;
     if (s.length <= ITEM_MAX) return s;
-    return s.slice(0, ITEM_MAX - 10).replace(/[ .]+$/, "") + " ~" + hash(canon);
+    return s.slice(0, ITEM_MAX - 10).replace(/[ .]+$/, "") + " _" + hash(canon);
   }
-  function tinyOf(canon){ return "~" + hash(canon); }
+  var TINY_RE = /^_[0-9a-f]{8}$/;
+  function tinyOf(canon){ return "_" + hash(canon); }
+  // The name part an app gives a record ("<user> - <YYYY-MM-DD HH-mm-ss-mmm> - <kind>.json")
+  // made shorter on disk: the user's initials (up to three; a one-word name
+  // keeps its first three letters) and a two-digit year. The milliseconds
+  // stay: two saves in the same second must never land on one name.
+  // Anything not in that shape is kept as given.
+  function compactBase(name){
+    var m = /^(.+?) - (\d{4})-(\d\d)-(\d\d) (\d\d)-(\d\d)-(\d\d)(-\d{3})? - (.+)$/.exec(String(name || ""));
+    if (!m) return name;
+    var words = m[1].split(/[\s_-]+/).filter(function(w){ return /[A-Za-z0-9]/.test(w); }), ini;
+    if (words.length >= 2) ini = words.slice(0, 3).map(function(w){ return w.charAt(0).toUpperCase(); }).join("");
+    else ini = (words[0] || "U").slice(0, 3);
+    return ini + " - " + m[2].slice(2) + "-" + m[3] + "-" + m[4] + " " + m[5] + "-" + m[6] + "-" + m[7] + (m[8] || "") + " - " + m[9];
+  }
 
   // Every key an app makes is remembered with the item it names, so a
   // stand-in folder asked for by key knows its level and its canonical key,
-  // and a record file's leading part (long, short or "~hash") finds its item.
+  // and a record file's leading part (long, short or "_hash") finds its item.
   var registry = {}, alias = {}, canonKnown = {}, byShort = {}, byTiny = {}, regVersion = 0;
   function remember(key, level, room, code){
-    if (!key || registry[key]) return key;
-    var canon = nameKey(itemKey(level, room, code)), lf = levelFolder(level), short = shortOf(canon, lf), tiny = tinyOf(canon);
+    if (!key) return key;
+    var lf = levelFolder(level);
+    if (registry[key]){
+      // v3: the same file name told with another level (an item moved): new
+      // records go to the level it is on now
+      if (registry[key].lf !== lf){ registry[key].lf = lf; registry[key].level = level == null ? "" : String(level); byShort[lf + "\u0000" + registry[key].short] = registry[key].canon; regVersion++; }
+      return key;
+    }
+    // v3: the app's key IS the item -- its file name (UtzItemFiles)
+    var canon = nameKey(key), short = leadOf(canon), tiny = tinyOf(canon);
     registry[key] = { level: level == null ? "" : String(level), room: room == null ? "" : String(room), code: code == null ? "" : String(code), canon: canon, lf: lf, short: short, tiny: tiny };
     if (key !== canon && !alias[canon]) alias[canon] = key;
     canonKnown[canon] = 1; byShort[lf + "\u0000" + short] = canon; byTiny[tiny] = canon;
@@ -2263,15 +2473,15 @@
   function canonOf(key){ var r = registry[key]; return r ? r.canon : nameKey(key); }
   // The item (canonical key) a record file in level folder lf belongs to,
   // from the part before " -- ": an old level-led name, a new short name, a
-  // "~hash" name, or -- for an item no app has named yet -- the level folder
+  // "_hash" name, or -- for an item no app has named yet -- the level folder
   // put back in front of a short name.
   function resolvePrefix(lf, prefix){
     var c = byShort[lf + "\u0000" + prefix];
     if (c) return c;
     if (canonKnown[prefix]) return prefix;
-    if (prefix.charAt(0) === "~") return byTiny[prefix] || prefix;
-    if (prefix === lf || prefix.indexOf(lf + " - ") === 0) return prefix;
-    return nameKey((lf === "No level" ? "plan" : lf) + " - " + prefix);
+    if (TINY_RE.test(prefix)) return byTiny[prefix] || prefix;
+    // v3: a name no app has named yet is its own item (its file name)
+    return prefix;
   }
 
   // ---------- small helpers ----------
@@ -2358,7 +2568,7 @@
   }
   function newGroup(lf){ return { entries: {}, legacy: [], lf: lf || null }; }
   // A listing's files grouped per item. The grouping is redone when an app
-  // has named more items since (registry), so a short or "~hash" record
+  // has named more items since (registry), so a short or "_hash" record
   // name listed before its item was known still lands with its item.
   function groupsOf(m){
     if (m.g && m.ver === regVersion) return m.g;
@@ -2467,7 +2677,7 @@
   // ---------- Windows' 260-character path limit ----------
   var tinyNeeded = {}, probes = {}, warned = {};
   var IS_WIN = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent || "");
-  var PROBE = "~ UTZLINE path check (safe to delete) ";
+  var PROBE = "UTZLINE path check (safe to delete)";
   function projectOf(ctx){ return String(ctx.id).split("\u0000")[0]; }
   function repeat(ch, n){ return n > 0 ? new Array(n + 1).join(ch) : ""; }
   // How many characters a Windows path leaves after this project's folder
@@ -2529,11 +2739,11 @@
     if (warned[pid + "\u0000" + why]) return;
     warned[pid + "\u0000" + why] = 1;
     var msg;
-    if (why === "budget") msg = "Windows limits a file's full path to 260 characters, and this project's folder path leaves only " + rel + " for UTZLINE's own files (long room names need about " + NEEDS_REL + "). Records that don't fit are kept under short names, but PDFs and exports with long names can still fail." + ADVICE;
-    else if (why === "fallback") msg = "A record for an item with a long name didn't fit Windows' 260-character path limit here, so it was saved under a short name instead. PDFs and exports with long names can still fail." + ADVICE;
+    if (why === "budget") msg = "Windows limits a file's full path to 260 characters, and this project's folder path leaves only " + rel + " for UTZLINE's own files (even the shortest record names need about " + NEEDS_REL + "), so some records may not save." + ADVICE;
+    else if (why === "fallback") msg = "A record for an item with a long name didn't fit Windows' 260-character path limit here, so it was saved under a short name instead (nothing is lost; the record reads as usual).";
     else msg = "A record couldn't be saved: its full path is past Windows' 260-character limit." + ADVICE;
     try{ if (typeof console !== "undefined") console.warn("UTZLINE events: " + msg); }catch(e){}
-    banner(msg);
+    if (why !== "fallback") banner(msg);   // a record kept under a short name is saved: no alarm
     try{ window.dispatchEvent(new CustomEvent("utz-path-limit", { detail: { why: why, rel: rel == null ? null : rel, message: msg } })); }catch(e){}
   }
   function banner(msg){
@@ -2576,7 +2786,7 @@
   // A record file this session just created but whose writer can't be
   // opened (on Windows: the full path, plus Chrome's ".crswap" swap file, is
   // past 259 characters -- the file is left empty) is made again under its
-  // item's "~hash" name; the empty file goes first.
+  // item's "_hash" name; the empty file goes first.
   FileWrap.prototype.createWritable = function(o){
     var rec = this._rec;
     return this._real().then(function(h){
@@ -2627,13 +2837,14 @@
       return levelDir(nh, lf, create);
     });
   };
-  // The on-disk name of a new record: "<Room> - <Code> -- <name>" inside the
-  // level folder (the registry's short part, else the canonical key with the
-  // level folder taken off the front); "~hash -- <name>" when tiny.
+  // The on-disk name of a new record: "<Room> - <Code> -- <compact name>"
+  // inside the level folder (the registry's short part, else the canonical
+  // key with the level folder taken off the front); "_hash -- <compact
+  // name>" when tiny.
   ItemDir.prototype._realName = function(name, tiny){
     var r = registry[this.name] || null, canon = this._canon, lf = this._g.lf;
-    if (tiny) return (r ? r.tiny : tinyOf(canon)) + SEP + name;
-    return (r ? r.short : shortOf(canon, lf)) + SEP + name;
+    if (tiny) return (r ? r.tiny : tinyOf(canon)) + SEP + compactBase(name);
+    return (r ? r.short : leadOf(canon)) + SEP + compactBase(name);
   };
   ItemDir.prototype.getFileHandle = function(name, opts){
     var self = this, create = !!(opts && opts.create), g = this._g;
@@ -2657,7 +2868,7 @@
         }
         var real = self._realName(name, tiny);
         return lh.getFileHandle(real, { create: true }).then(function(h){ return made(h, real, tiny); }, function(err){
-          // not even the empty file could be made: straight to the "~hash" name
+          // not even the empty file could be made: straight to the "_hash" name
           if (tiny || isNotFound(err) || !lengthy(ctx, lh.name, real)) throw err;
           var real2 = self._realName(name, true);
           return lh.getFileHandle(real2, { create: true }).then(function(h){
@@ -2671,7 +2882,7 @@
   };
   // createWritable failed on a record this session just made: if the file
   // is empty (nothing was ever written), remove it and make the record
-  // under its "~hash" name instead -> that handle. Anything else rethrows.
+  // under its "_hash" name instead -> that handle. Anything else rethrows.
   ItemDir.prototype._retryTiny = function(rec, err){
     var self = this, ctx = this._root._ctx, g = this._g;
     if (!lengthy(ctx, rec.parent.name, rec.real)) return Promise.reject(err);
@@ -2732,7 +2943,8 @@
     if (m && m.names) m.names.forEach(function(n){ if ((key.indexOf(n + " - ") === 0 || key === n) && (!best || n.length > best.length)) best = n; });
     if (best) return best;
     if (typeof console !== "undefined") console.warn("UTZLINE events: no level known for " + key);
-    return levelFolder(String(key).split(" - ")[0]);
+    // v3: keys are file names now -- an unknown one has no level in it
+    return String(key).indexOf(" - ") > 0 ? levelFolder(String(key).split(" - ")[0]) : levelFolder("");
   };
   Root.prototype.getDirectoryHandle = function(key, opts){
     var self = this, ctx = this._ctx, create = !!(opts && opts.create);
@@ -2744,10 +2956,11 @@
     if (all && all.newH === this._newH && all.legH === this._legH) memoP = all.p;
     else if (lf != null && this._newH) memoP = scan(ctx, this._newH, null, r.level);
     else if (this._newH){
-      memoP = ctx.levelDirs(this._newH).then(function(dirs){
-        var m = memos[ctx.id + "\u0001levels"]; if (m) m.names = dirs.map(function(d){ return d.name; });
-        lf = self._lfFor(canon, key);
-        return scan(ctx, self._newH, null, lf);
+      // v3: an item no app has named here -- its records may be in any level folder
+      memoP = scan(ctx, this._newH, null, null).then(function(m){
+        var g = m.groups()[canon];
+        lf = (g && g.lf) || self._lfFor(canon, key);
+        return m;
       });
     } else memoP = Promise.resolve(null);
     var memo = null;
@@ -2859,8 +3072,11 @@
               var ev;
               try{ ev = JSON.parse(r.text); }catch(e){ ev = null; }
               if (!ev || typeof ev !== "object" || ev.level == null){ out.left.push({ branch: branch, folder: dh.name, name: fh.name, why: "couldn't be read" }); return false; }
-              var canon = nameKey(itemKey(ev.level, ev.room, ev.joineryId)), lf = levelFolder(ev.level);
-              var target = shortOf(canon, lf) + SEP + fh.name, longName = canon + SEP + fh.name;
+              // v3 (2026-10-01, code-only file names): an old per-item folder is named by the item's app key
+              // (its file name), so its records go under that name, as every new record does
+              var lf = levelFolder(ev.level), known = registry[dh.name];
+              var canon = known ? known.canon : nameKey(itemKey(ev.level, ev.room, ev.joineryId));
+              var target = (known ? leadOf(canon) : shortOf(canon, lf)) + SEP + fh.name, longName = canon + SEP + fh.name;
               return levelDir(lf).then(function(lh){
                 // already moved under the long (pre-v2.1) name?
                 return lh.getFileHandle(longName, { create: false }).then(function(th){ return readText(th).then(function(t){ return t.text === r.text; }); }, function(err){ if (!isNotFound(err)) throw err; return false; }).then(function(there){
@@ -2933,9 +3149,9 @@
   function pathBudget(o){ return pathProbe(new Ctx({ dir: o.dir, branch: BRANCHES[0], cacheId: o.cacheId }), !!o.force); }
 
   window.UtzEvents = {
-    version: 2.1,
+    version: 3,
     ROOT: ROOT, SEP: SEP, BRANCHES: BRANCHES, NEEDS_REL: NEEDS_REL, WIN_FULL: WIN_FULL,
-    itemKey: itemKey, nameKey: nameKey, levelFolder: levelFolder, itpKey: itpKey, shortOf: shortOf, tinyOf: tinyOf,
+    itemKey: itemKey, nameKey: nameKey, levelFolder: levelFolder, itpKey: itpKey, shortOf: shortOf, leadOf: leadOf, tinyOf: tinyOf, compactBase: compactBase, LEVEL_MAX: LEVEL_MAX,
     remember: remember, root: root, refresh: refresh, tidy: tidy, countLegacy: countLegacy, pathBudget: pathBudget,
     _registry: registry, _memos: function(){ return memos; }, _probes: probes
   };
@@ -3527,7 +3743,8 @@
    A drawing group = several joinery items covered by ONE shop drawing / job note. Made in UTZLINE Projects
    (merge pins on the plan); the Scheduler fans one upload out to every member; the item pages say
    "1 of 4 on one drawing". One file per change (never rewritten):
-     <Project>/Project Saves/Drawing Groups/<groupId> - <user> - <YYYY-MM-DD HH-mm-ss-mmm> - group.json
+     <Project>/Project Saves/Drawing Groups/<groupId> - <initials> - <yy-mm-dd HH-mm-ss-mmm> - group.json
+     (2026-10-01; was "<groupId> - <user> - <YYYY-...>" -- both are read)
      { kind: "drawingGroup", groupId, members: [ { level, room, joineryId } ], by, at, app, removed?: true }
    Fold: the latest file per groupId wins; a removed group is gone; an item in two live groups belongs to the
    later one. API (window.UtzDrawingGroups):
@@ -3595,7 +3812,8 @@
     var d = new Date();
     var ev = { kind: "drawingGroup", groupId: group.groupId || newId(), members: (group.members || []).map(function(m){ return { level: String(m.level || ""), room: String(m.room || ""), joineryId: String(m.joineryId || "") }; }), by: by || "", at: d.toISOString(), app: app || "" };
     if (group.removed) ev.removed = true;
-    var name = ev.groupId + " - " + slug(by) + " - " + stamp(d) + " - group.json";
+    // (2026-10-01, code-only file names) initials and a two-digit year on disk; the body keeps the full name
+    var name = ev.groupId + " - " + (window.UtzItemFiles ? UtzItemFiles.initials(by) + " - " + UtzItemFiles.stamp(d, true) : slug(by) + " - " + stamp(d)) + " - group.json";
     return dir(ph, true).then(function(dh){ return dh.getFileHandle(name, { create: true }); }).then(function(fh){ return fh.createWritable(); }).then(function(w){
       return w.write(JSON.stringify(ev)).then(function(){ return w.close(); });
     }).then(function(){ forget(ph); return ev; });
@@ -4112,8 +4330,10 @@
       <!-- (v35) Andrew: "shop drawings need a sent and a returned section" -->
       <h3 class="sd-part-title">Sent</h3>
       <div id="itemShopDrawingsList"></div>
-      <h3 class="sd-part-title">Returned</h3>
+      <h3 class="sd-part-title">Returned to resubmit</h3>
       <div id="itemShopReturnedList"></div>
+      <h3 class="sd-part-title">Approved</h3>
+      <div id="itemShopApprovedList"></div>
     </div>
     <div class="card">
       <h2 class="section-title">Job notes</h2>
@@ -4598,7 +4818,9 @@
    folder)".
 
    WHERE REWORKS LIVE (written by Install ITP, which creates them):
-     flat:   <Project>/Project Saves/UTZLINE ITP/Install ITP Rework/<Level> - <Room> - <Code>.json
+     flat:   <Project>/Project Saves/UTZLINE ITP/Install ITP Rework/<file name>.json
+             (2026-10-01: the item's FILE NAME -- its joinery code, UtzItemFiles --
+             was "<Level> - <Room> - <Code>"; Windows' 260-character path limit)
      legacy: <Project>/itp-install-rework/<Level>/<Room>/<Code>.json
    One shared JSON per item: { joineryNo, level, room, reworks:[entry...] }.
    Install ITP and Delivery ITP rewrite that whole file, which is how
@@ -4609,7 +4831,7 @@
      flat:   Project Saves/UTZLINE ITP/Install ITP Rework Log/<fileBase>/
      legacy: itp-install-rework/<Level>/<Room>/<fileBase> log/
    (the same folder the Viewer's comments already use, v61). Each event is
-     "<name> - <YYYY-MM-DD HH-mm-ss-mmm> - <kind>.json"
+     "<initials> - <yy-mm-dd HH-mm-ss-mmm> - <kind>.json"   (2026-10-01; was "<name> - <YYYY-...>")
      { kind, reworkId, level, room, joineryId, fileBase, cabinetNumber, at, by, app, ... }
    kinds:
      comment    { text }
@@ -4626,7 +4848,7 @@
    wins; closed likewise. Events with a reworkId only apply to that entry.
 
    PER-REWORK PDF: one rework per PDF, named by who made it and when
-     <fileBase> - <Cab X | Rework yyyy-mm-dd> - <name> - <YYYY-MM-DD HH-mm-ss>.pdf
+     <fileBase> - <Cab X | Rework> - <initials> - <yy-mm-dd HH-mm-ss>.pdf   (2026-10-01, shorter)
    saved beside the item's other rework PDFs (flat: PDF Files/UTZLINE ITP/
    Install ITP Rework/; legacy: the item's itp-install-rework room folder),
    so two people printing at once can never write the same file. It has the
@@ -4672,6 +4894,14 @@
     var clean = String(name || "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().replace(/^[._]+|[._\s]+$/g, "").slice(0, 60);
     return clean || "Unnamed";
   }
+  // (2026-10-01, code-only file names) a flat item file's name: the item's
+  // FILE NAME (UtzItemFiles -- its joinery code), and the short name parts.
+  function flatBase(level, room, code, project){
+    if (global.UtzItemFiles) return global.UtzItemFiles.fileKey(level, room, code, project);
+    return sanitizeFileBase(level) + " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(code);
+  }
+  function nameInitials(by){ return global.UtzItemFiles ? global.UtzItemFiles.initials(by) : userSlug(by); }
+  function shortStamp(d, ms){ return global.UtzItemFiles ? global.UtzItemFiles.stamp(d, ms) : (ms ? stamp(d) : stampSeconds(d)); }
   function isNotFound(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError" || /NotFound/.test(String(err.message || "")))); }
   function escapeHtml(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
@@ -4783,12 +5013,16 @@
     }
     var flat = dirPath(projectHandle, FLAT_DATA, false).then(jsonFiles, function(){ return []; }).then(function(files){
       return runQueue(files, function(fh){
+        // (2026-10-01, code-only file names) the file is "<file name>.json" -- the item's code; its level and
+        // room come from the body (rowsFromData prefers them). An old "<Level> - <Room> - <Code>.json" still
+        // reads: its parts are only a fallback for a body without them.
         var base = fh.name.replace(/\.json$/i, "");
         var parts = base.split(" - ");
+        var old = parts.length >= 3 && !(global.UtzItemFiles && global.UtzItemFiles.valid && global.UtzItemFiles.valid(base) && base.length <= 46);
         return readFile(fh, {
           project: projectName, fileBase: base, fileName: fh.name, isFlat: true,
-          level: parts.length >= 3 ? parts[0] : "", room: parts.length >= 3 ? parts[1] : "",
-          code: parts.length >= 3 ? parts.slice(2).join(" - ") : base
+          level: old ? parts[0] : "", room: old ? parts[1] : "",
+          code: old ? parts.slice(2).join(" - ") : base
         });
       }, 1);
     });
@@ -4814,7 +5048,7 @@
   }
   // The reworks of ONE joinery item (level/room/code), both locations.
   function listItemReworks(projectHandle, projectName, level, room, code){
-    var flatName = sanitizeFileBase(level) + " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(code) + ".json";
+    var flatName = flatBase(level, room, code, projectName) + ".json";
     var legacyName = sanitizeFileBase(code) + ".json";
     var rows = [], unreadable = 0;
     var flat = dirPath(projectHandle, FLAT_DATA, false).then(function(d){ return d.getFileHandle(flatName, { create: false }); }).then(function(fh){
@@ -4835,7 +5069,7 @@
   }
   // A row for the item an ITP app has open (it knows where it is already).
   function rowFor(isFlat, level, room, code, entry, projectName){
-    var fileBase = isFlat ? sanitizeFileBase(level) + " - " + sanitizeFileBase(room) + " - " + sanitizeFileBase(code) : sanitizeFileBase(code);
+    var fileBase = isFlat ? flatBase(level, room, code, projectName) : sanitizeFileBase(code);
     return { project: projectName || "", level: level, room: room, code: code, fileBase: fileBase, fileName: fileBase + ".json", isFlat: !!isFlat,
       levelDir: isFlat ? "" : level, roomDir: isFlat ? "" : room, entry: entry || {} };
   }
@@ -4905,7 +5139,7 @@
       cabinetNumber: row.entry.cabinetNumber || "", at: at.toISOString(), by: by || "", app: app || ""
     };
     Object.keys(fields || {}).forEach(function(k){ ev[k] = fields[k]; });
-    var name = userSlug(by) + " - " + stamp(at) + " - " + kind + ".json";
+    var name = nameInitials(by) + " - " + shortStamp(at, true) + " - " + kind + ".json";
     var text = JSON.stringify(ev);
     return logDir(projectHandle, row, true).then(function(dirH){
       return writeVerified(dirH, name, text);
@@ -5025,12 +5259,12 @@
     return dataDir(projectHandle, row);
   }
   function pdfPartFor(entry){
-    if (entry.cabinetNumber) return "Cab " + sanitizeFileBase(entry.cabinetNumber);
+    if (entry.cabinetNumber) return "Cab " + sanitizeFileBase(entry.cabinetNumber).slice(0, 20).replace(/[ .]+$/, "");
     var d = entry.createdAt ? new Date(entry.createdAt) : null;
-    return "Rework" + (d && !isNaN(d.getTime()) ? " " + d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) : "");
+    return "Rework" + (d && !isNaN(d.getTime()) ? " " + p2(d.getFullYear() % 100) + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) : ""); // (2026-10-01) two-digit year
   }
   function pdfFileName(row, entry, by, when){
-    return row.fileBase + " - " + pdfPartFor(entry) + " - " + userSlug(by) + " - " + stampSeconds(when || new Date()) + ".pdf";
+    return row.fileBase + " - " + pdfPartFor(entry) + " - " + nameInitials(by) + " - " + shortStamp(when || new Date(), false) + ".pdf"; // (2026-10-01) initials, two-digit year
   }
   // Rework PDFs for one item file, newest first: [{name, handle, perRework, when}]
   function listItemPdfs(projectHandle, row){
@@ -5041,8 +5275,8 @@
         if (e.kind !== "file" || !/\.pdf$/i.test(e.name)) return;
         if (e.name === row.fileBase + ".pdf") out.push({ name: e.name, handle: e, perRework: false, when: "" });
         else if (e.name.indexOf(prefix) === 0){
-          var m = e.name.match(/(\d{4}-\d\d-\d\d \d\d-\d\d-\d\d)\.pdf$/i);
-          out.push({ name: e.name, handle: e, perRework: true, when: m ? m[1] : "" });
+          var m = e.name.match(/(\d{2}(?:\d\d)?-\d\d-\d\d \d\d-\d\d-\d\d)\.pdf$/i); // (2026-10-01) "26-10-01 ..." too
+          out.push({ name: e.name, handle: e, perRework: true, when: m ? (m[1].length === 17 ? "20" + m[1] : m[1]) : "" });
         }
       });
       out.sort(function(a, b){
@@ -8832,12 +9066,33 @@
   // [] and "Add joinery item" then wrote a file holding ONLY the new item,
   // every other record in the project gone. Now that case rejects
   // read_failed (after one retry) and neither writer touches the file.
+  // (2026-10-01, code-only file names) every item read gets its file name
+  // (UtzItemFiles: the code, " (2)" for a code the project already uses) --
+  // an item without one (made before this version) is given one here and
+  // it's saved with the next write (or by ensureItemFileKeys when a project
+  // is opened). Every other app reads it from joinery-items.json.
   function readJoineryItems(projectHandle){
     if (!projectHandle) return Promise.resolve([]);
-    return readJsonArrayFileStrict(projectHandle, joineryItemsFilename(), "joinery-items.json");
+    return readJsonArrayFileStrict(projectHandle, joineryItemsFilename(), "joinery-items.json").then(function(items){
+      UtzItemFiles.assign(items);
+      UtzItemFiles.register(projectHandle.name, items);
+      return items;
+    });
   }
   function writeJoineryItems(projectHandle, items){
-    return writeFileText(projectHandle, joineryItemsFilename(), JSON.stringify(items)).then(function(){}); // (v43) retried + checked
+    UtzItemFiles.assign(items); // a new item gets its file name before it's written
+    return writeFileText(projectHandle, joineryItemsFilename(), JSON.stringify(items)).then(function(){ UtzItemFiles.register(projectHandle.name, items); }); // (v43) retried + checked
+  }
+  // A project whose joinery-items.json has items without a file name (made
+  // before this version): saved once with their names, so every app reads
+  // the same ones. Strict read -- an unreadable file is never rewritten.
+  function ensureItemFileKeys(projectHandle){
+    if (!projectHandle) return Promise.resolve(false);
+    return readJsonArrayFileStrict(projectHandle, joineryItemsFilename(), "joinery-items.json").then(function(items){
+      var missing = items.some(function(it){ return it && typeof it === "object" && !UtzItemFiles.valid(it.fileKey); });
+      if (!missing){ UtzItemFiles.register(projectHandle.name, items); return false; }
+      return writeJoineryItems(projectHandle, items).then(function(){ return true; });
+    }).catch(function(err){ console.warn("Couldn't give this project's items their file names just now:", err); return false; });
   }
   // Re-reads strictly (readJoineryItems rejects read_failed for a file
   // that exists but can't be read) -- never appends onto an empty guess.
@@ -9534,8 +9789,11 @@
      to do better (see the Unified Implementation Brief's own note on this). */
   // (event layout v2) every key is remembered with its item, so the event
   // store knows the level folder and the shared key (see UTZLINE-EVENT-STORE).
-  function joineryItemKey(item){
-    return UtzEvents.remember(sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + (item.joineryId ? " - " + sanitizeFileBase(item.joineryId) : ""), item.level, item.room, item.joineryId);
+  // (2026-10-01) the item's FILE NAME (its code -- UtzItemFiles), the same
+  // key every other app uses; never "<Level> - <Room> - <Code>".
+  function joineryItemKey(item, project){
+    var fk = (item && UtzItemFiles.valid(item.fileKey)) ? item.fileKey : UtzItemFiles.fileKey(item.level, item.room, item.joineryId, project);
+    return UtzEvents.remember(fk, item.level, item.room, item.joineryId);
   }
   // Every file (optionally filtered) directly inside a directory handle,
   // sorted newest-name-first (every filename convention in this family
@@ -9595,7 +9853,7 @@
   }
   function listJobNotesForItem(projectHandle, item){
     return getJobNotesDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
-      return listFilesInDir(dirH, function(name){ return /\.pdf$/i.test(name); });
+      return listFilesInDir(dirH, function(name){ return /\.pdf$/i.test(name); }).then(function(files){ return shopSidecars(dirH, files); }); // (2026-10-01) "Job note - <stamp> - <code>.pdf" + a sidecar with the name it was dropped in with
     }, function(){ return []; }).then(function(list){
       list.sort(function(a, b){
         var ka = jobNoteSortKey(a.fileName), kb = jobNoteSortKey(b.fileName);
@@ -9683,18 +9941,23 @@
       return everySubdir(dirH).then(function(groupHandles){
         return Promise.all(groupHandles.map(function(groupH){
           return listFilesInDir(groupH, function(name){ return /\.pdf$/i.test(name); }).then(function(files){
+            return shopSidecars(groupH, files);
+          }).then(function(files){
             var revisions = files.map(function(f){
               var parsed = parseShopDrawingRevisionFileName(f.fileName);
-              return { fileName: f.fileName, handle: f.handle, revLabel: parsed.revLabel, rawLabel: parsed.raw, displayName: parsed.displayName, stamp: parsed.stamp };
+              return { fileName: f.fileName, handle: f.handle, revLabel: parsed.revLabel, rawLabel: parsed.raw, displayName: f.original || parsed.displayName, stamp: parsed.stamp, by: f.by || "" };
             });
             shopRevOrder(revisions); // (v45) REV 0, A, B ... by the order they were saved
-            // (v35) the copies that came back, in the drawing's own "Returned" folder
-            return listShopDrawingReturned(groupH).then(function(returned){ returned.forEach(function(x){ x.revLabel = shopRevLabelReturned(x, revisions); }); return { drawingId: groupH.name, revisions: revisions, returned: returned }; }); // (v45) the label of the revision it answers
+            // (v35) the copies that came back, in the drawing's own "Returned" folder -- and (2026-10-01) the approved ones, in "Approved"
+            return Promise.all([listShopDrawingPart(groupH, "Returned"), listShopDrawingPart(groupH, "Approved")]).then(function(r){
+              r[0].concat(r[1]).forEach(function(x){ x.revLabel = shopRevLabelReturned(x, revisions); });
+              return { drawingId: groupH.name, revisions: revisions, returned: r[0], approved: r[1] }; // (v45) the label of the revision it answers
+            });
           });
         }));
       });
     }, function(){ return []; }).then(function(groups){
-      groups = (groups || []).filter(function(g){ return g.revisions.length > 0 || g.returned.length > 0; });
+      groups = (groups || []).filter(function(g){ return g.revisions.length > 0 || g.returned.length > 0 || g.approved.length > 0; });
       groups.sort(function(a, b){ return b.drawingId.localeCompare(a.drawingId); });
       return groups;
     });
@@ -9710,16 +9973,30 @@
      Returned copies sit in their own sub-folder, so the apps that only know
      sent drawings (Site Measure's View shop drawing, the ITP apps) carry on
      showing exactly what they showed before. */
-  function listShopDrawingReturned(groupH){
-    return groupH.getDirectoryHandle("Returned", { create: false }).then(function(rh){
-      return listFilesInDir(rh, function(name){ return /\.pdf$/i.test(name); });
+  /* (2026-10-01, code-only file names) Andrew: "drawings should be renamed to suit when imported. not use the old
+     filenames" -- a drawing's file is "REV n - <saved> - <the item's file name>.pdf"; the name it was dropped in
+     with is kept in the sidecar .json beside it ({ original, by, at, part }), and that is what is shown. */
+  function shopSidecars(dirH, files){
+    return Promise.all(files.map(function(f){
+      return dirH.getFileHandle(f.fileName.replace(/\.pdf$/i, "") + ".json", { create: false }).then(function(fh){ return fh.getFile(); }).then(function(file){ return file.text(); }).then(function(t){
+        var o = null; try{ o = JSON.parse(t); }catch(e){}
+        if (o && typeof o === "object"){ f.original = typeof o.original === "string" ? o.original : ""; f.by = typeof o.by === "string" ? o.by : ""; }
+        return f;
+      }, function(){ return f; });
+    }));
+  }
+  // "Returned" = Returned to resubmit; "Approved" = approved (the folders under a drawing's folder)
+  function listShopDrawingPart(groupH, folder){
+    return groupH.getDirectoryHandle(folder, { create: false }).then(function(rh){
+      return listFilesInDir(rh, function(name){ return /\.pdf$/i.test(name); }).then(function(files){ return shopSidecars(rh, files); });
     }, function(){ return []; }).then(function(files){
       return files.map(function(f){
         var p = parseShopDrawingRevisionFileName(f.fileName);
-        return { fileName: f.fileName, handle: f.handle, revLabel: p.revLabel, rawLabel: p.raw, displayName: p.displayName, stamp: p.stamp, drawingId: groupH.name };
+        return { fileName: f.fileName, handle: f.handle, revLabel: p.revLabel, rawLabel: p.raw, displayName: f.original || p.displayName, stamp: p.stamp, drawingId: groupH.name, by: f.by || "" };
       });
     });
   }
+  function listShopDrawingReturned(groupH){ return listShopDrawingPart(groupH, "Returned"); }
   function shopStampDate(stamp){
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(stamp || ""));
     if (!m) return "";
@@ -9728,15 +10005,18 @@
   }
   // Every sent revision (newest first) and every returned copy (newest first).
   function shopDrawingParts(groups){
-    var sent = [], ret = [];
+    var sent = [], ret = [], appr = [];
     (groups || []).forEach(function(g){
       g.revisions.forEach(function(r){ sent.push(Object.assign({ drawingId: g.drawingId }, r)); });
       (g.returned || []).forEach(function(r){ ret.push(r); });
+      (g.approved || []).forEach(function(r){ appr.push(r); });
     });
     function byRev(a, b){ return ((b.revIndex || 0) - (a.revIndex || 0)) || String(b.stamp || "").localeCompare(String(a.stamp || "")); } // (v45) by position (REV 0, A, B ...)
     sent.sort(byRev);
-    ret.sort(function(a, b){ return String(b.stamp || "").localeCompare(String(a.stamp || "")) || byRev(a, b); });
-    return { sent: sent, returned: ret };
+    function byStamp(a, b){ return String(b.stamp || "").localeCompare(String(a.stamp || "")) || byRev(a, b); }
+    ret.sort(byStamp);
+    appr.sort(byStamp);
+    return { sent: sent, returned: ret, approved: appr };
   }
   /* (v35) Andrew: "we need the option to open all revisions, not just the
      latest one, have a button that goes to the revisions if there are any
@@ -9764,10 +10044,11 @@
     el.appendChild(btn);
     el.appendChild(box);
   }
-  function renderShopDrawingParts(groups, sentEl, returnedEl){
+  function renderShopDrawingParts(groups, sentEl, returnedEl, approvedEl){
     var parts = shopDrawingParts(groups);
     renderShopDrawingPart(sentEl, parts.sent, "Nothing sent yet.", function(r){ return r.revLabel + (r.stamp ? " · sent " + shopStampDate(r.stamp) : ""); }, "revisions");
-    renderShopDrawingPart(returnedEl, parts.returned, "Nothing returned yet.", function(r){ return r.revLabel + " returned" + (r.stamp ? " · " + shopStampDate(r.stamp) : ""); }, "returned");
+    renderShopDrawingPart(returnedEl, parts.returned, "Nothing returned to resubmit.", function(r){ return r.revLabel + " returned to resubmit" + (r.stamp ? " · " + shopStampDate(r.stamp) : ""); }, "returned to resubmit");
+    if (approvedEl) renderShopDrawingPart(approvedEl, parts.approved, "Nothing approved yet.", function(r){ return r.revLabel + " approved" + (r.stamp ? " · " + shopStampDate(r.stamp) : ""); }, "approved");
   }
 
   /* ---- Site Measure overlays (2026-09-24, mirrors source.html's own
@@ -9791,6 +10072,9 @@
   }
   function parseJoineryOverlayFileName(fileName){
     var base = fileName.replace(/\.json$/i, "");
+    // (2026-10-01, code-only file names) "<initials> - yy-mm-dd hh-mm-ss[-mmm]" -- the stamp comes back as 20yy-...
+    var sm = /^(.+?) - (\d{2})-(\d{2})-(\d{2}) (\d{2})-(\d{2})-(\d{2})(?:-(\d{3}))?$/.exec(base);
+    if (sm) return { user: sm[1], stamp: "20" + sm[2] + "-" + sm[3] + "-" + sm[4] + " " + sm[5] + "-" + sm[6] + "-" + sm[7] + (sm[8] ? "-" + sm[8] : "") };
     var idx = base.lastIndexOf(" - ");
     if (idx < 0) return { user: base, stamp: "" };
     return { user: base.slice(0, idx), stamp: base.slice(idx + 3) };
@@ -9799,7 +10083,7 @@
   // label -- same cosmetic-only formatting as source.html's own
   // formatOverlayStamp.
   function formatOverlayStamp(stamp){
-    var m = /^(\d{4}-\d{2}-\d{2}) (\d{2})-(\d{2})-(\d{2})$/.exec(stamp || "");
+    var m = /^(\d{4}-\d{2}-\d{2}) (\d{2})-(\d{2})-(\d{2})(?:-\d{3})?$/.exec(stamp || "");
     if (!m) return stamp || "";
     return m[1] + " " + m[2] + ":" + m[3];
   }
@@ -9835,7 +10119,7 @@
         var data = null;
         try{ data = JSON.parse(text); }catch(e){}
         return {
-          user: latest.user, stamp: latest.stamp, otherCount: list.length - 1,
+          user: (data && data.savedBy) || latest.user, stamp: latest.stamp, otherCount: list.length - 1, // (2026-10-01) the file's name has initials only; the full name is in the body
           snapshotDataUrl: (data && data.overlaySnapshotDataURL) || null
         };
       }, function(){
@@ -9850,11 +10134,12 @@
      app's own itpAppBranchName/getItpChecklistsDirFlat/getItpPdfDirFlat).
      UTZLINE Projects only ever creates flat projects, so there's no legacy
      per-Level/Room branch to also check here. */
+  // (2026-10-01, code-only file names) the item's FILE NAME (its code), exactly what the ITP apps use.
   function itpChecklistFileNameForItem(item){
-    return sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + " - " + sanitizeFileBase(item.joineryId) + ".json";
+    return joineryItemKey(item) + ".json";
   }
   function itpPdfBaseNameForItem(item){
-    return sanitizeFileBase(item.level) + " - " + sanitizeFileBase(item.room) + " - " + sanitizeFileBase(item.joineryId);
+    return joineryItemKey(item);
   }
   // Raw checklist JSON for one item, in one ITP app's own flat branch --
   // factored out of readItpChecklistSummary (2026-09-23) so the new
@@ -9968,8 +10253,9 @@
       .replace(/^[._]+|[._\s]+$/g, "");
     return cleaned.slice(0, 120) || "file";
   }
+  // (2026-10-01, code-only file names) "<the item's file name>.json" -- its joinery code, as Sub Orders writes it.
   function subOrdersFileNameFor(level, room, joineryId){
-    return subOrdersNamePart(level) + " - " + subOrdersNamePart(room) + " - " + subOrdersNamePart(joineryId) + ".json";
+    return joineryItemKey({ level: level, room: room, joineryId: joineryId }) + ".json";
   }
   function subOrderWithHandle(o, handle){
     // typeLabel is included here (v28) so a Sub Orders custom order type
@@ -10092,8 +10378,9 @@
   }
   function listItpPdfsForItem(projectHandle, appBranch, item){
     return projectDir(projectHandle, ["PDF Files", "UTZLINE ITP", appBranch], false).then(function(dirH){
+      // "<file name>_<YYYY-MM-DD_HHMMSS>.pdf" -- the date and time after the "_", so "JG.1" never picks up "JG.1_2"'s PDFs
       var prefix = itpPdfBaseNameForItem(item) + "_";
-      return listFilesInDir(dirH, function(name){ return name.indexOf(prefix) === 0 && /\.pdf$/i.test(name); });
+      return listFilesInDir(dirH, function(name){ return name.indexOf(prefix) === 0 && /^\d{4}-\d{2}-\d{2}[_ ]\d{2}-?\d{2}-?\d{2}\.pdf$/i.test(name.slice(prefix.length)); });
     }, function(){ return []; });
   }
 
@@ -11785,6 +12072,7 @@
   var itemSolidSurfaceCompletionList = document.getElementById("itemSolidSurfaceCompletionList");
   var itemShopDrawingsList = document.getElementById("itemShopDrawingsList"); // (v35) the Sent part
   var itemShopReturnedList = document.getElementById("itemShopReturnedList");
+  var itemShopApprovedList = document.getElementById("itemShopApprovedList");
   var itemJobNotesList = document.getElementById("itemJobNotesList");
   var itemItpList = document.getElementById("itemItpList");
   var itemReworkList = document.getElementById("itemReworkList");
@@ -11854,6 +12142,7 @@
     }
     itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemShopReturnedList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
+    itemShopApprovedList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
 
@@ -11879,11 +12168,12 @@
 
     listShopDrawingsForItem(activeProjectHandle, item).then(function(groups){
       if (activeJoineryItem !== item) return; // navigated away before this resolved
-      renderShopDrawingParts(groups, itemShopDrawingsList, itemShopReturnedList); // (v35) Sent / Returned
+      renderShopDrawingParts(groups, itemShopDrawingsList, itemShopReturnedList, itemShopApprovedList); // (v35) Sent / Returned to resubmit / Approved
     }).catch(function(err){
       console.error("Listing shop drawings failed:", err);
       itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load shop drawings.</p>";
       itemShopReturnedList.innerHTML = "";
+      itemShopApprovedList.innerHTML = "";
     });
 
     listJobNotesForItem(activeProjectHandle, item).then(function(notes){
@@ -11894,7 +12184,7 @@
         return;
       }
       notes.forEach(function(n){
-        itemJobNotesList.appendChild(docRow(escapeHtml(n.fileName), "", n.handle));
+        itemJobNotesList.appendChild(docRow(escapeHtml(n.original || n.fileName), n.original ? n.fileName : "", n.handle)); // (2026-10-01) the name it came in with; the saved name under it
       });
     }).catch(function(err){
       console.error("Listing job notes failed:", err);
@@ -12295,7 +12585,7 @@
           var sideP = side ? side.handle.getFile().then(function(file){ return file.text(); }).then(function(t){ try{ return JSON.parse(t); }catch(e){ return null; } }, function(){ return null; }) : Promise.resolve(null);
           return sideP.then(function(info){
             return { at: (info && info.at) || histStampToIso(p.stamp), by: (info && info.by) || "", cat: "Shop drawing", cls: "",
-              text: (part === "returned" ? "Returned " : "Sent ") + p.revLabel, detail: [p.displayName], rawLabel: p.raw, stamp: p.stamp }; // (v45) labelled below
+              text: (part === "returned" ? "Returned to resubmit " : part === "approved" ? "Approved " : "Sent ") + p.revLabel, detail: [(info && info.original) || p.displayName], rawLabel: p.raw, stamp: p.stamp }; // (v45) labelled below; (2026-10-01) the name it was dropped in with is in the sidecar
           });
         }));
       });
@@ -12305,13 +12595,15 @@
         return Promise.all(groups.map(function(g){
           return Promise.all([
             listDir(g, "sent", g.name),
-            g.getDirectoryHandle("Returned", { create: false }).then(function(r){ return listDir(r, "returned", g.name); }, function(){ return []; })
+            g.getDirectoryHandle("Returned", { create: false }).then(function(r){ return listDir(r, "returned", g.name); }, function(){ return []; }),
+            g.getDirectoryHandle("Approved", { create: false }).then(function(r){ return listDir(r, "approved", g.name); }, function(){ return []; })
           ]).then(function(r){
             // (v45) REV 0, A, B ... by the order they were saved; a returned copy shows its sent revision's label
             var sent = shopRevOrder(r[0]);
             sent.forEach(function(x){ x.text = "Sent " + x.revLabel; });
-            r[1].forEach(function(x){ x.text = "Returned " + shopRevLabelReturned(x, sent); });
-            return sent.concat(r[1]);
+            r[1].forEach(function(x){ x.text = "Returned to resubmit " + shopRevLabelReturned(x, sent); });
+            r[2].forEach(function(x){ x.text = "Approved " + shopRevLabelReturned(x, sent); });
+            return sent.concat(r[1], r[2]);
           });
         }));
       });
@@ -12363,8 +12655,9 @@
   // Job note events get their file's name when one was saved within 3 minutes of them.
   function attachJobNoteNames(entries, notes){
     var files = notes.map(function(n){
-      var m = / - (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.pdf$/i.exec(n.fileName);
-      return { name: n.fileName, at: m ? histStampToIso(m[1]) : "", used: false };
+      // (2026-10-01) "Job note - <stamp> - <code>.pdf" (original name in the sidecar); older "<original> - <stamp>.pdf"
+      var m = /(\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})/.exec(n.fileName);
+      return { name: n.original || n.fileName, at: m ? histStampToIso(m[1]) : "", used: false };
     });
     entries.filter(function(e){ return e.jobNote; }).forEach(function(e){
       var t = new Date(e.at).getTime(), best = null, bestD = Infinity;
@@ -13141,7 +13434,10 @@
       activeProjectHandle = dirH;
       activeProjectName = name;
       checkPathBudget(dirH);
-      return populateLevelList();
+      // (2026-10-01) items' file names are saved once for a project that has none -- alongside the level list, which paints
+      // from its snapshot at once, so a folder that is slow to answer (OneDrive) never holds the screen back
+      var keysP = ensureItemFileKeys(dirH);
+      return Promise.all([keysP, populateLevelList()]);
     }).catch(function(err){
       console.error("Opening project failed:", err);
       showToast("Couldn't open “" + name + "”.");
@@ -16870,9 +17166,9 @@
       if (w) woResplitValues(items, { workOrders: [w] }, who, "Deleted " + removed.joineryId + " in " + removed.room + " (a double-up)");
       return writeJoineryItems(activeProjectHandle, items);
     }).then(function(){
-      // the record is kept: Project Saves/Deleted Items/<who> - <stamp> - <code>.json
+      // the record is kept: Project Saves/Deleted Items/<initials> - <yy-mm-dd hh-mm-ss-mmm> - <file name>.json
       return projectDir(activeProjectHandle, [projectSavesDirName(), "Deleted Items"], true).then(function(dirH){
-        return writeFileText(dirH, sanitizeFileBase(who + " - " + statusEventStampFromIso(at) + " - " + (removed.joineryId || "item")) + ".json",
+        return writeFileText(dirH, sanitizeFileBase(UtzItemFiles.initials(who) + " - " + UtzItemFiles.stamp(new Date(at), true) + " - " + (removed.fileKey || removed.joineryId || "item")).slice(0, 70) + ".json", // (2026-10-01) initials, two-digit year, the item's file name
           JSON.stringify({ kind: "deletedItem", reason: "double-up", by: who, at: at, item: removed }, null, 1)); // (v43)
       }).catch(function(err){ console.error("Keeping the deleted item's record failed:", err); });
     }).then(function(){
