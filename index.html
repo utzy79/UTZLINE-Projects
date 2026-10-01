@@ -89,9 +89,103 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- UTZLINE-THEME BEGIN (generated from shared/theme -- don't edit here) -->
+<script>
+/* ============================== UTZLINE day / night (2026-09-30) ==============================
+   Andrew: "give me day / night mode for all apps".
+   One small module, inlined at the top of the page head in every app (before the page paints):
+     - the choice is kept per device in localStorage "utzline-theme" ("light" | "dark"); with nothing
+       kept, the device's own setting (prefers-color-scheme) decides; the apps on one origin share it.
+       (Site Measure / Viewer's older key "redline_theme" is read as a fallback.)
+     - sets <html data-theme="light|dark"> and color-scheme, keeps <meta name="theme-color"> in step
+       (data-theme-light / data-theme-dark on the meta hold the two colours).
+     - UtzTheme.mount(headerEl) adds the ☀ / ☾ toggle button (class utz-theme-btn) to the app's header.
+     - UtzTheme.get() / set("light"|"dark"|null) / toggle() / onChange(fn).
+   Each app's own stylesheet carries the light palette under :root[data-theme="light"] (the same
+   variable names it already uses for dark). Plain ES5. */
+(function(){
+  "use strict";
+  if (window.UtzTheme) return;
+  var KEY = "utzline-theme", OLD = "redline_theme";
+  var listeners = [];
+  function stored(){
+    try {
+      var v = localStorage.getItem(KEY);
+      if (v === "light" || v === "dark") return v;
+      var o = localStorage.getItem(OLD);
+      if (o === "light" || o === "dark") return o;
+    } catch (e) {}
+    return null;
+  }
+  function system(){
+    try { return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; } catch (e) { return "dark"; }
+  }
+  function current(){ return stored() || system(); }
+  function apply(){
+    var t = current();
+    var root = document.documentElement;
+    root.setAttribute("data-theme", t);
+    root.style.colorScheme = t;
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta){
+      var want = meta.getAttribute(t === "light" ? "data-theme-light" : "data-theme-dark");
+      if (!meta.getAttribute("data-theme-dark")) meta.setAttribute("data-theme-dark", meta.getAttribute("content") || "");
+      if (want) meta.setAttribute("content", want);
+      else if (t === "light") meta.setAttribute("content", "#f4f4f4");
+      else meta.setAttribute("content", meta.getAttribute("data-theme-dark") || "");
+    }
+    for (var i = 0; i < listeners.length; i++){ try { listeners[i](t); } catch (e) {} }
+    var btns = document.querySelectorAll(".utz-theme-btn");
+    for (var j = 0; j < btns.length; j++) paint(btns[j], t);
+    return t;
+  }
+  var SUN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  function paint(btn, t){
+    btn.innerHTML = t === "light" ? MOON : SUN;
+    btn.title = t === "light" ? "Night mode" : "Day mode";
+    btn.setAttribute("aria-label", btn.title);
+  }
+  function set(v){
+    try { if (v === "light" || v === "dark") localStorage.setItem(KEY, v); else localStorage.removeItem(KEY); } catch (e) {}
+    return apply();
+  }
+  function toggle(){ return set(current() === "light" ? "dark" : "light"); }
+  function mount(header){
+    header = header || document.querySelector("header");
+    if (!header || header.querySelector(".utz-theme-btn")) return null;
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "utz-theme-btn";
+    paint(b, current());
+    b.addEventListener("click", function(e){ e.preventDefault(); e.stopPropagation(); toggle(); });
+    header.appendChild(b);
+    return b;
+  }
+  try {
+    var mq = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)");
+    if (mq && mq.addEventListener) mq.addEventListener("change", function(){ if (!stored()) apply(); });
+  } catch (e) {}
+  window.addEventListener("storage", function(e){ if (e && (e.key === KEY || e.key === OLD || e.key === null)) apply(); });
+  apply();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ apply(); mount(); });
+  else { apply(); mount(); }
+  window.UtzTheme = { get: current, stored: stored, set: set, toggle: toggle, mount: mount, apply: apply, onChange: function(fn){ if (typeof fn === "function") listeners.push(fn); } };
+})();
+</script>
+<style id="utzThemeStyle">
+  /* ---- UTZLINE day / night toggle (2026-09-30) -- see shared/theme/theme.js ---- */
+  header{ position: relative; }
+  .utz-theme-btn{ position: absolute; top: 50%; right: 12px; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border-radius: 999px; border: 1px solid var(--border, rgba(128,128,128,.4)); background: transparent; color: inherit; cursor: pointer; opacity: .85; touch-action: manipulation; z-index: 3; }
+  .utz-theme-btn:hover, .utz-theme-btn:focus{ opacity: 1; outline: none; }
+  header:has(.utz-theme-btn){ padding-right: 60px; }
+  /* light palette (day mode) */
+  :root[data-theme="light"]{ --bg: #f6f2f1; --panel: #ffffff; --panel2: #f1e9e8; --border: #dccfcd; --text: #1d1414; --muted: #6e5a5a; --muted2: #937e7e; --accent: #d12b2b; --accent-ink: #ffffff; --accent-soft: #fbe3e3; --danger: #d12b2b; --utz-header: #ffffff; --utz-deep: #efe6e5; }
+  :root[data-theme="light"] select, :root[data-theme="light"] input, :root[data-theme="light"] textarea{ color-scheme: light; }
+</style>
+<!-- UTZLINE-THEME END -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>UTZLINE Projects</title>
-<meta name="theme-color" content="#140d0d">
+<meta name="theme-color" content="#140d0d" data-theme-light="#f6f2f1">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
@@ -109,9 +203,9 @@
 <script src="./jspdf.umd.min.js" onerror="window.__jsPdfLibFailed = true;"></script>
 <style>
   :root{
-    --bg: #140d0d;
+    --bg: var(--bg);
     --panel: #1d1414;
-    --panel2: #241818;
+    --panel2: var(--panel2);
     --border: #3a2626;
     --text: #f6ecec;
     --muted: #b99;
@@ -138,7 +232,7 @@
     gap: 10px;
     padding: 12px 16px;
     border-bottom: 1px solid var(--border);
-    background: #170f0f;
+    background: var(--utz-header, var(--utz-header, var(--utz-header, #170f0f)));
     flex: 0 0 auto;
   }
   header img{ width: 32px; height: 32px; border-radius: 8px; }
@@ -235,7 +329,7 @@
   .field label{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
   .field input[type=text]{
     width: 100%;
-    background: #140d0d;
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text);
@@ -245,13 +339,19 @@
   .field input[type=text]:focus{ outline: none; border-color: var(--accent); }
   /* (v35) the PC date and the Project manager list look like the other fields */
   .field input[type=date], .field select{
-    width: 100%; background: #140d0d; border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text); padding: 9px 12px; font-size: 14px; color-scheme: dark; font-family: inherit;
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 9px 12px; font-size: 14px; color-scheme: light dark; font-family: inherit;
   }
   .field input[type=date]:focus, .field select:focus{ outline: none; border-color: var(--accent); }
   .pi-fill-row{ margin: -6px 0 12px; }
   .pi-fill-note{ font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; line-height: 1.45; }
   .pi-fill-note b{ color: var(--text); }
+  .pi-bd-thumb{ height: 34px; max-width: 120px; object-fit: contain; background: #fff; border-radius: 6px; padding: 2px; flex: none; }
+  .pi-bd-add{ flex-direction: column; align-items: stretch; }
+  .pi-bd-drop{ border: 2px dashed var(--border); border-radius: 10px; padding: 14px; text-align: center; color: var(--muted); font-size: 13px; cursor: pointer; background: var(--panel2); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .pi-bd-drop.dragover, .pi-bd-drop:focus{ border-color: var(--accent); color: var(--text); outline: none; }
+  .pi-bd-drop img{ max-height: 80px; max-width: 100%; object-fit: contain; background: #fff; border-radius: 6px; padding: 4px; }
+  .pi-bd-add-actions{ display: flex; gap: 8px; justify-content: flex-end; }
   .pi-pm-row{ display: flex; gap: 8px; align-items: center; }
   .pi-pm-row select{ flex: 1 1 auto; min-width: 0; }
   .pi-pm-row .btn{ flex: 0 0 auto; padding: 8px 10px; font-size: 12.5px; }
@@ -268,7 +368,7 @@
   .wo-format-line{ margin: 8px 0 4px; color: var(--muted); font-size: 12.5px; }
   .wo-format-line code{ color: var(--text); background: rgba(255,255,255,.05); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
   .wo-format-chips{ display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
-  .wf-chip{ display: inline-flex; flex-direction: column; gap: 3px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; background: #140d0d; min-width: 64px; }
+  .wf-chip{ display: inline-flex; flex-direction: column; gap: 3px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; background: var(--bg); min-width: 64px; }
   .wf-chip b{ font-weight: 700; font-size: 13.5px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
   .wf-chip small{ color: var(--muted); font-size: 11px; }
   .wf-chip select{ background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
@@ -314,7 +414,7 @@
   .logo-row{ display:flex; align-items:center; gap: 14px; }
   .logo-preview{
     width: 56px; height: 56px; border-radius: 10px;
-    background: #140d0d; border: 1px solid var(--border);
+    background: var(--bg); border: 1px solid var(--border);
     display:flex; align-items:center; justify-content:center;
     overflow: hidden; flex: 0 0 auto;
   }
@@ -324,7 +424,7 @@
   /* Shared name+PIN identity selector (2026-09-23) -- the <select> IS the
      button (see the JS section of the same name for the full story). */
   .identity-select{
-    background: #140d0d;
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text);
@@ -387,7 +487,7 @@
     margin: 12px 0;
   }
   .pdf-page-cell{
-    background: #140d0d;
+    background: var(--bg);
     border: 2px solid var(--border);
     border-radius: 8px;
     padding: 6px;
@@ -414,13 +514,56 @@
     display: flex; align-items: center; gap: 12px;
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
-    background: #170f0f;
+    background: var(--utz-header, var(--utz-header, var(--utz-header, #170f0f)));
   }
   .plan-canvas-topbar span{ font-weight: 600; font-size: 14px; }
   .plan-canvas-stage{ flex: 1 1 auto; position: relative; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .plan-canvas-stage svg{ display: block; width: 100%; height: 100%; cursor: grab; }
   /* (v31) work order import + pin-drop */
   .wo-import-modal{ max-width: 980px; }
+
+  /* ---- (v50) Set up floor plans & report ---- */
+  .ps-modal{ max-width: 980px; }
+  .ps-tabs{ display: flex; gap: 6px; margin: 6px 0 14px; border-bottom: 1px solid var(--border); }
+  .ps-tab{ background: transparent; border: 0; border-bottom: 3px solid transparent; color: var(--muted); font: inherit; font-size: 14px; font-weight: 700; padding: 8px 12px; cursor: pointer; touch-action: manipulation; }
+  .ps-tab.active{ color: var(--text); border-bottom-color: var(--accent); }
+  .ps-tab:disabled{ opacity: .5; cursor: default; }
+  .ps-drop{ min-height: 74px; justify-content: center; margin-bottom: 12px; font-size: 14px; }
+  .ps-opt{ display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 10px; font-size: 14px; }
+  .ps-opt label{ display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .ps-opt input[type=checkbox]{ width: 18px; height: 18px; }
+  .ps-hint{ color: var(--muted); font-size: 12.5px; }
+  .ps-rows{ display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+  .ps-head, .ps-row{ display: grid; grid-template-columns: 28px 64px minmax(90px, 1.1fr) minmax(110px, 1.3fr) minmax(90px, 1fr) 70px minmax(90px, 1fr); gap: 8px; align-items: center; }
+  .ps-head{ color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 6px; }
+  .ps-row{ background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 6px; }
+  .ps-row.off{ opacity: .55; }
+  .ps-row input[type=checkbox]{ width: 18px; height: 18px; margin: 0 auto; display: block; }
+  .ps-row img{ width: 64px; height: 48px; object-fit: contain; background: #fff; border-radius: 6px; }
+  .ps-row input[type=text]{ width: 100%; box-sizing: border-box; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 14px; }
+  .ps-row input[type=text]:focus{ outline: none; border-color: var(--accent); }
+  .ps-src{ font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .ps-status{ font-size: 12.5px; color: var(--muted); }
+  .ps-status.ok{ color: var(--ok); }
+  .ps-status.bad{ color: var(--danger); }
+  .ps-status.warn{ color: var(--warn); }
+  .ps-rows.no-zones .ps-zone, .ps-head.no-zones .ps-zone{ display: none; }
+  .ps-rows.no-zones .ps-row, .ps-head.no-zones{ grid-template-columns: 28px 64px minmax(90px, 1.1fr) minmax(110px, 1.5fr) 70px minmax(90px, 1fr); }
+  .ps-empty{ color: var(--muted2); font-size: 13px; margin: 0 0 10px; }
+  .ps-warn{ color: var(--warn); font-size: 13px; margin: 0 0 10px; }
+  .ps-progress{ color: var(--text); font-size: 13px; margin: 0 0 10px; }
+  .ps-done-list{ display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
+  .ps-done-row{ display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .ps-done-row .ps-done-n{ color: var(--muted); font-size: 13px; }
+  @media (max-width: 760px){
+    .ps-head{ display: none; }
+    .ps-row, .ps-rows.no-zones .ps-row{ grid-template-columns: 28px 64px 1fr; }
+    .ps-row .ps-level, .ps-row .ps-zone, .ps-row .ps-code, .ps-row .ps-status{ grid-column: 2 / -1; }
+    .ps-row .ps-code{ max-width: 120px; }
+  }
+  /* the Levels list: a level with several zones is a heading with its zones under it */
+  .list-group-head{ font-weight: 700; font-size: 14px; color: var(--muted); padding: 10px 6px 2px; letter-spacing: .02em; }
+  .list-item.list-item-zone{ margin-left: 18px; width: calc(100% - 18px); }
   .wo-zones{ display:flex; flex-direction:column; gap:8px; margin: 0 0 12px; }
   .wo-zone-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size: 14px; }
   .wo-zone-row select{ background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 14px; min-width: 180px; }
@@ -451,7 +594,7 @@
   .unplaced-item{ display:block; width:100%; text-align:left; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; margin-bottom: 5px; font-size: 13px; cursor: pointer; touch-action: manipulation; }
   .unplaced-item:hover{ border-color: var(--accent); }
   .unplaced-wo{ color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .plan-pin-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #2a1414; border-top: 1px solid var(--border); font-size: 14px; }
+  .plan-pin-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--utz-deep, var(--utz-deep, var(--utz-deep, #2a1414))); border-top: 1px solid var(--border); font-size: 14px; }
   .plan-pin-bar[hidden]{ display: none; }
   .plan-pin-bar-btns{ display:flex; gap: 8px; }
   /* (v32) drag list, room picker, undo */
@@ -464,11 +607,14 @@
   .placed-wos summary{ cursor: pointer; font-size: 12px; color: var(--muted); padding: 6px 0; }
   .plan-unplaced-panel.dragging{ opacity: .35; }
   .plan-drag-ghost{ position: fixed; z-index: 90; pointer-events: none; transform: translate(-50%, -130%); background: var(--panel); color: var(--text); border: 2px dashed var(--muted); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
-  .plan-drag-ghost.over-plan{ border-color: #ff5b5b; background: #2a1414; }
+  .plan-drag-ghost.over-plan{ border-color: #ff5b5b; background: var(--utz-deep, var(--utz-deep, var(--utz-deep, #2a1414))); }
   .plan-undo-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #142a1b; border-top: 1px solid var(--border); font-size: 14px; }
   .plan-undo-bar[hidden]{ display: none; }
   .pc-note{ display:inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(240,178,62,.16); color: #f0b23e; vertical-align: 1px; } /* (v35) */
   /* (v34) placed from the plan's labels: amber ring until someone's checked it; Move mode */
+  .marker-group-ring{ fill: none; stroke: #ffd166; stroke-dasharray: 6 5; pointer-events: none; }
+  .marker-group-ring.picked{ stroke: #ffd166; stroke-dasharray: none; fill: rgba(255,209,102,.18); }
+  .plan-merge-bar{ background: rgba(255,209,102,.14); }
   .marker-check-ring{ fill: none; stroke: #f0b23e; stroke-dasharray: 7 5; pointer-events: none; }
   .plan-move-bar{ flex: 0 0 auto; display:flex; align-items:center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #2a2210; border-top: 1px solid var(--border); font-size: 14px; }
   .plan-move-bar[hidden]{ display: none; }
@@ -517,10 +663,14 @@
     font-size: 11px;
     color: var(--muted);
     text-align: center;
-    background: #170f0f;
+    background: var(--utz-header, var(--utz-header, var(--utz-header, #170f0f)));
     border-top: 1px solid var(--border);
   }
   .marker-dot{ cursor: pointer; }
+  .field .utz-pick{ display: block; width: 100%; }
+  .field .utz-pick-btn{ width: 100%; max-width: none; justify-content: space-between; padding: 10px 12px; font-size: 14px; }
+  .plan-zoom-btns{ display: inline-flex; gap: 4px; }
+  .plan-zoom-btns .btn{ min-width: 36px; padding-left: 10px; padding-right: 10px; }
   .marker-label{ font-weight: 600; pointer-events: none; user-select: none; } /* (v35) no font-size here: a CSS font-size overrides the SVG font-size attribute planRenderMarkers sets */
 
 
@@ -630,7 +780,7 @@
   /* ---- Status-history hover popup (2026-09-23) ---- */
   .status-history-pop{
     position: fixed; z-index: 60; max-width: 300px;
-    background: #241818; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 12px; font-size: 12px; color: var(--text);
     box-shadow: 0 8px 24px rgba(0,0,0,0.4); pointer-events: none;
   }
@@ -711,8 +861,8 @@
   .so-order-item-status{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .so-order-item-status .tick-label{ font-size: 12.5px; color: inherit; }
   .so-received-date{
-    background: #140d0d; border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text); padding: 4px 8px; font-size: 12.5px; color-scheme: dark;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); padding: 4px 8px; font-size: 12.5px; color-scheme: light dark;
   }
   .so-received-date:focus{ outline: none; border-color: var(--accent); }
   .so-received-date[hidden]{ display: none; }
@@ -744,7 +894,7 @@
     left: 50%;
     bottom: 24px;
     transform: translateX(-50%) translateY(20px);
-    background: #241818;
+    background: var(--panel2);
     border: 1px solid var(--border);
     color: var(--text);
     padding: 10px 18px;
@@ -780,6 +930,14 @@
   .ix-cut-input.ix-dirty{ border-color: var(--warn); }
   .ix-cut-input.ix-saving{ opacity: .6; }
   .ix-cut-input.ix-saved{ border-color: var(--ok); }
+  /* (2026-09-30) a saved cutting file name is locked (read-only) until the padlock + the user's PIN opens it */
+  .ix-cut-lockwrap{ display: inline-flex; align-items: center; gap: 5px; max-width: 100%; }
+  .ix-cut-lockwrap .ix-cut-input{ width: 160px; }
+  .ix-cut-input.ix-locked{ background: transparent; border-style: dashed; cursor: default; }
+  .ix-cut-input.ix-unlocked{ border-color: var(--accent); }
+  .ix-cut-edit{ flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 34px; min-height: 32px; padding: 0 7px; background: var(--panel2); color: var(--muted); border: 1px solid var(--border); border-radius: 7px; cursor: pointer; touch-action: manipulation; }
+  .ix-cut-edit:hover, .ix-cut-edit:focus{ color: var(--text); border-color: var(--accent); outline: none; }
+  .ix-cut-edit:disabled{ opacity: .5; cursor: default; }
   .sched-table td.ix-notes-cell{ min-width: 170px; max-width: 260px; white-space: normal; }
   .ix-notes-btn{ display: flex; align-items: flex-start; gap: 6px; width: 100%; min-width: 150px; text-align: left; background: transparent; color: var(--text); border: 1px dashed var(--border); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 12px; cursor: pointer; touch-action: manipulation; }
   .ix-notes-btn:hover{ border-color: var(--accent); }
@@ -801,6 +959,8 @@
   .ix-add textarea:focus{ outline: none; border-color: var(--accent); }
   .ix-add-row{ display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
   .ix-cut-card .ix-cut-input{ width: 100%; max-width: 460px; font-size: 14px; padding: 8px 10px; }
+  .ix-cut-card .ix-cut-lockwrap{ display: flex; max-width: 500px; }
+  .ix-cut-card .ix-cut-lockwrap .ix-cut-input{ flex: 1; width: auto; min-width: 0; }
   .ix-cut-meta{ font-size: 12px; color: var(--muted); margin-top: 6px; }
   .ix-hist{ font-size: 12px; color: var(--muted); margin-top: 4px; }
   .ix-hist-item{ color: var(--text); }
@@ -984,6 +1144,8 @@
     var writeFileText = opts.writeFileText;
     var getHandle = opts.getHandle;
     var getUser = opts.getUser || function(){ return ""; };
+    // (2026-09-30) confirmPin(name, why) -> Promise<bool>: asks the signed-in user for their own PIN (the apps pass their numberpad check)
+    var confirmPin = opts.confirmPin || null;
     // (event layout v2) the branch folder as the event store's stand-in
     function evRoot(h, branch, create, project){
       if (window.UtzEvents && window.UtzEvents.root){
@@ -1060,11 +1222,18 @@
     }
 
     // ---------- table cells ----------
+    // (2026-09-30) Andrew: "once a cutting file name is pasted, lock it, can be edited with a pin".
+    // A saved name shows read-only with a padlock button; the button asks the signed-in user for their PIN
+    // before the field opens for an edit. An empty field is still open for pasting (no PIN).
+    var LOCK_SVG = "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"5\" y=\"11\" width=\"14\" height=\"9\" rx=\"2\"/><path d=\"M8 11V8a4 4 0 0 1 8 0v3\"/></svg>";
     function cutCellInner(rec){
       var loaded = !!rec;
       var val = rec && rec.cutting ? rec.cutting.fileName : "";
-      var title = rec && rec.cutting && rec.cutting.fileName ? "Set by " + (rec.cutting.by || "?") + ", " + whenText(rec.cutting.at) : "Paste the cutting file's name here, then press Enter";
-      return "<input type=\"text\" class=\"ix-cut-input\" maxlength=\"" + MAX_NAME + "\" spellcheck=\"false\" autocomplete=\"off\" placeholder=\"" + (loaded ? "Paste file name" : "…") + "\"" + (loaded ? "" : " disabled") + " value=\"" + esc(val) + "\" title=\"" + esc(title) + "\">";
+      var title = rec && rec.cutting && rec.cutting.fileName ? "Set by " + (rec.cutting.by || "?") + ", " + whenText(rec.cutting.at) + " — locked: tap the padlock to edit (asks for your PIN)" : "Paste the cutting file's name here, then press Enter";
+      var locked = !!val;
+      var inp = "<input type=\"text\" class=\"ix-cut-input" + (locked ? " ix-locked" : "") + "\" maxlength=\"" + MAX_NAME + "\" spellcheck=\"false\" autocomplete=\"off\" placeholder=\"" + (loaded ? "Paste file name" : "…") + "\"" + (loaded ? "" : " disabled") + (locked ? " readonly" : "") + " value=\"" + esc(val) + "\" title=\"" + esc(title) + "\">";
+      if (!locked) return inp;
+      return "<span class=\"ix-cut-lockwrap\">" + inp + "<button type=\"button\" class=\"ix-cut-edit\" title=\"Locked — edit the cutting file name (asks for your PIN)\" aria-label=\"Edit the cutting file name (asks for your PIN)\">" + LOCK_SVG + "</button></span>";
     }
     function notesCellInner(rec){
       if (!rec) return "<button type=\"button\" class=\"ix-notes-btn\" disabled><span class=\"ix-empty\">…</span></button>";
@@ -1146,8 +1315,37 @@
       });
       host.addEventListener("focusout", function(e){
         var el = e.target;
-        if (el.classList && el.classList.contains("ix-cut-input") && el.value.trim() !== saved()) commit(el);
+        if (!el.classList || !el.classList.contains("ix-cut-input")) return;
+        if (el.value.trim() !== saved()){ commit(el); return; }
+        if (el.classList.contains("ix-unlocked")) setTimeout(relock, 0); // opened for an edit but nothing changed: lock it again
       });
+      host.addEventListener("click", function(e){
+        var b = e.target.closest ? e.target.closest(".ix-cut-edit") : null;
+        if (!b || b.disabled) return;
+        unlockForEdit(b);
+      });
+      function relock(){
+        var el = input();
+        if (el && (el.classList.contains("ix-saving") || el.value.trim() !== saved() || document.activeElement === el)) return;
+        host.innerHTML = cutCellInner(recFor(row.project, rowKey(row)));
+      }
+      function unlockForEdit(btn){
+        var user = needUser("cutting files");
+        if (!user) return;
+        btn.disabled = true;
+        var ask = confirmPin ? Promise.resolve(confirmPin(user, "to edit the cutting file name as “" + user + "”")) : Promise.resolve(true);
+        ask.then(function(okPin){
+          btn.disabled = false;
+          if (!okPin) return;
+          var el = input();
+          if (!el) return;
+          el.readOnly = false;
+          el.classList.remove("ix-locked"); el.classList.add("ix-unlocked");
+          var w = el.parentNode; if (w && w.classList && w.classList.contains("ix-cut-lockwrap")){ var eb = w.querySelector(".ix-cut-edit"); if (eb) eb.style.display = "none"; }
+          el.focus();
+          try{ el.select(); }catch(err){}
+        }, function(){ btn.disabled = false; });
+      }
       function commit(el){
         if (el.classList.contains("ix-saving")) return;
         var val = el.value.trim().slice(0, MAX_NAME);
@@ -1155,8 +1353,10 @@
         el.classList.add("ix-saving");
         setCuttingFile(row, val).then(function(ok){
           el.classList.remove("ix-saving", "ix-dirty");
-          if (!ok){ el.value = saved(); return; }
+          if (!ok){ el.value = saved(); if (el.classList.contains("ix-unlocked")) setTimeout(relock, 0); return; }
           el.classList.add("ix-saved"); setTimeout(function(){ el.classList.remove("ix-saved"); }, 1500);
+          // (2026-09-30) saved -> lock it straight away: let go of the box so the redraw can replace it with the locked one
+          if (document.activeElement === el) el.blur();
           patchCells(row.project, rowKey(row));
         });
       }
@@ -1960,10 +2160,11 @@
    for 12 hours (they only change when a device that hasn't been updated
    writes there); UtzEvents.refresh({ old: true }) forgets that.
 
-   UtzEvents.tidy() (UTZLINE Projects -> "Speed up this project") moves the
-   old per-item records into the new layout: copy, read back, then remove
-   the old file; an old item folder is removed once empty. Safe to repeat,
-   safe on two PCs at once. Run it only when every device has the v2 apps.
+   UtzEvents.tidy() moves the old per-item records into the new layout: copy,
+   read back, then remove the old file; an old item folder is removed once
+   empty. No screen calls it any more (the "Speed up this project" card was
+   removed from UTZLINE Projects in v48, 2026-09-30, once Andrew's jobs were
+   moved): the apps simply keep reading both layouts.
 
    Generated into each app between UTZLINE-EVENT-STORE markers from
    shared/event-store/event-store.js -- edit it there. */
@@ -2509,6 +2710,821 @@
 })();
 </script>
 <!-- UTZLINE-EVENT-STORE END -->
+<!-- UTZLINE-SIGNIN BEGIN (generated from shared/sign-in -- don't edit here) -->
+<script>
+/* UTZLINE-SIGNIN BEGIN -- shared/sign-in/sign-in.js (inlined into every app that has a name + PIN; edit the shared file, then re-run scratchpad/signin_round.py) */
+/* (2026-09-30) Sign in every time an app is opened -- on a tablet or phone.
+   Andrew: "on next update, when opening the apps, it should as[k] for you to
+   login, currently it just loads to the last user that was logged in, some of
+   these tablets will have multiple users (employees)". Decided with Andrew:
+   ask on a fresh launch AND again when the app was left in the background for
+   10 minutes or more; tablets and phones only (a PC keeps the last user, as
+   before).
+   What stays the same: the saved name (utzline-identity) is still the one
+   thing every app on the device reads to stamp saves. What changes: on a
+   tablet / phone the saved name is only "the last person", not "who's using
+   it now" -- the app clears it in memory and covers the screen with a
+   "Who's using this?" list until a name + PIN (the app's own numberpad) is
+   entered. The sign-in lasts while the app is in use (sessionStorage, so it
+   is gone when the app is closed). Another app on the device signing in as
+   someone else locks this one too when it comes back to the front. */
+(function(){
+  "use strict";
+  if (window.UtzSignIn) return;
+  var AWAY_DEFAULT_MS = 10 * 60 * 1000;
+  var A = null;                       // the app's adapter (see init)
+  var S = { booted: false, locked: false, gate: null, showing: false, staleName: "", pendingName: "", names: null };
+
+  function isLight(){
+    if (window.__utzSignInForce === true) return true;     // tests
+    if (window.__utzSignInForce === false) return false;
+    var ua = navigator.userAgent || "";
+    return /Android|iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  }
+  function awayMs(){
+    var t = window.__utzSignInAwayMs;
+    return (typeof t === "number" && t >= 0) ? t : AWAY_DEFAULT_MS;
+  }
+  var KEY = "utzline-signin:" + (location.pathname || "/");
+  function readSession(){
+    try { var raw = window.sessionStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  function writeSession(o){
+    try { window.sessionStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
+  }
+  function curName(){ try { return (A && A.getName && A.getName()) || ""; } catch (e) { return ""; } }
+
+  // "navigate" = the app was opened (or a link to it followed); "reload" /
+  // "back_forward" = the same page brought back (a pull-to-refresh, the app's
+  // own update reload, Android restoring a page it had put to sleep).
+  function sameVisit(){
+    if (typeof window.__utzSignInNavType === "string") return window.__utzSignInNavType === "reload" || window.__utzSignInNavType === "back_forward";
+    try {
+      var e = window.performance && performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
+      return !!(e && (e.type === "reload" || e.type === "back_forward"));
+    } catch (x) { return false; }
+  }
+
+  /* The first call decides (the one boot-time loadDeviceUserName): the saved
+     name is honoured only when this page is the same visit coming back (see
+     sameVisit), this app session already signed in as that name, and it was
+     not away 10 minutes or more -- so every time the app is opened, it asks.
+     Later calls never clear a name somebody just signed in with. */
+  function boot(savedName){
+    savedName = String(savedName || "");
+    if (!isLight()) return savedName;
+    if (!S.booted){
+      S.booted = true;
+      var s = readSession();
+      var away = s && s.hiddenAt ? (Date.now() - s.hiddenAt) : 0;
+      var ok = !!(s && s.name && s.name === savedName && away < awayMs() && sameVisit());
+      S.locked = !ok;
+      S.staleName = ok ? "" : savedName;
+      writeSession({ name: ok ? savedName : "", hiddenAt: 0 });
+    }
+    if (S.locked && (savedName === S.staleName) && savedName !== S.pendingName) return "";
+    return savedName;
+  }
+
+  /* ---- the cover ---- */
+  var CSS = "" +
+    "#utzSignIn{position:fixed;left:0;top:0;right:0;bottom:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(14,11,10,.97);color:#f4ecea;font-family:inherit;padding:16px;overflow:auto;-webkit-overflow-scrolling:touch}" +
+    "#utzSignIn .usi-card{width:100%;max-width:420px;margin:auto}" +
+    "#utzSignIn h1{font-size:24px;line-height:1.2;margin:0 0 6px;font-weight:700}" +
+    "#utzSignIn p{margin:0 0 18px;color:#c9bcb8;font-size:15px}" +
+    "#utzSignIn .usi-list{display:flex;flex-direction:column;gap:10px}" +
+    "#utzSignIn button{font:inherit;font-size:19px;font-weight:600;min-height:58px;padding:10px 16px;border-radius:12px;border:1px solid #4a3c38;background:#2a211f;color:#f4ecea;text-align:left;cursor:pointer;touch-action:manipulation}" +
+    "#utzSignIn button:active{background:#3a2d2a}" +
+    "#utzSignIn button.usi-add{background:transparent;border-style:dashed;color:#c9bcb8;font-weight:500;font-size:16px;min-height:48px}" +
+    "#utzSignIn .usi-msg{margin-top:14px;font-size:14px;color:#c9bcb8}" +
+    /* the app's own numberpad / name prompt / tickbox list sit above the cover */
+    "body.utz-signin-on .modal-backdrop{z-index:100001 !important}" +
+    "body.utz-signin-on #toast,body.utz-signin-on .toast{z-index:100002 !important}";
+  function ensureStyle(){
+    if (document.getElementById("utzSignInStyle")) return;
+    var st = document.createElement("style"); st.id = "utzSignInStyle"; st.textContent = CSS;
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function sortNames(list){
+    return list.slice().sort(function(a, b){ return a.toLowerCase().localeCompare(b.toLowerCase()); });
+  }
+  function drawGate(names){
+    ensureStyle();
+    if (!S.gate){
+      var g = document.createElement("div");
+      g.id = "utzSignIn"; g.setAttribute("role", "dialog"); g.setAttribute("aria-modal", "true"); g.setAttribute("aria-label", "Sign in");
+      // Sit in the same container as the app's own dialogs (numberpad, name
+      // prompt): some apps keep them inside a positioned wrapper, and a cover
+      // on <body> would then hide the numberpad behind itself.
+      var np = document.getElementById("numberpadBackdrop");
+      (np && np.parentNode ? np.parentNode : document.body).appendChild(g);
+      S.gate = g;
+    }
+    var g2 = S.gate;
+    g2.innerHTML = "";
+    var card = document.createElement("div"); card.className = "usi-card";
+    var h = document.createElement("h1"); h.textContent = "Who’s using this?";
+    var p = document.createElement("p"); p.textContent = "Pick your name, then enter your PIN.";
+    var list = document.createElement("div"); list.className = "usi-list";
+    sortNames(names).forEach(function(n){
+      var b = document.createElement("button"); b.type = "button"; b.className = "usi-name"; b.textContent = n;
+      b.setAttribute("data-name", n);
+      b.addEventListener("click", function(){ pick(n); });
+      list.appendChild(b);
+    });
+    var add = document.createElement("button"); add.type = "button"; add.className = "usi-add"; add.textContent = "+ Add a new name…";
+    add.addEventListener("click", function(){ addNew(); });
+    list.appendChild(add);
+    card.appendChild(h); card.appendChild(p); card.appendChild(list);
+    g2.appendChild(card);
+    g2.hidden = false;
+    document.body.classList.add("utz-signin-on");
+    S.showing = true;
+  }
+  function hideGate(){
+    if (S.gate){ S.gate.hidden = true; if (S.gate.parentNode) S.gate.parentNode.removeChild(S.gate); S.gate = null; }
+    document.body.classList.remove("utz-signin-on");
+    S.showing = false;
+  }
+  function unlocked(){
+    S.locked = false; S.staleName = ""; S.pendingName = "";
+    writeSession({ name: curName(), hiddenAt: 0 });
+    hideGate();
+    try { if (A && A.refresh) A.refresh(); } catch (e) {}   // redraw the hint + selector for the person now signed in
+    try { window.dispatchEvent(new Event("utzline-signed-in")); } catch (e) {}
+  }
+  function pick(name){
+    if (!A || !A.pickName) return;
+    S.pendingName = name;
+    Promise.resolve().then(function(){ return A.pickName(name); }).then(function(){
+      if (curName() && curName().toLowerCase() === String(name).toLowerCase()) unlocked();
+      else S.pendingName = "";
+    }, function(){ S.pendingName = ""; });
+  }
+  function addNew(){
+    if (!A || !A.addNew) return;
+    Promise.resolve().then(function(){ return A.addNew(); }).then(function(){
+      if (curName()) unlocked();
+    }, function(){});
+  }
+
+  /* Called by the app every time it has (re)read the list of names, and on
+     coming back to the front. Shows the cover while locked; with no names in
+     the list yet there is nothing to pick, so it waits (the app's own
+     "Set your name" / add-a-name flow works as before). */
+  function check(names){
+    if (!isLight() || !S.booted) return Promise.resolve();
+    if (!S.locked) return Promise.resolve();
+    if (curName()){ unlocked(); return Promise.resolve(); }     // they signed in another way (added a name)
+    var have = Promise.resolve(names && names.length ? names : (A && A.readUsers ? A.readUsers().then(function(rows){ return (rows || []).map(function(r){ return r.name; }).filter(Boolean); }, function(){ return []; }) : []));
+    return have.then(function(list){
+      if (!S.locked) return;
+      if (!list.length) { hideGate(); return; }
+      if (S.showing && S.gate && S.names && S.names.join("\u0001") === list.join("\u0001")) return;
+      S.names = list.slice();
+      drawGate(list);
+    });
+  }
+  function lock(){
+    if (!isLight() || !A) return;
+    S.staleName = curName() || S.staleName;
+    S.locked = true; S.pendingName = "";
+    writeSession({ name: "", hiddenAt: 0 });
+    try { if (A.clear) A.clear(); } catch (e) {}
+    check();
+  }
+
+  /* ---- leaving / coming back ---- */
+  function onHide(){
+    if (!isLight() || !S.booted) return;
+    writeSession({ name: S.locked ? "" : curName(), hiddenAt: Date.now() });
+  }
+  function onShow(){
+    if (!isLight() || !S.booted) return;
+    var s = readSession();
+    if (!S.locked && s && s.hiddenAt && (Date.now() - s.hiddenAt) >= awayMs()){ lock(); return; }
+    if (!S.locked){
+      writeSession({ name: curName(), hiddenAt: 0 });
+      // another app on this device signed in as someone else while this one was away
+      if (A && A.getPointer && curName()){
+        Promise.resolve(A.getPointer()).then(function(p){
+          if (p && curName() && p !== curName() && !S.locked) lock();
+        }, function(){});
+      }
+    } else {
+      check();
+    }
+  }
+  document.addEventListener("visibilitychange", function(){
+    if (document.visibilityState === "hidden") onHide(); else onShow();
+  });
+  window.addEventListener("pagehide", onHide);
+
+  window.UtzSignIn = {
+    init: function(adapter){ A = adapter || null; if (S.booted && S.locked) check(); },
+    boot: boot,
+    check: check,
+    lock: lock,
+    isLight: isLight,                 // tablet or phone (also used to hide PC-only bits)
+    isLocked: function(){ return !!S.locked; },
+    isShowing: function(){ return !!S.showing; },
+    _away: function(){ return awayMs(); }
+  };
+})();
+/* UTZLINE-SIGNIN END */
+</script>
+<!-- UTZLINE-SIGNIN END -->
+<!-- UTZLINE-CHANGE-FOLDER BEGIN -->
+<style id="utzChangeFolderStyle">
+/* (2026-09-30) "move the change folder to the bottom right of the page, and smaller" */
+.utz-change-folder{position:fixed;right:12px;bottom:12px;z-index:5;font:inherit;font-size:12px;line-height:1.2;
+  padding:5px 11px;border-radius:999px;border:1px solid rgba(128,128,128,.45);background:rgba(128,128,128,.16);
+  color:inherit;opacity:.8;cursor:pointer;width:auto;min-height:0;text-decoration:none;touch-action:manipulation}
+.utz-change-folder:hover,.utz-change-folder:focus{opacity:1}
+.utz-change-folder[hidden]{display:none}
+</style>
+<!-- UTZLINE-CHANGE-FOLDER END -->
+<!-- UTZLINE-BUILDERS BEGIN (generated from shared/builders -- don't edit here) -->
+<script>
+/* ============================== UTZLINE builders + their logos (2026-09-30) ==============================
+   Andrew: "can each project when started input the builders logo, this could be saved per builder. when
+   we start a project the builder name can be a drop down with option to add new, if adding new it asks
+   to drag and drop their logo. this can be used on the project headers" (screens + PDFs).
+   Kept once at the Projects ROOT (beside company-logo.png and utzline-users.csv), never per project:
+     utzline-builders.json                  { schemaVersion: 1, updatedAt, builders: [ { name, logo, addedBy, addedAt } ] }
+     utzline-builder-logo - <slug>.png      the logo (PNG, longest side <= 600 px) -- a root FILE, so no app
+                                            ever lists it as a project and no exclusion list needs changing
+   A project only stores the builder's NAME (project-meta.json "contractor", as before); the logo is looked
+   up by name (case-insensitive). Written by UTZLINE Projects only; every app reads.
+     UtzBuilders.list(rootH)                      -> Promise<[{name, logo}]>   ([] when the file isn't there)
+     UtzBuilders.add(rootH, name, file, by)       -> Promise<builder>          (file may be null: name only)
+     UtzBuilders.setLogo(rootH, name, file, by)   -> Promise<builder>
+     UtzBuilders.logoUrl(rootH, name)             -> Promise<string|null>      (object URL, cached per root)
+     UtzBuilders.logoDataUrl(rootH, name, maxPx)  -> Promise<string|null>      (for PDFs)
+     UtzBuilders.contractorOf(projectH)           -> Promise<string>           (project-meta.json "contractor", "" if none)
+     UtzBuilders.mount(el, rootH, name)           -> shows the logo in/next to a header element (adds <img class="utz-builder-logo">)
+     UtzBuilders.forget(rootH)                    -> drops the caches (after a save)
+   Plain ES5. */
+(function(){
+  "use strict";
+  if (window.UtzBuilders) return;
+  var FILE = "utzline-builders.json", PREFIX = "utzline-builder-logo - ";
+  var cache = {}; // rootKey -> { list: Promise, urls: {nameLower: Promise<url|null>} }
+  function rootKey(h){ return (h && h.name) || "root"; }
+  function slug(name){ return String(name || "").trim().replace(/[\\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").slice(0, 80); }
+  function norm(name){ return String(name || "").trim().toLowerCase(); }
+  function readText(h, name){
+    return h.getFileHandle(name, { create: false }).then(function(fh){ return fh.getFile(); }).then(function(f){ return f.text(); });
+  }
+  function notFound(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError")); }
+  function readDoc(rootH){
+    return readText(rootH, FILE).then(function(t){
+      var d = JSON.parse(t);
+      if (!d || typeof d !== "object" || !Array.isArray(d.builders)) throw new Error("utzline-builders.json isn't the expected shape");
+      d.builders = d.builders.filter(function(b){ return b && typeof b.name === "string" && b.name.trim(); });
+      return d;
+    }, function(err){ if (notFound(err)) return { schemaVersion: 1, updatedAt: null, builders: [] }; throw err; });
+  }
+  function writeText(h, name, text){
+    return h.getFileHandle(name, { create: true }).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(text).then(function(){ return w.close(); }); });
+  }
+  function writeBlob(h, name, blob){
+    return h.getFileHandle(name, { create: true }).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(blob).then(function(){ return w.close(); }); });
+  }
+  function sortByName(list){ return list.sort(function(a, b){ return a.name.localeCompare(b.name, undefined, { sensitivity: "base" }); }); }
+  function list(rootH){
+    var k = rootKey(rootH);
+    if (!cache[k]) cache[k] = { list: null, urls: {} };
+    if (!cache[k].list) cache[k].list = readDoc(rootH).then(function(d){ return sortByName(d.builders.map(function(b){ return { name: b.name.trim(), logo: b.logo || "" }; })); }, function(err){ cache[k].list = null; throw err; });
+    return cache[k].list;
+  }
+  function forget(rootH){ delete cache[rootKey(rootH)]; }
+  // image -> PNG blob, longest side <= maxPx (a logo dropped in as a 4000-px JPEG is not what a header or a PDF needs)
+  function downscale(file, maxPx){
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function(){
+        try{
+          var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, s = Math.min(1, maxPx / Math.max(w, h));
+          var c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          c.toBlob(function(b){ b ? resolve(b) : reject(new Error("Couldn't read that image")); }, "image/png");
+        }catch(e){ URL.revokeObjectURL(url); reject(e); }
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("That file isn't an image the app can read")); };
+      img.src = url;
+    });
+  }
+  function upsert(rootH, name, file, by){
+    name = String(name || "").trim();
+    if (!name) return Promise.reject(new Error("The builder needs a name"));
+    return readDoc(rootH).then(function(d){
+      var logoName = null;
+      var p = file ? downscale(file, 600).then(function(b){ logoName = PREFIX + slug(name) + ".png"; return writeBlob(rootH, logoName, b); }) : Promise.resolve();
+      return p.then(function(){
+        var found = null;
+        d.builders.forEach(function(b){ if (norm(b.name) === norm(name)) found = b; });
+        if (!found){ found = { name: name, logo: "", addedBy: by || "", addedAt: new Date().toISOString() }; d.builders.push(found); }
+        if (logoName){ found.logo = logoName; found.logoBy = by || ""; found.logoAt = new Date().toISOString(); }
+        d.schemaVersion = 1; d.updatedAt = new Date().toISOString();
+        return writeText(rootH, FILE, JSON.stringify(d, null, 2)).then(function(){ forget(rootH); return { name: found.name, logo: found.logo || "" }; });
+      });
+    });
+  }
+  function add(rootH, name, file, by){ return upsert(rootH, name, file, by); }
+  function setLogo(rootH, name, file, by){ return upsert(rootH, name, file, by); }
+  function entryFor(rootH, name){
+    return list(rootH).then(function(l){ var n = norm(name); for (var i = 0; i < l.length; i++) if (norm(l[i].name) === n) return l[i]; return null; });
+  }
+  function logoUrl(rootH, name){
+    if (!rootH || !name) return Promise.resolve(null);
+    var k = rootKey(rootH), n = norm(name);
+    if (!cache[k]) cache[k] = { list: null, urls: {} };
+    if (!cache[k].urls[n]) cache[k].urls[n] = entryFor(rootH, name).then(function(b){
+      if (!b || !b.logo) return null;
+      return rootH.getFileHandle(b.logo, { create: false }).then(function(fh){ return fh.getFile(); }).then(function(f){
+        if (f instanceof Blob) return URL.createObjectURL(f);
+        // a stand-in file object (tests, some wrappers): build a Blob from its bytes
+        return f.arrayBuffer().then(function(ab){ return URL.createObjectURL(new Blob([ab], { type: "image/png" })); });
+      }).catch(function(){ return null; });
+    }, function(){ return null; });
+    return cache[k].urls[n];
+  }
+  function logoDataUrl(rootH, name, maxPx){
+    return logoUrl(rootH, name).then(function(url){
+      if (!url) return null;
+      return new Promise(function(resolve){
+        var img = new Image();
+        img.onload = function(){
+          try{
+            var w = img.naturalWidth, h = img.naturalHeight, s = Math.min(1, (maxPx || 400) / Math.max(w, h));
+            var c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+            c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+            resolve({ dataUrl: c.toDataURL("image/png"), w: c.width, h: c.height });
+          }catch(e){ resolve(null); }
+        };
+        img.onerror = function(){ resolve(null); };
+        img.src = url;
+      });
+    });
+  }
+  function contractorOf(projectH){
+    if (!projectH) return Promise.resolve("");
+    return readText(projectH, "project-meta.json").then(function(t){ var m = JSON.parse(t); return (m && typeof m.contractor === "string") ? m.contractor.trim() : ""; }, function(){ return ""; });
+  }
+  // el: a header element (or a container); the logo goes in a <img class="utz-builder-logo"> inside it (kept, updated, hidden)
+  function mount(el, rootH, name){
+    if (!el) return Promise.resolve(null);
+    var img = el.querySelector(":scope > img.utz-builder-logo");
+    if (!img){ img = document.createElement("img"); img.className = "utz-builder-logo"; img.alt = ""; img.hidden = true; el.appendChild(img); }
+    var token = (img.__utzToken = (img.__utzToken || 0) + 1);
+    if (!name){ img.hidden = true; img.removeAttribute("src"); return Promise.resolve(null); }
+    img.title = name;
+    return logoUrl(rootH, name).then(function(url){
+      if (img.__utzToken !== token) return url;
+      if (url){ img.src = url; img.hidden = false; } else { img.hidden = true; img.removeAttribute("src"); }
+      return url;
+    });
+  }
+  window.UtzBuilders = { FILE: FILE, PREFIX: PREFIX, list: list, add: add, setLogo: setLogo, logoUrl: logoUrl, logoDataUrl: logoDataUrl, contractorOf: contractorOf, mount: mount, forget: forget, slug: slug, downscale: downscale };
+})();
+</script>
+<style>
+  /* ---- UTZLINE builder logo on project headers (2026-09-30) -- see shared/builders/builders.js ---- */
+  img.utz-builder-logo{ height: 30px; max-width: 140px; width: auto; object-fit: contain; vertical-align: middle; margin-left: 10px; border-radius: 4px; background: #fff; padding: 2px; }
+  img.utz-builder-logo[hidden]{ display: none; }
+</style>
+<!-- UTZLINE-BUILDERS END -->
+<!-- UTZLINE-PLAN-MARKER BEGIN (generated from shared/plan-marker -- don't edit here) -->
+<script>
+/* ============================== UTZLINE plan marker (2026-09-30) ==============================
+   Andrew: "floor plans on projects should have the status icons. same with schedule ... all icons
+   to have this fill colour as default" (a solid blue dot, black ring, white outer ring -- the Site
+   Measure marker look) and "make the text and icons 25% smaller".
+   One drawer for the joinery markers on the plan canvases of UTZLINE Projects, the Scheduler and the
+   Solid Surface Schedule (Machine Schedule keeps its own cut-progress markers -- Andrew: "dont change
+   icons in machine schedule"; Site Measure / Viewer keep their own renderer but share FILL and the
+   scales below).
+     UtzPlanMarker.FILL         "#0011ff" -- the default fill (from Andrew's swatch)
+     UtzPlanMarker.DOT_SCALE    0.6  = the old 0.8 ("20% smaller", v35/v42/v69) x 0.75 (25% smaller again)
+     UtzPlanMarker.TEXT_SCALE   0.75 -- multiply the app's current label size by this
+     UtzPlanMarker.iconFor(rec) -> "" | emoji   rec = { status, jobNote } (same rule as Site Measure's
+                                  joineryDisplayIcon: installed 🏆, delivered 🚚, manufactured 📦,
+                                  machined ⚙️, in_manufacture 🏭, a job note = 🏭, measured 📏)
+     UtzPlanMarker.draw(parent, { x, y, r, fill, icon, glyph, opacity, muted, id, cls })
+                                  r = the saved (full) radius; the dot is drawn at r * DOT_SCALE with the
+                                  white / black rings; icon = emoji centred on the dot (status), or
+                                  glyph = plain text (e.g. "✓") in white; muted dims the whole marker.
+                                  Returns the <g>. Hit-testing stays the caller's (full r).
+   Plain ES5, no dependencies. */
+(function(){
+  "use strict";
+  if (window.UtzPlanMarker) return;
+  var NS = "http://www.w3.org/2000/svg";
+  var FILL = "#0011ff", DOT_SCALE = 0.6, TEXT_SCALE = 0.75;
+  function iconFor(rec){
+    if (!rec) return "";
+    var s = rec.status || "";
+    if (s === "installed") return "🏆";
+    if (s === "delivered") return "🚚";
+    if (s === "manufactured") return "📦";
+    if (s === "machined") return "⚙️";
+    if (s === "in_manufacture") return "🏭";
+    if (rec.jobNote) return "🏭";
+    if (s === "measured") return "📏";
+    return "";
+  }
+  function el(name, attrs){
+    var e = document.createElementNS(NS, name);
+    for (var k in attrs) if (attrs.hasOwnProperty(k) && attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function draw(parent, o){
+    var fullR = (Number(o.r) > 0) ? Number(o.r) : 20;
+    var r = fullR * DOT_SCALE, pad = Math.max(1.5, r * 0.14);
+    var g = el("g", { "class": "utz-marker" + (o.cls ? " " + o.cls : ""), "data-marker-id": o.id });
+    if (o.muted) g.setAttribute("opacity", "0.4");
+    g.appendChild(el("circle", { cx: o.x, cy: o.y, r: r + pad * 2, fill: "#ffffff" }));
+    g.appendChild(el("circle", { cx: o.x, cy: o.y, r: r + pad, fill: "#000000" }));
+    var dot = el("circle", { cx: o.x, cy: o.y, r: r, fill: o.fill || FILL, "class": "marker-dot", "data-marker-id": o.id });
+    if (o.opacity !== undefined && o.opacity !== null) dot.setAttribute("fill-opacity", o.opacity);
+    g.appendChild(dot);
+    if (o.icon){
+      var t = el("text", { x: o.x, y: o.y, "font-size": Math.max(12, r * 2), "text-anchor": "middle", "dominant-baseline": "central",
+        stroke: "#ffffff", "stroke-width": 3, "paint-order": "stroke", "class": "marker-icon", "pointer-events": "none" });
+      t.textContent = o.icon; g.appendChild(t);
+    } else if (o.glyph){
+      var t2 = el("text", { x: o.x, y: o.y, "font-size": Math.max(12, r * 1.6), "font-weight": "700", "text-anchor": "middle", "dominant-baseline": "central",
+        fill: "#ffffff", "class": "marker-glyph", "pointer-events": "none" });
+      t2.textContent = o.glyph; g.appendChild(t2);
+    }
+    parent.appendChild(g);
+    return g;
+  }
+  window.UtzPlanMarker = { FILL: FILL, DOT_SCALE: DOT_SCALE, TEXT_SCALE: TEXT_SCALE, iconFor: iconFor, draw: draw };
+})();
+</script>
+<!-- UTZLINE-PLAN-MARKER END -->
+<!-- UTZLINE-PICK-FILTER BEGIN (generated from shared/pick-filter -- don't edit here) -->
+<script>
+/* ============================== UTZLINE pick filter (2026-09-30) ==============================
+   Andrew, with a screenshot of the Machine Schedule's "All statuses" list: "these need to be tick
+   boxes (drop down then tick on / off)".
+   Turns an existing single-choice <select> filter into a drop-down of tick boxes: tick any number of
+   its options; none ticked = all. The <select> stays in the page (hidden) so the app's own code keeps
+   working: select.value is "" for all / several, or the one value when exactly one is ticked, and a
+   "change" event fires on it whenever the ticks change. The app's filter reads
+   UtzPickFilter.values(select) (an array, [] = all) or UtzPickFilter.matches(select, value).
+     UtzPickFilter.attach(select, { allLabel, storageKey })  -- allLabel defaults to the "" option's text
+     UtzPickFilter.values(select) / matches(select, v) / set(select, [values]) / refresh(select)
+   Options rebuilt by the app (innerHTML) are picked up automatically. Remembered per device when a
+   storageKey is given. Plain ES5. */
+(function(){
+  "use strict";
+  if (window.UtzPickFilter) return;
+  var openPop = null;
+  function opts(sel){ return Array.prototype.filter.call(sel.options, function(o){ return o.value !== ""; }); }
+  function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k) || "null"); }catch(e){ return null; } }
+  function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  function values(sel){
+    if (!sel) return [];
+    if (sel.__utzPick) return sel.__utzPick.picked.slice();
+    return sel.value === "" ? [] : [sel.value];
+  }
+  function matches(sel, v){ var p = values(sel); return !p.length || p.indexOf(v) !== -1; }
+  function label(st){
+    var sel = st.sel, p = st.picked;
+    if (!p.length) return st.allLabel;
+    if (p.length === 1){ var o = Array.prototype.filter.call(sel.options, function(x){ return x.value === p[0]; })[0]; return o ? o.textContent : p[0]; }
+    return p.length + " " + st.noun;
+  }
+  function apply(st, fire){
+    var sel = st.sel;
+    // keep to options that still exist (options the app rebuilt without a ticked one -> that tick goes, and the app hears about it)
+    var have = opts(sel).map(function(o){ return o.value; });
+    var before = st.picked.length;
+    st.picked = st.picked.filter(function(v){ return have.indexOf(v) !== -1; });
+    if (st.picked.length !== before) fire = true;
+    sel.value = st.picked.length === 1 ? st.picked[0] : "";
+    st.btn.querySelector(".utz-pick-text").textContent = label(st);
+    st.btn.classList.toggle("utz-pick-on", st.picked.length > 0);
+    if (st.storageKey) lsSet(st.storageKey, st.picked);
+    Array.prototype.forEach.call(st.pop.querySelectorAll("input[type=checkbox]"), function(cb){ cb.checked = st.picked.indexOf(cb.value) !== -1; });
+    var all = st.pop.querySelector(".utz-pick-all"); if (all) all.classList.toggle("utz-pick-current", !st.picked.length);
+    if (fire){ var ev; try{ ev = new Event("change", { bubbles: true }); }catch(e){ ev = document.createEvent("Event"); ev.initEvent("change", true, true); } sel.dispatchEvent(ev); }
+  }
+  function build(st){
+    var sel = st.sel, pop = st.pop;
+    pop.innerHTML = "";
+    var all = document.createElement("button"); all.type = "button"; all.className = "utz-pick-all"; all.textContent = st.allLabel;
+    all.addEventListener("click", function(){ st.picked = []; apply(st, true); });
+    pop.appendChild(all);
+    opts(sel).forEach(function(o){
+      var row = document.createElement("label"); row.className = "utz-pick-row";
+      var cb = document.createElement("input"); cb.type = "checkbox"; cb.value = o.value;
+      cb.addEventListener("change", function(){
+        var i = st.picked.indexOf(o.value);
+        if (cb.checked && i === -1) st.picked.push(o.value); else if (!cb.checked && i !== -1) st.picked.splice(i, 1);
+        apply(st, true);
+      });
+      var t = document.createElement("span"); t.textContent = o.textContent;
+      row.appendChild(cb); row.appendChild(t); pop.appendChild(row);
+    });
+    apply(st, false);
+  }
+  function close(){ if (openPop){ openPop.pop.hidden = true; openPop.btn.setAttribute("aria-expanded", "false"); openPop = null; } }
+  function attach(sel, o){
+    if (!sel || sel.__utzPick) return sel && sel.__utzPick;
+    o = o || {};
+    var allOpt = Array.prototype.filter.call(sel.options, function(x){ return x.value === ""; })[0];
+    var st = { sel: sel, picked: [], allLabel: o.allLabel || (allOpt ? allOpt.textContent : "All"), noun: o.noun || "picked", storageKey: o.storageKey || null };
+    var wrap = document.createElement("div"); wrap.className = "utz-pick";
+    var btn = document.createElement("button"); btn.type = "button"; btn.className = "utz-pick-btn"; btn.setAttribute("aria-haspopup", "true"); btn.setAttribute("aria-expanded", "false");
+    btn.innerHTML = '<span class="utz-pick-text"></span><span class="utz-pick-caret" aria-hidden="true">▾</span>';
+    var pop = document.createElement("div"); pop.className = "utz-pick-pop"; pop.hidden = true;
+    st.btn = btn; st.pop = pop;
+    sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(sel); wrap.appendChild(btn); wrap.appendChild(pop);
+    sel.classList.add("utz-pick-select"); sel.__utzPick = st;
+    var remembered = st.storageKey ? lsGet(st.storageKey) : null;
+    if (remembered && Object.prototype.toString.call(remembered) === "[object Array]") st.picked = remembered.filter(function(v){ return typeof v === "string"; });
+    else if (sel.value) st.picked = [sel.value];
+    build(st);
+    btn.addEventListener("click", function(e){
+      e.preventDefault(); e.stopPropagation();
+      if (openPop && openPop !== st) close();
+      if (pop.hidden){ pop.hidden = false; btn.setAttribute("aria-expanded", "true"); openPop = st; } else close();
+    });
+    pop.addEventListener("click", function(e){ e.stopPropagation(); });
+    try{
+      var mo = new MutationObserver(function(){ build(st); });
+      mo.observe(sel, { childList: true });
+    }catch(e){}
+    return st;
+  }
+  function set(sel, vals){ var st = sel && sel.__utzPick; if (!st) return; st.picked = (vals || []).slice(); apply(st, true); }
+  function refresh(sel){ var st = sel && sel.__utzPick; if (st) build(st); }
+  document.addEventListener("click", function(){ close(); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape") close(); });
+  window.UtzPickFilter = { attach: attach, values: values, matches: matches, set: set, refresh: refresh, close: close };
+})();
+</script>
+<style>
+  /* ---- UTZLINE pick filter: a drop-down of tick boxes (2026-09-30) -- see shared/pick-filter/pick-filter.js ---- */
+  .utz-pick{ position: relative; display: inline-block; vertical-align: middle; }
+  .utz-pick select.utz-pick-select{ display: none !important; }
+  .utz-pick-btn{ display: inline-flex; align-items: center; gap: 8px; max-width: 260px; min-height: 36px; padding: 6px 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; touch-action: manipulation; }
+  .utz-pick-btn .utz-pick-text{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .utz-pick-btn .utz-pick-caret{ opacity: .7; font-size: 12px; }
+  .utz-pick-btn.utz-pick-on{ border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .utz-pick-pop{ position: absolute; top: calc(100% + 4px); left: 0; z-index: 60; min-width: 220px; max-height: 60vh; overflow-y: auto; padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .utz-pick-pop[hidden]{ display: none; }
+  .utz-pick-all{ display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--text); background: transparent; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 9px 10px; margin: 0 0 4px; cursor: pointer; }
+  .utz-pick-all.utz-pick-current{ color: var(--accent); font-weight: 700; }
+  .utz-pick-row{ display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 10px; border-radius: 8px; font-size: 14px; color: var(--text); cursor: pointer; }
+  .utz-pick-row:hover{ background: var(--panel2); }
+  .utz-pick-row input{ width: 20px; height: 20px; margin: 0; accent-color: var(--accent); flex: none; }
+</style>
+<!-- UTZLINE-PICK-FILTER END -->
+<!-- UTZLINE-DRAWING-GROUPS BEGIN (generated from shared/drawing-groups -- don't edit here) -->
+<script>
+/* ============================== UTZLINE drawing groups (2026-09-30) ==============================
+   Andrew: "we also need to find a way to show if there are more than one joinery item in a shop drawing /
+   job note. maybe we could have a merge option that merges the pins by selection, then you only upload one
+   drawing for that merge and it flags everything on that merge at once".
+   A drawing group = several joinery items covered by ONE shop drawing / job note. Made in UTZLINE Projects
+   (merge pins on the plan); the Scheduler fans one upload out to every member; the item pages say
+   "1 of 4 on one drawing". One file per change (never rewritten):
+     <Project>/Project Saves/Drawing Groups/<groupId> - <user> - <YYYY-MM-DD HH-mm-ss-mmm> - group.json
+     { kind: "drawingGroup", groupId, members: [ { level, room, joineryId } ], by, at, app, removed?: true }
+   Fold: the latest file per groupId wins; a removed group is gone; an item in two live groups belongs to the
+   later one. API (window.UtzDrawingGroups):
+     read(projectHandle)                     -> Promise<{ groups: [ {groupId, members, by, at} ], byKey: { key: group } }>
+     write(projectHandle, group, by, app)    -> Promise<group>   (group: { groupId?, members, removed? })
+     groupFor(state, level, room, joineryId) -> group | null
+     key(level, room, joineryId)             -> the canonical member key
+     forget(projectHandle)                   -> drops the 4 s memo
+   Plain ES5. */
+(function(){
+  "use strict";
+  if (window.UtzDrawingGroups) return;
+  var SAVES = "Project Saves", BRANCH = "Drawing Groups", MEMO_MS = 4000;
+  var memo = {}; // project handle name -> { at, p }
+  function key(level, room, joineryId){ return [level, room, joineryId].map(function(x){ return String(x || "").trim().toLowerCase(); }).join("\u0001"); }
+  function pad(n, w){ n = String(n); while (n.length < w) n = "0" + n; return n; }
+  function stamp(d){ return d.getFullYear() + "-" + pad(d.getMonth() + 1, 2) + "-" + pad(d.getDate(), 2) + " " + pad(d.getHours(), 2) + "-" + pad(d.getMinutes(), 2) + "-" + pad(d.getSeconds(), 2) + "-" + pad(d.getMilliseconds(), 3); }
+  function slug(s){ return String(s || "Unnamed").replace(/[\\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 60) || "Unnamed"; }
+  function newId(){ var d = new Date(); return "g" + d.getTime().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function dir(ph, create){
+    return ph.getDirectoryHandle(SAVES, { create: !!create }).then(function(s){ return s.getDirectoryHandle(BRANCH, { create: !!create }); });
+  }
+  function notFound(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError")); }
+  function listFiles(dh){
+    var out = [];
+    var it = dh.values();
+    function step(){
+      return it.next().then(function(r){
+        if (r.done) return out;
+        if (r.value && r.value.kind === "file" && /\.json$/i.test(r.value.name)) out.push(r.value);
+        return step();
+      });
+    }
+    return step();
+  }
+  function readAll(ph){
+    return dir(ph, false).then(listFiles, function(err){ if (notFound(err)) return []; throw err; }).then(function(files){
+      return Promise.all(files.map(function(fh){
+        return fh.getFile().then(function(f){ return f.text(); }).then(function(t){ try{ var o = JSON.parse(t); return (o && o.kind === "drawingGroup" && o.groupId && Array.isArray(o.members)) ? o : null; }catch(e){ return null; } }, function(){ return null; });
+      }));
+    }).then(function(evs){
+      var latest = {};
+      evs.forEach(function(e){ if (!e) return; var cur = latest[e.groupId]; if (!cur || String(e.at || "") > String(cur.at || "")) latest[e.groupId] = e; });
+      var groups = [], byKey = {};
+      Object.keys(latest).forEach(function(id){
+        var e = latest[id]; if (e.removed) return;
+        var g = { groupId: id, by: e.by || "", at: e.at || "", members: e.members.filter(function(m){ return m && m.joineryId; }).map(function(m){ return { level: String(m.level || ""), room: String(m.room || ""), joineryId: String(m.joineryId || "") }; }) };
+        if (g.members.length < 2) return;
+        groups.push(g);
+      });
+      groups.sort(function(a, b){ return String(a.at).localeCompare(String(b.at)); });
+      groups.forEach(function(g){ g.members.forEach(function(m){ byKey[key(m.level, m.room, m.joineryId)] = g; }); }); // later groups win a contested item
+      return { groups: groups, byKey: byKey };
+    });
+  }
+  function read(ph){
+    var k = (ph && ph.name) || "p", now = Date.now();
+    if (memo[k] && now - memo[k].at < MEMO_MS) return memo[k].p;
+    var p = readAll(ph).catch(function(err){ delete memo[k]; throw err; });
+    memo[k] = { at: now, p: p };
+    return p;
+  }
+  function forget(ph){ delete memo[(ph && ph.name) || "p"]; }
+  function write(ph, group, by, app){
+    var d = new Date();
+    var ev = { kind: "drawingGroup", groupId: group.groupId || newId(), members: (group.members || []).map(function(m){ return { level: String(m.level || ""), room: String(m.room || ""), joineryId: String(m.joineryId || "") }; }), by: by || "", at: d.toISOString(), app: app || "" };
+    if (group.removed) ev.removed = true;
+    var name = ev.groupId + " - " + slug(by) + " - " + stamp(d) + " - group.json";
+    return dir(ph, true).then(function(dh){ return dh.getFileHandle(name, { create: true }); }).then(function(fh){ return fh.createWritable(); }).then(function(w){
+      return w.write(JSON.stringify(ev)).then(function(){ return w.close(); });
+    }).then(function(){ forget(ph); return ev; });
+  }
+  function groupFor(state, level, room, joineryId){ return (state && state.byKey && state.byKey[key(level, room, joineryId)]) || null; }
+  window.UtzDrawingGroups = { read: read, write: write, groupFor: groupFor, key: key, forget: forget, BRANCH: BRANCH };
+})();
+</script>
+<!-- UTZLINE-DRAWING-GROUPS END -->
+<!-- UTZLINE-COLUMNS BEGIN (generated from shared/columns -- don't edit here) -->
+<script>
+/* ============================== UTZLINE columns: hide / rearrange (2026-09-30) ==============================
+   Andrew: "all schedules need the option to hide, rearrange columns".
+   A "Columns" button beside a table's Text size bar opens a list of its columns: tick to show / untick to
+   hide, ▲ ▼ to move. The frozen identity columns at the left (Level / Room / Joinery ID …) and the trailing
+   actions column stay where they are. The choice is remembered per device, per table, and re-applied every
+   time the app redraws the rows (a MutationObserver on the body -- the apps' own render code is untouched).
+     UtzColumns.attach(tableEl, { storageKey, frozen: N, fixedEnd: M, mountBefore: el, onApply: fn })
+       - columns are identified by <th data-col>, else the header text, else their index
+       - frozen (default 0): the first N columns can't be hidden or moved; fixedEnd (default: the trailing
+         <th> with no text and no data-col, e.g. the row-actions column) likewise
+       - mountBefore: the button goes inside this element (the .tv-zoom bar) or before the table's box
+     UtzColumns.apply(tableEl) / reset(tableEl) / state(tableEl) -> { order, hidden }
+   Plain ES5. */
+(function(){
+  "use strict";
+  if (window.UtzColumns) return;
+  var openPop = null;
+  function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k) || "null"); }catch(e){ return null; } }
+  function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  function colId(th, i){ return th.getAttribute("data-col") || (th.textContent || "").trim() || ("col" + i); }
+  function headRow(t){ return t && t.tHead && t.tHead.rows.length ? t.tHead.rows[0] : null; }
+  function tagRow(st, row){
+    // cells the app just drew are in the ORIGINAL order; cells this module already moved carry their id
+    var cells = Array.prototype.slice.call(row.cells);
+    if (cells.length && !cells[0].hasAttribute("data-utz-col")){
+      cells.forEach(function(c, i){ if (i < st.ids.length) c.setAttribute("data-utz-col", st.ids[i]); });
+    }
+    return cells;
+  }
+  function desiredOrder(st){
+    var mov = st.order.filter(function(id){ return st.movable.indexOf(id) !== -1; });
+    st.movable.forEach(function(id){ if (mov.indexOf(id) === -1) mov.push(id); }); // a column the app added since
+    return st.front.concat(mov, st.end);
+  }
+  function applyRow(st, row, order, hiddenSet){
+    var cells = tagRow(st, row), byId = {};
+    cells.forEach(function(c){ byId[c.getAttribute("data-utz-col")] = c; });
+    var frag = document.createDocumentFragment(), extra = cells.filter(function(c){ return order.indexOf(c.getAttribute("data-utz-col")) === -1; });
+    order.forEach(function(id){ var c = byId[id]; if (c){ c.classList.toggle("utz-col-hidden", hiddenSet[id] === true); frag.appendChild(c); } });
+    extra.forEach(function(c){ frag.appendChild(c); });
+    row.appendChild(frag);
+  }
+  function apply(t){
+    var st = t && t.__utzCols; if (!st) return;
+    var order = desiredOrder(st), hiddenSet = {};
+    st.hidden.forEach(function(id){ if (st.movable.indexOf(id) !== -1) hiddenSet[id] = true; });
+    st.applying = true;
+    try{
+      var hr = headRow(t); if (hr) applyRow(st, hr, order, hiddenSet);
+      Array.prototype.forEach.call(t.tBodies, function(tb){ Array.prototype.forEach.call(tb.rows, function(r){ applyRow(st, r, order, hiddenSet); }); });
+    } finally { st.applying = false; }
+    if (st.btn) st.btn.classList.toggle("utz-cols-on", st.hidden.length > 0 || JSON.stringify(st.order) !== JSON.stringify(st.movable));
+    if (st.onApply){ try{ st.onApply(t); }catch(e){} }
+  }
+  function save(st){ if (st.storageKey) lsSet(st.storageKey, { order: st.order, hidden: st.hidden }); }
+  function label(st, id){ var th = st.thById[id]; return th ? ((th.textContent || "").trim() || id) : id; }
+  function buildPop(st){
+    var pop = st.pop; pop.innerHTML = "";
+    var h = document.createElement("div"); h.className = "utz-cols-head"; h.textContent = "Columns — tick to show, ▲ ▼ to move"; pop.appendChild(h);
+    var order = desiredOrder(st).filter(function(id){ return st.movable.indexOf(id) !== -1; });
+    order.forEach(function(id, i){
+      var row = document.createElement("div"); row.className = "utz-cols-row";
+      var lab = document.createElement("label");
+      var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = st.hidden.indexOf(id) === -1; cb.setAttribute("data-col", id);
+      cb.addEventListener("change", function(){ var k = st.hidden.indexOf(id); if (cb.checked && k !== -1) st.hidden.splice(k, 1); else if (!cb.checked && k === -1) st.hidden.push(id); save(st); apply(st.table); });
+      var sp = document.createElement("span"); sp.textContent = label(st, id);
+      lab.appendChild(cb); lab.appendChild(sp);
+      var up = document.createElement("button"); up.type = "button"; up.className = "utz-cols-move"; up.textContent = "▲"; up.title = "Move left"; up.disabled = i === 0;
+      var dn = document.createElement("button"); dn.type = "button"; dn.className = "utz-cols-move"; dn.textContent = "▼"; dn.title = "Move right"; dn.disabled = i === order.length - 1;
+      up.addEventListener("click", function(){ move(st, id, -1); });
+      dn.addEventListener("click", function(){ move(st, id, 1); });
+      row.appendChild(lab); row.appendChild(up); row.appendChild(dn); pop.appendChild(row);
+    });
+    var reset = document.createElement("button"); reset.type = "button"; reset.className = "utz-cols-reset"; reset.textContent = "Show all, original order";
+    reset.addEventListener("click", function(){ st.order = st.movable.slice(); st.hidden = []; save(st); apply(st.table); buildPop(st); });
+    pop.appendChild(reset);
+  }
+  function move(st, id, dir){
+    var order = desiredOrder(st).filter(function(x){ return st.movable.indexOf(x) !== -1; });
+    var i = order.indexOf(id), j = i + dir;
+    if (i === -1 || j < 0 || j >= order.length) return;
+    order.splice(i, 1); order.splice(j, 0, id);
+    st.order = order; save(st); apply(st.table); buildPop(st);
+  }
+  function close(){ if (openPop){ openPop.pop.hidden = true; openPop.btn.setAttribute("aria-expanded", "false"); openPop = null; } }
+  function attach(t, o){
+    if (!t || t.__utzCols) return t && t.__utzCols;
+    o = o || {};
+    var hr = headRow(t); if (!hr) return null;
+    var ths = Array.prototype.slice.call(hr.cells);
+    var ids = ths.map(colId), thById = {};
+    ths.forEach(function(th, i){ thById[ids[i]] = th; });
+    var frozen = o.frozen || 0;
+    var fixedEnd = o.fixedEnd;
+    if (fixedEnd === undefined){ fixedEnd = 0; for (var k = ths.length - 1; k >= 0; k--){ var th = ths[k]; if (!th.getAttribute("data-col") && !(th.textContent || "").trim()) fixedEnd++; else break; } }
+    var st = { table: t, ids: ids, thById: thById, front: ids.slice(0, frozen), end: fixedEnd ? ids.slice(ids.length - fixedEnd) : [], movable: ids.slice(frozen, ids.length - fixedEnd),
+               order: [], hidden: [], storageKey: o.storageKey || null, onApply: o.onApply || null, applying: false };
+    var saved = st.storageKey ? lsGet(st.storageKey) : null;
+    if (saved && typeof saved === "object"){
+      if (Array.isArray(saved.order)) st.order = saved.order.filter(function(id){ return st.movable.indexOf(id) !== -1; });
+      if (Array.isArray(saved.hidden)) st.hidden = saved.hidden.filter(function(id){ return st.movable.indexOf(id) !== -1; });
+    }
+    if (!st.order.length) st.order = st.movable.slice();
+    t.__utzCols = st;
+    // the button + popover
+    var wrap = document.createElement("span"); wrap.className = "utz-cols";
+    var btn = document.createElement("button"); btn.type = "button"; btn.className = "utz-cols-btn"; btn.setAttribute("aria-haspopup", "true"); btn.setAttribute("aria-expanded", "false"); btn.textContent = "Columns ▾";
+    var pop = document.createElement("div"); pop.className = "utz-cols-pop"; pop.hidden = true;
+    wrap.appendChild(btn); wrap.appendChild(pop);
+    st.btn = btn; st.pop = pop;
+    var host = o.mountBefore || null;
+    if (host && host.parentNode){ host.appendChild(wrap); }
+    else { var box = t.parentNode; box.parentNode.insertBefore(wrap, box); }
+    btn.addEventListener("click", function(e){ e.preventDefault(); e.stopPropagation(); if (openPop && openPop !== st) close(); if (pop.hidden){ buildPop(st); pop.hidden = false; btn.setAttribute("aria-expanded", "true"); openPop = st; } else close(); });
+    pop.addEventListener("click", function(e){ e.stopPropagation(); });
+    // re-apply after every redraw of the rows
+    try{
+      var raf = 0;
+      var mo = new MutationObserver(function(){ if (st.applying) return; if (!raf) raf = requestAnimationFrame(function(){ raf = 0; apply(t); }); });
+      Array.prototype.forEach.call(t.tBodies, function(tb){ mo.observe(tb, { childList: true }); });
+      if (t.tHead) mo.observe(t.tHead, { childList: true }); // rows replaced only -- never subtree, this module's own cell moves must not re-trigger it
+    }catch(e){}
+    apply(t);
+    return st;
+  }
+  function reset(t){ var st = t && t.__utzCols; if (!st) return; st.order = st.movable.slice(); st.hidden = []; save(st); apply(t); }
+  function state(t){ var st = t && t.__utzCols; return st ? { order: desiredOrder(st).filter(function(x){ return st.movable.indexOf(x) !== -1; }), hidden: st.hidden.slice() } : null; }
+  document.addEventListener("click", function(){ close(); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape") close(); });
+  window.UtzColumns = { attach: attach, apply: apply, reset: reset, state: state, close: close };
+})();
+</script>
+<style>
+  /* ---- UTZLINE columns: hide / rearrange (2026-09-30) -- see shared/columns/columns.js ---- */
+  .utz-col-hidden{ display: none !important; }
+  .utz-cols{ position: relative; display: inline-block; margin-left: 10px; }
+  .utz-cols-btn{ min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; touch-action: manipulation; }
+  .utz-cols-btn.utz-cols-on{ border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .utz-cols-pop{ position: absolute; top: calc(100% + 4px); right: 0; z-index: 60; min-width: 280px; max-height: 70vh; overflow-y: auto; padding: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.35); text-align: left; }
+  .utz-cols-pop[hidden]{ display: none; }
+  .utz-cols-head{ font-size: 12px; color: var(--muted); padding: 4px 6px 8px; }
+  .utz-cols-row{ display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 2px 6px; border-radius: 8px; }
+  .utz-cols-row:hover{ background: var(--panel2); }
+  .utz-cols-row label{ flex: 1; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); cursor: pointer; }
+  .utz-cols-row input{ width: 20px; height: 20px; margin: 0; accent-color: var(--accent); flex: none; }
+  .utz-cols-move{ width: 34px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 12px; cursor: pointer; touch-action: manipulation; }
+  .utz-cols-move:disabled{ opacity: .35; cursor: default; }
+  .utz-cols-reset{ display: block; width: 100%; margin-top: 8px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; }
+</style>
+<!-- UTZLINE-COLUMNS END -->
 </head>
 <body>
 
@@ -2581,7 +3597,8 @@
       <div class="list" id="projectListItems"></div>
       <div class="empty-note" id="projectListEmpty" hidden>No projects yet -- start one above.</div>
     </div>
-    <button class="btn link" id="chooseDifferentRootBtn">Choose a different Projects folder</button>
+    <button class="utz-change-folder" id="chooseDifferentRootBtn" type="button" title="Choose a different Projects folder">Change folder</button>
+    <div style="height:44px" aria-hidden="true"></div>
   </section>
 
   <!-- ---- Level list (inside a project) ---- -->
@@ -2600,6 +3617,8 @@
     <div class="card">
       <div class="row">
         <button class="btn" id="newLevelBtn">+ New Level</button>
+        <!-- (v50) several floor plans at once -> levels (and zones), then the report -> items + markers -->
+        <button class="btn secondary" id="setupPlansBtn">Import floor plans &amp; report…</button>
         <button class="btn secondary" id="openRegisterBtn">Joinery Register</button>
         <button class="btn secondary" id="openReworkRegisterBtn">Rework register</button>
         <!-- (v31) job system's Work Order List PDF -> joinery items (WO #, joinery code, room), then pin-drop them on a level's plan -->
@@ -2611,17 +3630,6 @@
       <p class="refresh-note" id="levelListRefreshNote" hidden>Refreshing levels…</p>
       <div class="list" id="levelListItems"></div>
       <div class="empty-note" id="levelListEmpty" hidden>No levels yet -- start one above.</div>
-    </div>
-    <!-- (v47, event layout v2) moving a project's old one-folder-per-item
-         records into one folder per level -- see runSpeedUp -->
-    <div class="card" id="speedUpCard" hidden>
-      <h2 class="section-title" style="margin-top:0;">Speed up this project</h2>
-      <p class="sub" id="speedUpText" style="margin-top:0;"></p>
-      <div class="row">
-        <button class="btn" id="speedUpBtn">Speed up this project</button>
-        <button class="btn secondary" id="speedUpCancelBtn" hidden>Cancel</button>
-      </div>
-      <p class="sub" id="speedUpStatus" hidden></p>
     </div>
   </section>
 
@@ -2955,6 +3963,8 @@
         <button class="btn" id="planCheckBtn" hidden>Check placed (0)</button>
         <button class="btn secondary" id="planMoveBtn">Move markers</button>
         <button class="btn" id="planUnplacedBtn" hidden>To place (0)</button>
+        <!-- (2026-09-30) the same zoom buttons as the schedules' plans -->
+        <span class="plan-zoom-btns"><button class="btn secondary" id="planZoomOutBtn" type="button" title="Zoom out" aria-label="Zoom out">−</button><button class="btn secondary" id="planZoomResetBtn" type="button" title="Fit the whole plan">Reset view</button><button class="btn secondary" id="planZoomInBtn" type="button" title="Zoom in" aria-label="Zoom in">+</button></span>
       </span>
     </div>
     <div class="plan-canvas-stage" id="planCanvasStage">
@@ -2979,6 +3989,14 @@
         <button class="btn secondary" id="planPinStopBtn">Stop</button>
       </span>
     </div>
+    <!-- (2026-09-30) Merge mode: tap the pins that share ONE shop drawing / job note -->
+    <div class="plan-pin-bar plan-merge-bar" id="planMergeBar" hidden>
+      <span id="planMergeBarText"></span>
+      <span class="plan-pin-bar-btns">
+        <button class="btn" id="planMergeSaveBtn">Save group</button>
+        <button class="btn secondary" id="planMergeCancelBtn">Cancel</button>
+      </span>
+    </div>
     <!-- (v34) Move mode: drag markers; tap an amber one to say it's right -->
     <div class="plan-move-bar" id="planMoveBar" hidden>
       <span id="planMoveBarText">Drag a marker to move it.</span>
@@ -2996,6 +4014,49 @@
   </section>
 
 </main>
+
+<!-- ---- (v50) Set up floor plans & report: several plans dropped at once -> levels (and zones), then the report -> items + markers ---- -->
+<div class="modal-backdrop" id="psBackdrop" hidden>
+  <div class="modal ps-modal">
+    <h2>Set up floor plans &amp; report</h2>
+    <div class="ps-tabs" role="tablist">
+      <button type="button" class="ps-tab active" id="psTabPlans" role="tab">1. Floor plans</button>
+      <button type="button" class="ps-tab" id="psTabReport" role="tab">2. Report</button>
+    </div>
+    <div id="psPanelPlans">
+      <p class="sub">Drop every floor plan for this project at once. Each plan becomes a level; a multi-page PDF gives one row per page (untick cover sheets). Names are read from each drawing's title block — fix any before creating.</p>
+      <div class="pi-bd-drop ps-drop" id="psDrop" tabindex="0" role="button" aria-label="Drop floor plans here, or tap to choose them">
+        <span id="psDropText">Drag floor plans here — PDFs or images, several at once (or tap to choose)</span></div>
+      <input type="file" id="psFileInput" accept="image/*,.pdf,application/pdf" multiple hidden>
+      <div class="ps-opt"><label><input type="checkbox" id="psZonesToggle"> <b>Levels, then zones</b> — two tiers, for a level that is split over several plans</label>
+        <span class="ps-hint">Zones only show in the list when a level has more than one.</span></div>
+      <div class="ps-head no-zones" id="psHead" hidden><span></span><span></span><span>Plan</span><span>Level</span><span class="ps-zone">Zone</span><span title="The zone code the work-order report uses, e.g. H1 or G">Code</span><span></span></div>
+      <div class="ps-rows no-zones" id="psRows"></div>
+      <p class="ps-empty" id="psRowsEmpty">No plans yet.</p>
+      <p class="ps-warn" id="psDupWarn" hidden></p>
+      <p class="ps-progress" id="psProgress" hidden></p>
+      <div class="modal-actions">
+        <button class="btn secondary" id="psCancelBtn" type="button">Close</button>
+        <button class="btn secondary" id="psToReportBtn" type="button">Skip to the report →</button>
+        <button class="btn" id="psCreateBtn" type="button" disabled>Create levels</button>
+      </div>
+    </div>
+    <div id="psPanelReport" hidden>
+      <p class="sub">Now the job system's <b>Work Order List</b> or <b>Work Order Cost Analysis</b> report. Its zones are matched to the levels by their codes, the items are created, and each one is placed on its label on the plan. Anything the plan doesn't label goes to <b>To place</b>.</p>
+      <div class="pi-bd-drop ps-drop" id="psReportDrop" tabindex="0" role="button" aria-label="Drop the report PDF here, or tap to choose it"><span>Drag the report PDF here (or tap to choose)</span></div>
+      <input type="file" id="psReportFileInput" accept=".pdf,application/pdf" hidden>
+      <div class="modal-actions">
+        <button class="btn secondary" id="psReportBackBtn" type="button">← Floor plans</button>
+        <button class="btn secondary" id="psSkipReportBtn" type="button">Finish without the report</button>
+      </div>
+    </div>
+    <div id="psPanelDone" hidden>
+      <p class="sub" id="psDoneSummary"></p>
+      <div class="ps-done-list" id="psDoneList"></div>
+      <div class="modal-actions"><button class="btn" id="psDoneCloseBtn" type="button">Done</button></div>
+    </div>
+  </div>
+</div>
 
 <!-- ---- (v31) Import work orders: preview + zone -> level ---- -->
 <div class="modal-backdrop" id="woImportBackdrop" hidden>
@@ -3213,7 +4274,19 @@
     <p class="pi-fill-note" id="piFillNote" hidden></p>
     <div class="field"><label for="piNoInput">Job number</label><input type="text" id="piNoInput"></div>
     <div class="field"><label for="piNameInput">Project name</label><input type="text" id="piNameInput"></div>
-    <div class="field"><label for="piBuilderInput">Builder</label><input type="text" id="piBuilderInput"></div>
+    <!-- (2026-09-30) Andrew: "when we start a project the builder name can be a drop down with option to add new,
+         if adding new it asks to drag and drop their logo. this can be used on the project headers" -->
+    <div class="field"><label for="piBuilderSelect">Builder</label>
+      <div class="pi-pm-row"><select id="piBuilderSelect"></select><img id="piBuilderLogoThumb" class="pi-bd-thumb" alt="" hidden>
+        <button class="btn secondary" id="piBuilderLogoChangeBtn" type="button" hidden title="Change this builder's logo">Change logo…</button></div>
+      <div class="pi-pm-add pi-bd-add" id="piBuilderAddRow" hidden>
+        <input type="text" id="piBuilderInput" placeholder="Builder's name, e.g. Hansen Yuncken" autocomplete="off">
+        <div class="pi-bd-drop" id="piBuilderLogoDrop" tabindex="0" role="button" aria-label="Drop the builder's logo here, or tap to choose it">
+          <img id="piBuilderLogoPreview" alt="" hidden><span id="piBuilderLogoDropText">Drag and drop the builder's logo here (or tap to choose)</span></div>
+        <input type="file" id="piBuilderLogoFile" accept="image/*" hidden>
+        <div class="pi-bd-add-actions"><button class="btn" id="piBuilderAddBtn" type="button">Add builder</button><button class="btn secondary" id="piBuilderAddCancel" type="button">Cancel</button></div>
+      </div>
+    </div>
     <div class="field"><label for="piSiteAddressInput">Site address</label><input type="text" id="piSiteAddressInput"></div>
     <!-- (v35) "ignore project manage that will need to be picked from a list" -->
     <div class="field"><label for="piProjectManagerSelect">Project manager</label>
@@ -3313,6 +4386,9 @@
                 "Complete -- ready to deliver" (Scheduler)
      delivered  { receivedDate, deliveryLocationPin?, locationSnapshot? }   (Delivery ITP, v22+)
      closed     {}                      (Install ITP "Save & close out", v43+)
+     drafterAssigned { drafter }        (Viewer, 2026-09-30: the rework is flagged to a drafter)
+     drafterAction   { action: "resentToCnc" | "notRequired" | "passedOn", to? }
+                                        (the drafter's answer; passedOn hands it to drafter `to`)
    FOLD: an entry's state is the latest state change (its own statusHistory
    plus state events, by time); delivered (in the file or as an event) always
    wins; closed likewise. Events with a reworkId only apply to that entry.
@@ -3653,6 +4729,20 @@
       if (ev.kind === "closed" && !closed) closed = { at: ev.at || "", by: ev.by || "", src: "event", app: ev.app || "" };
     });
     var comments = evs.filter(function(ev){ return ev.kind === "comment"; }).sort(function(a, b){ return String(a.at).localeCompare(String(b.at)); });
+    // (2026-09-30) drafter step, Viewer: the latest assignment (a passedOn hands it on), and the drafter's latest answer since
+    var drafter = "", drafterAt = "", drafterBy = "", drafterAction = null, drafterHistory = [];
+    evs.filter(function(ev){ return ev.kind === "drafterAssigned" || ev.kind === "drafterAction"; })
+       .sort(function(a, b){ return String(a.at).localeCompare(String(b.at)); })
+       .forEach(function(ev){
+         if (ev.kind === "drafterAssigned"){ drafter = String(ev.drafter || "").trim(); drafterAt = ev.at || ""; drafterBy = ev.by || ""; drafterAction = null; drafterHistory.push({ kind: "assigned", drafter: drafter, at: ev.at || "", by: ev.by || "", app: ev.app || "" }); }
+         else {
+           var a = ev.action === "resentToCnc" || ev.action === "notRequired" || ev.action === "passedOn" ? ev.action : "";
+           if (!a) return;
+           drafterHistory.push({ kind: a, to: ev.to || "", at: ev.at || "", by: ev.by || "", app: ev.app || "" });
+           if (a === "passedOn"){ drafter = String(ev.to || "").trim(); drafterAt = ev.at || ""; drafterBy = ev.by || ""; drafterAction = null; }
+           else drafterAction = { action: a, at: ev.at || "", by: ev.by || "", app: ev.app || "" };
+         }
+       });
     var status = delivered ? "delivered" : (latest ? latest.status : "logged");
     // The state before the latest change (what an undo goes back to).
     var before = "logged";
@@ -3663,7 +4753,8 @@
       statusBy: delivered ? delivered.by : (latest ? latest.by : (entry.createdBy || "")),
       latestChange: latest, previousStatus: before, changes: changes,
       delivered: delivered, closed: closed, isDone: !!(delivered || closed),
-      comments: comments, lastComment: comments.length ? comments[comments.length - 1] : null
+      comments: comments, lastComment: comments.length ? comments[comments.length - 1] : null,
+      drafter: drafter, drafterAt: drafterAt, drafterBy: drafterBy, drafterAction: drafterAction, drafterHistory: drafterHistory
     };
   }
   // Every line of the log, newest first: [{at, by, what, kind, app}]
@@ -3686,9 +4777,14 @@
     }
     if (f.closed) out.push({ at: f.closed.at, by: f.closed.by, what: "Closed out", kind: "closed", app: f.closed.app || "" });
     f.comments.forEach(function(c){ out.push({ at: c.at, by: c.by || "", what: "Comment: " + (c.text || ""), kind: "comment", app: c.app || "" }); });
+    (f.drafterHistory || []).forEach(function(d){
+      var what = d.kind === "assigned" ? "Flagged to drafter " + (d.drafter || "?") : d.kind === "resentToCnc" ? "Drafter: resent to CNC" : d.kind === "notRequired" ? "Drafter: not required (nothing to redraw)" : "Drafter: passed on to " + (d.to || "?");
+      out.push({ at: d.at, by: d.by || "", what: what, kind: "drafter", app: d.app || "" });
+    });
     out.sort(function(a, b){ return String(b.at || "").localeCompare(String(a.at || "")); });
     return out;
   }
+  function drafterActionLabel(a){ return a === "resentToCnc" ? "Resent to CNC" : a === "notRequired" ? "Not required" : a === "passedOn" ? "Passed on" : ""; }
   function stateLabel(status, short){ var s = STATES[status] || STATES.logged; return short ? s.short : s.long; }
 
   /* ------------------------------ PDFs ------------------------------ */
@@ -3767,13 +4863,15 @@
     var W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
     var M = 36, CW = W - M * 2;
     var RED = [190, 30, 24], GREEN = [31, 120, 70];
-    var logoH = 0, cl = opts.companyLogo, al = opts.appLogo;
-    var clSize = null;
+    var logoH = 0, cl = opts.companyLogo, al = opts.appLogo, bl = opts.builderLogo; // (2026-09-30) builderLogo: the project's builder, beside the company logo
+    var clSize = null, blSize = null;
     if (cl && cl.dataUrl && cl.w > 0 && cl.h > 0){ clSize = fitInto(cl.w, cl.h, 170, 70); logoH = clSize.h; }
+    if (bl && bl.dataUrl && bl.w > 0 && bl.h > 0){ blSize = fitInto(bl.w, bl.h, 150, 60); logoH = Math.max(logoH, blSize.h); }
     if (al && al.dataUrl) logoH = Math.max(logoH, 44);
     var y = M + logoH + (logoH ? 14 : 0);
     function drawLogos(){
       if (clSize){ try{ doc.addImage(cl.dataUrl, imageFormat(cl.dataUrl), M, M, clSize.w, clSize.h, undefined, "FAST"); }catch(e){} }
+      if (blSize){ try{ doc.addImage(bl.dataUrl, imageFormat(bl.dataUrl), M + (clSize ? clSize.w + 18 : 0), M, blSize.w, blSize.h, undefined, "FAST"); }catch(e){} }
       if (al && al.dataUrl){ try{ doc.addImage(al.dataUrl, imageFormat(al.dataUrl), W - M - 44, M, 44, 44, undefined, "FAST"); }catch(e){} }
     }
     drawLogos();
@@ -3801,8 +4899,12 @@
       ["Area / Room", row.room || "—"], ["Joinery No.", row.code || "—"],
       ["Cabinet", entry.cabinetNumber || "—"], ["Logged", [fmtDate(entry.createdAt, true), entry.createdBy || ""].filter(Boolean).join(" — ") || "—"],
       ["Current state", f.closed ? "Closed out" : stateLabel(f.status)], ["State set", [fmtDate(f.closed ? f.closed.at : f.statusAt, true), f.closed ? f.closed.by : f.statusBy].filter(Boolean).join(" — ") || "—"],
-      ["Delivered to site", f.delivered ? [f.delivered.date || fmtDate(f.delivered.at), f.delivered.by || ""].filter(Boolean).join(" — ") : "Not yet"], ["Photos", String(photos.filter(function(p){ return !/^Delivery location/.test(p.caption); }).length)]
+      ["Delivered to site", f.delivered ? [f.delivered.date || fmtDate(f.delivered.at), f.delivered.by || ""].filter(Boolean).join(" — ") : "Not yet"], ["Photos", String(photos.filter(function(p){ return !/^Delivery location/.test(p.caption); }).length)],
     ];
+    // (2026-09-30) the Drafter row only when a rework was flagged to one -- an
+    // extra row costs 28pt and would push photos off page 1 on every other PDF
+    if (f.drafter) fields.push(["Drafter", f.drafter + (f.drafterAction ? " — " + drafterActionLabel(f.drafterAction.action) : " (flagged)")], ["", ""]);
+    while (fields.length && fields[fields.length - 1][0] === "" ) fields.pop();
     var colW = CW / 2;
     fields.forEach(function(fl, i){
       var fx = M + (i % 2) * colW, fy = y + Math.floor(i / 2) * 28;
@@ -4357,6 +5459,12 @@
         return m ? { no: String(m.no || ""), name: String(m.name || ""), contractor: String(m.contractor || "") } : null;
       }, function(){ return null; });
     }
+    // (2026-09-30) the project's builder logo (shared/builders at the Projects root), for the PDF header
+    function builderLogo(meta){
+      var root = cfg.getRootHandle && cfg.getRootHandle();
+      if (!root || !meta || !meta.contractor || !global.UtzBuilders) return Promise.resolve(null);
+      return global.UtzBuilders.logoDataUrl(root, meta.contractor, 400).catch(function(){ return null; });
+    }
     // Builds the PDF and saves a copy beside the item's other rework PDFs.
     // Resolves { blob, name, saved }.
     function makePdf(row){
@@ -4364,7 +5472,9 @@
       var when = new Date();
       return Promise.all([cfg.loadJsPdf(), readFullEntry(row.projectHandle, row), readLog(row.projectHandle, row), projectMeta(row), companyLogo(), appLogo()]).then(function(res){
         st.logs[rowKey(row)] = res[2];
-        return buildPdf({ jsPDF: res[0], row: row, entry: res[1], events: res[2], project: res[3] || { name: row.project }, companyLogo: res[4], appLogo: res[5], by: user, appName: cfg.appName, when: when });
+        return builderLogo(res[3]).then(function(bl){
+          return buildPdf({ jsPDF: res[0], row: row, entry: res[1], events: res[2], project: res[3] || { name: row.project }, companyLogo: res[4], builderLogo: bl, appLogo: res[5], by: user, appName: cfg.appName, when: when });
+        });
       }).then(function(blob){
         var name = pdfFileName(row, row.entry, user || "Unnamed", when);
         return savePdf(row.projectHandle, row, name, blob).then(function(){ return { blob: blob, name: name, saved: true }; }, function(err){
@@ -4521,6 +5631,7 @@
             "<dt>Logged</dt><dd>" + escapeHtml([fmtDate(e.createdAt, true), e.createdBy || ""].filter(Boolean).join(" — ") || "—") + "</dd>" +
             "<dt>State</dt><dd>" + pillHtml(f) + (f.statusAt ? " <span class=\"urw-small urw-muted\">" + escapeHtml([f.statusBy, fmtDate(f.statusAt, true)].filter(Boolean).join(", ")) + "</span>" : "") + "</dd>" +
             (f.delivered ? "<dt>Delivered</dt><dd>" + escapeHtml([f.delivered.date || fmtDate(f.delivered.at), f.delivered.by].filter(Boolean).join(" — ")) + "</dd>" : "") +
+            (f.drafter ? "<dt>Drafter</dt><dd>" + escapeHtml(f.drafter) + (f.drafterAction ? " — <b>" + escapeHtml(drafterActionLabel(f.drafterAction.action)) + "</b> <span class=\"urw-small urw-muted\">" + escapeHtml([f.drafterAction.by, fmtDate(f.drafterAction.at, true)].filter(Boolean).join(", ")) + "</span>" : " <span class=\"urw-small urw-muted\">(flagged" + (f.drafterBy ? " by " + escapeHtml(f.drafterBy) : "") + ")</span>") + "</dd>" : "") +
           "</dl>" +
           "<p class=\"urw-desc\">" + escapeHtml(e.text || "(no description)") + "</p>" +
           "<div class=\"urw-actions\">" + act +
@@ -4763,7 +5874,7 @@
     VERSION: 1, STATES: STATES, STATE_ORDER: STATE_ORDER, QUICK_COMMENTS: QUICK_COMMENTS,
     stamp: stamp, userSlug: userSlug, sanitizeFileBase: sanitizeFileBase, fmtDate: fmtDate,
     listProjectReworks: listProjectReworks, listItemReworks: listItemReworks, readFullEntry: readFullEntry, rowFor: rowFor, slimEntry: slimEntry,
-    readLog: readLog, writeEvent: writeEvent, logDir: logDir, fold: fold, logLines: logLines, stateLabel: stateLabel,
+    readLog: readLog, writeEvent: writeEvent, logDir: logDir, fold: fold, logLines: logLines, stateLabel: stateLabel, drafterActionLabel: drafterActionLabel,
     pdfFileName: pdfFileName, buildPdf: buildPdf, savePdf: savePdf, listItemPdfs: listItemPdfs, pdfDir: pdfDir,
     create: create
   };
@@ -4933,7 +6044,7 @@
   }
   function loadDeviceUserName(){
     return getDeviceUserName().then(function(name){
-      deviceUserName = name || "";
+      deviceUserName = window.UtzSignIn ? UtzSignIn.boot(name || "") : (name || ""); // (2026-09-30) a tablet / phone asks who is using it each time the app is opened -- see UTZLINE-SIGNIN
       updateDeviceUserNameText();
       populateIdentitySelector(); // in case this resolves after the root folder (order isn't guaranteed -- both are fired at boot)
     }).catch(function(){
@@ -5326,7 +6437,7 @@
       selectEl.value = (deviceUserName && names.indexOf(deviceUserName) !== -1) ? deviceUserName : IDENTITY_PLACEHOLDER_VALUE;
     }, function(){ /* CSV not readable yet (no root folder chosen) -- leave it empty */ });
   }
-  function populateIdentitySelector(){ return populateIdentitySelectorEl(identitySelector); }
+  function populateIdentitySelector(){ return populateIdentitySelectorEl(identitySelector).then(function(){ if (window.UtzSignIn) UtzSignIn.check(); }); } // (2026-09-30) sign in on open -- see UTZLINE-SIGNIN
   function revertIdentitySelectorEl(selectEl, previousValue){
     if (!selectEl) return;
     var hasOpt = Array.prototype.some.call(selectEl.options, function(o){ return o.value === previousValue; });
@@ -5417,6 +6528,23 @@
       revertIdentitySelectorEl(selectEl, previousValue);
     });
   }
+  /* (2026-09-30) Sign in every time the app is opened -- on a tablet or phone
+     (Andrew: "when opening the apps, it should as[k] for you to login ... some
+     of these tablets will have multiple users"). The saved name is only "the
+     last person" there: the app clears it and shows a "Who's using this?"
+     list until a name + PIN is entered (this app's own numberpad above), on a
+     fresh open and again after 10 minutes in the background. A PC is
+     unchanged. All the logic is the UTZLINE-SIGNIN block in the page head;
+     this just tells it how this app reads / sets the name. */
+  if (window.UtzSignIn) UtzSignIn.init({
+    getName: function(){ return deviceUserName; },
+    clear: function(){ deviceUserName = ""; updateDeviceUserNameText(); populateIdentitySelector(); },
+    readUsers: readUsersCsv,
+    pickName: function(n){ return beginPinVerifyFlow(n, IDENTITY_PLACEHOLDER_VALUE); },
+    addNew: function(){ return beginAddNewIdentityFlow(IDENTITY_PLACEHOLDER_VALUE); },
+    getPointer: getDeviceUserName,
+    refresh: function(){ updateDeviceUserNameText(); return populateIdentitySelector(); } // the name just changed: redraw the hint + selector
+  });
   if (identitySelector){
     identitySelector.addEventListener("change", function(){
       var picked = identitySelector.value;
@@ -6126,7 +7254,10 @@
   function showProjectInfoDialog(current){
     piNoInput.value = (current && current.no) || "";
     piNameInput.value = (current && current.name) || "";
-    piBuilderInput.value = (current && current.contractor) || "";
+    bdDialogCurrent = (current && current.contractor) || ""; // (2026-09-30) picked from the builder list
+    bdRenderSelect(bdDialogCurrent);
+    piBuilderAddRow.hidden = true; bdClearPendingLogo();
+    bdLoadIntoDialog();
     piSiteAddressInput.value = (current && current.siteAddress) || "";
     pmDialogCurrent = (current && current.projectManager) || ""; // (v35) picked from the list
     pmRenderSelect(pmDialogCurrent);
@@ -6147,12 +7278,182 @@
     return {
       name: piNameInput.value,
       no: piNoInput.value,
-      contractor: piBuilderInput.value,
+      contractor: bdSelectedValue() || (!piBuilderAddRow.hidden ? String(piBuilderInput.value || "").replace(/\s+/g, " ").trim() : ""), // a name typed in the add row but not added yet still counts
       siteAddress: piSiteAddressInput.value,
       projectManager: pmSelectedValue(),
       pcDate: piPcDateInput.value || ""
     };
   }
+
+  /* ---- (2026-09-30) Builders: picked from a list, each with a logo ----
+     Andrew: "can each project when started input the builders logo, this could be saved per builder.
+     when we start a project the builder name can be a drop down with option to add new, if adding new
+     it asks to drag and drop their logo. this can be used on the project headers". The list and the
+     logos live once at the Projects ROOT (shared/builders: utzline-builders.json + "utzline-builder-logo
+     - <name>.png" files, so no app lists them as projects); a project keeps only the builder's NAME in
+     project-meta.json ("contractor", as before). Every app shows the logo next to the project's name and
+     on its PDFs. The first time the list is opened with no file yet it's started from the builders already
+     typed on the existing projects. */
+  var BD_ADD = "__add__";
+  var bdList = [];            // [{name, logo}] as last read
+  var bdDialogCurrent = "";   // the project's own builder when the dialog opened
+  var bdLastValue = "";
+  var bdPendingLogo = null;   // a File dropped on the add row, not yet saved
+  var piBuilderSelect = document.getElementById("piBuilderSelect");
+  var piBuilderLogoThumb = document.getElementById("piBuilderLogoThumb");
+  var piBuilderLogoChangeBtn = document.getElementById("piBuilderLogoChangeBtn");
+  var piBuilderAddRow = document.getElementById("piBuilderAddRow");
+  var piBuilderLogoDrop = document.getElementById("piBuilderLogoDrop");
+  var piBuilderLogoPreview = document.getElementById("piBuilderLogoPreview");
+  var piBuilderLogoDropText = document.getElementById("piBuilderLogoDropText");
+  var piBuilderLogoFile = document.getElementById("piBuilderLogoFile");
+  var piBuilderAddBtn = document.getElementById("piBuilderAddBtn");
+  var piBuilderAddCancel = document.getElementById("piBuilderAddCancel");
+  var bdChangingLogoFor = ""; // "Change logo…" for an existing builder: the add row saves the logo only
+  function bdOnList(name){ var l = String(name || "").trim().toLowerCase(); return !!l && bdList.some(function(b){ return b.name.toLowerCase() === l; }); }
+  function bdEntry(name){ var l = String(name || "").trim().toLowerCase(); return bdList.filter(function(b){ return b.name.toLowerCase() === l; })[0] || null; }
+  function bdSeedFromProjects(){
+    return listExistingProjects(projectsRootHandle).then(function(names){
+      var found = [], p = Promise.resolve();
+      names.forEach(function(n){
+        p = p.then(function(){
+          return projectsRootHandle.getDirectoryHandle(n).then(function(d){ return readProjectMeta(d); }).then(function(m){ if (m && m.contractor) found.push(m.contractor); }, function(){});
+        });
+      });
+      return p.then(function(){ return pmNormalize(found); });
+    });
+  }
+  function bdLoadList(){
+    if (!projectsRootHandle || !window.UtzBuilders) return Promise.resolve([]);
+    return UtzBuilders.list(projectsRootHandle).then(function(list){
+      if (list.length) return list;
+      return bdSeedFromProjects().then(function(seed){
+        if (!seed.length) return [];
+        var p = Promise.resolve();
+        seed.forEach(function(n){ p = p.then(function(){ return UtzBuilders.add(projectsRootHandle, n, null, deviceUserName || "").catch(function(err){ console.error("Couldn't start the builder list:", err); }); }); });
+        return p.then(function(){ return UtzBuilders.list(projectsRootHandle); });
+      });
+    });
+  }
+  function bdRenderSelect(selected){
+    selected = String(selected || "").trim();
+    var html = "<option value=\"\">— Pick the builder —</option>";
+    bdList.forEach(function(b){ html += "<option value=\"" + escapeHtml(b.name) + "\">" + escapeHtml(b.name) + "</option>"; });
+    if (selected && !bdOnList(selected)) html += "<option value=\"" + escapeHtml(selected) + "\">" + escapeHtml(selected) + " (not on the list)</option>";
+    html += "<option value=\"" + BD_ADD + "\">+ Add a new builder…</option>";
+    piBuilderSelect.innerHTML = html;
+    var match = bdEntry(selected);
+    piBuilderSelect.value = match ? match.name : selected;
+    bdLastValue = piBuilderSelect.value;
+    bdShowThumb();
+  }
+  function bdShowThumb(){
+    var b = bdEntry(bdLastValue);
+    piBuilderLogoChangeBtn.hidden = !b;
+    if (b && b.logo && projectsRootHandle){
+      UtzBuilders.logoUrl(projectsRootHandle, b.name).then(function(url){
+        if (bdLastValue !== b.name) return;
+        if (url){ piBuilderLogoThumb.src = url; piBuilderLogoThumb.hidden = false; } else piBuilderLogoThumb.hidden = true;
+      });
+    } else piBuilderLogoThumb.hidden = true;
+    piBuilderLogoChangeBtn.textContent = (b && b.logo) ? "Change logo…" : "Add logo…";
+  }
+  function bdSelectedValue(){ var v = piBuilderSelect.value; return v === BD_ADD ? bdLastValue : v; }
+  var bdLoading = Promise.resolve();
+  function bdLoadIntoDialog(){
+    bdLoading = bdLoadList().then(function(list){
+      bdList = list;
+      if (!projectInfoBackdrop.hidden || projectInfoResolve) bdRenderSelect(bdSelectedValue());
+    }, function(err){ console.error("Reading the builder list failed:", err); });
+    return bdLoading;
+  }
+  function bdClearPendingLogo(){
+    bdPendingLogo = null;
+    if (piBuilderLogoPreview.src) { try{ URL.revokeObjectURL(piBuilderLogoPreview.src); }catch(e){} }
+    piBuilderLogoPreview.removeAttribute("src"); piBuilderLogoPreview.hidden = true;
+    piBuilderLogoDropText.textContent = "Drag and drop the builder's logo here (or tap to choose)";
+  }
+  function bdSetPendingLogo(file){
+    if (!file) return;
+    if (!/^image\//.test(file.type || "")){ showToast("Drop an image file (PNG or JPEG) for the logo."); return; }
+    bdClearPendingLogo();
+    bdPendingLogo = file;
+    piBuilderLogoPreview.src = URL.createObjectURL(file); piBuilderLogoPreview.hidden = false;
+    piBuilderLogoDropText.textContent = file.name + " — drop another to replace it";
+  }
+  function bdOpenAddRow(name, changingFor){
+    bdChangingLogoFor = changingFor || "";
+    piBuilderAddRow.hidden = false;
+    piBuilderInput.value = name || "";
+    piBuilderInput.disabled = !!changingFor;
+    piBuilderAddBtn.textContent = changingFor ? "Save logo" : "Add builder";
+    bdClearPendingLogo();
+    if (changingFor) piBuilderLogoDrop.focus(); else piBuilderInput.focus();
+  }
+  function bdPickOrOfferToAdd(name){
+    name = String(name || "").replace(/\s+/g, " ").trim();
+    if (!name) return;
+    bdLoading.then(function(){
+      if (bdOnList(name)){ bdRenderSelect(name); return; }
+      bdRenderSelect(bdLastValue);
+      bdOpenAddRow(name, "");
+    });
+  }
+  piBuilderSelect.addEventListener("change", function(){
+    if (piBuilderSelect.value === BD_ADD){
+      piBuilderSelect.value = bdLastValue;
+      bdOpenAddRow("", "");
+      return;
+    }
+    bdLastValue = piBuilderSelect.value;
+    bdShowThumb();
+  });
+  piBuilderLogoChangeBtn.addEventListener("click", function(){ if (bdLastValue) bdOpenAddRow(bdLastValue, bdLastValue); });
+  function bdAddFromRow(){
+    var name = String(piBuilderInput.value || "").replace(/\s+/g, " ").trim();
+    if (!name){ piBuilderInput.focus(); return Promise.resolve(); }
+    if (!projectsRootHandle){ showToast("Choose the Projects folder first."); return Promise.resolve(); }
+    if (!bdPendingLogo && !bdChangingLogoFor && !bdOnList(name)){
+      // Andrew: adding new "asks to drag and drop their logo" -- asked for, but a builder can still be added without one
+      if (!piBuilderAddRow.__askedLogo){ piBuilderAddRow.__askedLogo = true; showToast("Drop the builder's logo on the box (or tap it to choose) — or press Add builder again to add the name without a logo.", 5000); piBuilderLogoDrop.focus(); return Promise.resolve(); }
+    }
+    piBuilderAddBtn.disabled = true;
+    var file = bdPendingLogo;
+    return bdLoading.then(function(){ return UtzBuilders.add(projectsRootHandle, name, file, deviceUserName || ""); }).then(function(b){
+      return UtzBuilders.list(projectsRootHandle).then(function(list){
+        bdList = list;
+        bdRenderSelect(b.name);
+        piBuilderAddRow.hidden = true; piBuilderAddRow.__askedLogo = false; bdChangingLogoFor = "";
+        bdClearPendingLogo();
+        refreshBuilderHeaderLogo();
+        showToast(file ? "Saved “" + b.name + "” with its logo." : "Added “" + b.name + "” to the builder list.");
+      });
+    }).catch(function(err){
+      console.error("Saving the builder failed:", err);
+      if (isReadFailed(err)) readFailedToast(UtzBuilders.FILE);
+      else showToast("Couldn't save the builder — " + ((err && err.message) || "try again") + ".", 5000);
+    }).then(function(){ piBuilderAddBtn.disabled = false; });
+  }
+  piBuilderAddBtn.addEventListener("click", function(){ bdAddFromRow(); });
+  piBuilderInput.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); bdAddFromRow(); }
+    else if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); piBuilderAddRow.hidden = true; }
+  });
+  piBuilderAddCancel.addEventListener("click", function(){ piBuilderAddRow.hidden = true; piBuilderAddRow.__askedLogo = false; bdChangingLogoFor = ""; bdClearPendingLogo(); });
+  piBuilderLogoDrop.addEventListener("click", function(){ piBuilderLogoFile.click(); });
+  piBuilderLogoDrop.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); piBuilderLogoFile.click(); } });
+  piBuilderLogoFile.addEventListener("change", function(){ var f = piBuilderLogoFile.files && piBuilderLogoFile.files[0]; piBuilderLogoFile.value = ""; bdSetPendingLogo(f); });
+  ["dragenter", "dragover"].forEach(function(t){ piBuilderLogoDrop.addEventListener(t, function(e){ e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; piBuilderLogoDrop.classList.add("dragover"); }); });
+  piBuilderLogoDrop.addEventListener("dragleave", function(){ piBuilderLogoDrop.classList.remove("dragover"); });
+  piBuilderLogoDrop.addEventListener("drop", function(e){ e.preventDefault(); e.stopPropagation(); piBuilderLogoDrop.classList.remove("dragover"); var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; bdSetPendingLogo(f); });
+  // the builder's logo beside the project's name (levels screen) -- refreshed when the project opens / its info is saved
+  var builderHeaderName = "";
+  function refreshBuilderHeaderLogo(){
+    if (!window.UtzBuilders) return;
+    UtzBuilders.mount(levelsProjectLabel, projectsRootHandle, builderHeaderName);
+    if (typeof registerProjectLabel !== "undefined" && registerProjectLabel) UtzBuilders.mount(registerProjectLabel, projectsRootHandle, builderHeaderName);
+  }
+  function setBuilderHeader(contractor){ builderHeaderName = String(contractor || "").trim(); refreshBuilderHeaderLogo(); }
 
   /* ---- (v35) Project managers: picked from a list ----
      Andrew: "ignore project manage that will need to be picked from a
@@ -6324,7 +7625,7 @@
       }
       if (h.jobNo) piNoInput.value = h.jobNo;
       if (h.name) piNameInput.value = h.name;
-      if (h.builder) piBuilderInput.value = h.builder;
+      if (h.builder) bdPickOrOfferToAdd(h.builder); // (2026-09-30) on the list -> picked; new -> the add row opens with it typed in, asking for the logo
       piFillNote.innerHTML = "From <b>" + escapeHtml(file.name) + "</b>: " +
         [h.jobNo ? "Job # <b>" + escapeHtml(h.jobNo) + "</b>" : "", h.name ? "<b>" + escapeHtml(h.name) + "</b>" : "", h.builder ? "builder <b>" + escapeHtml(h.builder) + "</b>" : ""].filter(Boolean).join(" · ") +
         ". The report's project manager isn't used — pick one from the list.";
@@ -6335,7 +7636,14 @@
       else showToast("Couldn't read that PDF — is it the Work Order Cost Analysis report?", 6000);
     }).then(function(){ piFillFromReportBtn.disabled = false; });
   });
-  projectInfoSave.addEventListener("click", function(){ closeProjectInfo(currentProjectInfoValue()); });
+  projectInfoSave.addEventListener("click", function(){
+    var v = currentProjectInfoValue();
+    // (2026-09-30) a builder typed in the add row (e.g. filled from the report) but not added yet goes onto the list too, with the dropped logo if any
+    if (!piBuilderAddRow.hidden && v.contractor && !bdOnList(v.contractor) && projectsRootHandle && window.UtzBuilders){
+      UtzBuilders.add(projectsRootHandle, v.contractor, bdPendingLogo, deviceUserName || "").then(function(){ refreshBuilderHeaderLogo(); }, function(err){ console.error("Adding the builder to the list failed:", err); });
+    }
+    closeProjectInfo(v);
+  });
   projectInfoSkip.addEventListener("click", function(){ closeProjectInfo(null); });
   projectInfoBackdrop.addEventListener("click", function(e){ if (e.target === projectInfoBackdrop) closeProjectInfo(null); });
 
@@ -6601,6 +7909,8 @@
         return writeProjectMeta(activeProjectHandle, info).then(function(){
           showToast("Created “" + finalName + "”.");
           return populateLevelList();
+        }).then(function(){
+          psOpen({ fresh: true }); // (v50) project setup: drop the floor plans, then the report
         });
       });
     }).catch(function(err){
@@ -6753,7 +8063,20 @@
      saved, deleted one by onr"; Projects "on its next update"). Shared code:
      the UTZLINE-ITEM-EXTRAS block in the page head. This app has its own History
      card, so the module's is off; History reads both folders itself. */
-  var itemExtras = UtzItemExtras.create({ app: "Projects", toast: showToast, eventsCacheId: function(project, h){ return eventsCacheId(h); }, keyFor: function(level, room, joineryId){ return joineryItemKey({ level: level, room: room, joineryId: joineryId }); },
+  // (2026-09-30) the signed-in user's own PIN -- used to unlock a saved cutting file name for editing (see shared/item-extras)
+  function confirmOwnPin(name, why){
+    return openNumberpad({
+      title: "Confirm PIN",
+      subtitle: why || ("as \u201c" + name + "\u201d"),
+      verify: function(pin){
+        return readUsersCsv().then(function(rows){
+          var row = findUserRowCI(rows, name);
+          return !!(row && row.pin === pin);
+        });
+      }
+    }).then(function(pin){ return pin !== null && pin !== undefined; });
+  }
+  var itemExtras = UtzItemExtras.create({ app: "Projects", confirmPin: function(n, w){ return confirmOwnPin(n, w); }, toast: showToast, eventsCacheId: function(project, h){ return eventsCacheId(h); }, keyFor: function(level, room, joineryId){ return joineryItemKey({ level: level, room: room, joineryId: joineryId }); },
     writeFileText: writeFileText, getHandle: function(){ return activeProjectHandle; }, getUser: function(){ return deviceUserName; }, history: false });
   function showCropDialog(dataUrl, naturalW, naturalH){
     return new Promise(function(resolve){
@@ -8684,7 +10007,7 @@
   /* (v38) Andrew: "make indicater text 25% smaller" (the plan markers' codes):
      0.75 x the saved 32 = 24. Placement uses the same size, so new markers
      sit a little closer to their labels; nothing saved changes. */
-  var PLAN_TEXT_SCALE = 0.75; // (v35) was 1 (32: v34 really drew 14, so that was the "about twice")
+  var PLAN_TEXT_SCALE = 0.5625; // (2026-09-30) 0.75 x 0.75, 25% smaller again; (v35) was 1 (32: v34 really drew 14, so that was the "about twice")
   /* (v42) Andrew: "on he next projects update, make the indicator dots about
      20% smaller (and the icons)": every marker's dot (and its amber check
      ring, a copy's dashed pin, the pin being placed) is drawn at 0.8 x its
@@ -8692,7 +10015,7 @@
      draw the same markers at the same 0.8, with their status icons. The
      code under a dot moves up with the dot's edge. Tapping still uses the
      full saved size (easier to hit). */
-  var PLAN_DOT_SCALE = 0.8;
+  var PLAN_DOT_SCALE = 0.6; // (2026-09-30) 0.8 x 0.75 -- Andrew: "make the text and icons 25% smaller" (shared/plan-marker DOT_SCALE)
   function planDotR(obj){ return (Number(obj && obj.r) || 27) * PLAN_DOT_SCALE; }
   function planMarkerTextSize(obj){ return (Number(obj.label && obj.label.fontSize) || 32) * PLAN_TEXT_SCALE; }
   function planMarkerTextPos(obj){
@@ -8779,6 +10102,13 @@
     planView.ty = sy - world.y * planView.scale;
     planScheduleTransform();
   }
+  (function(){ // (2026-09-30) zoom buttons
+    var zo = document.getElementById("planZoomOutBtn"), zi = document.getElementById("planZoomInBtn"), zr = document.getElementById("planZoomResetBtn");
+    function centre(){ var r = planCanvasSvg.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+    if (zo) zo.addEventListener("click", function(){ var c = centre(); planZoomAt(c.x, c.y, planView.scale / 1.25); });
+    if (zi) zi.addEventListener("click", function(){ var c = centre(); planZoomAt(c.x, c.y, planView.scale * 1.25); });
+    if (zr) zr.addEventListener("click", function(){ planFitToView(); });
+  })();
   function planRenderTiles(){
     while (planCanvasTilesG.firstChild) planCanvasTilesG.removeChild(planCanvasTilesG.firstChild);
     if (!planSaved) return;
@@ -8798,20 +10128,44 @@
       planCanvasTilesG.appendChild(img2);
     }
   }
+  // (2026-09-30) the level's item statuses, read once when the plan opens (not blocking the plan), for the icons
+  var planStatusList = null, planStatusSeq = 0;
+  function planStatusIconFor(obj){
+    if (!planStatusList || !window.UtzPlanMarker) return "";
+    var rec = findJoineryStatus(planStatusList, activeLevelName, obj.roomName, obj.joineryCode);
+    return UtzPlanMarker.iconFor(rec);
+  }
+  function planLoadStatuses(){
+    var seq = ++planStatusSeq, ph = activeProjectHandle;
+    planStatusList = null;
+    if (!ph) return;
+    readJoineryStatuses(ph).then(function(list){
+      if (seq !== planStatusSeq) return;
+      planStatusList = list || [];
+      planRenderMarkers();
+    }, function(err){ console.warn("Statuses for the plan icons couldn't be read just now:", err); });
+  }
   function planRenderMarkers(){
     while (planCanvasMarkersG.firstChild) planCanvasMarkersG.removeChild(planCanvasMarkersG.firstChild);
     if (typeof renderPlanCheckUi === "function") renderPlanCheckUi(); // (v34)
     if (!planSaved || !planSaved.objects) return;
     planSaved.objects.forEach(function(obj){
       if (obj.type !== "roomlink") return;
-      var dot = document.createElementNS(SVG_NS, "circle");
-      dot.setAttribute("class", "marker-dot");
-      var dr = planDotR(obj); // (v42) 20% smaller
-      dot.setAttribute("cx", obj.x); dot.setAttribute("cy", obj.y); dot.setAttribute("r", dr);
-      dot.setAttribute("fill", obj.color || "#c8391c");
-      dot.setAttribute("stroke", "#fff"); dot.setAttribute("stroke-width", Math.max(1, dr * 0.08));
-      dot.setAttribute("data-marker-id", obj.id);
-      planCanvasMarkersG.appendChild(dot);
+      var dr = planDotR(obj); // (v42) 20% smaller; (2026-09-30) 25% smaller again
+      // (2026-09-30) Andrew: "floor plans on projects should have the status icons ... all icons to have this fill colour
+      // as default": the Site Measure marker look (white ring, black ring, blue fill) with the item's status icon on it.
+      // The saved marker colour is ignored (every marker Projects ever placed carries the old red).
+      UtzPlanMarker.draw(planCanvasMarkersG, { x: obj.x, y: obj.y, r: Number(obj.r) || 27, fill: UtzPlanMarker.FILL, icon: planStatusIconFor(obj), id: obj.id });
+      // (2026-09-30) drawing group: a gold dashed ring; in merge mode a picked pin gets a solid one
+      var grp = (typeof planGroupOf === "function") ? planGroupOf(activeLevelName, obj.roomName || "", obj.joineryCode || "") : null;
+      var picked = (typeof mergePicked === "function") && mergePicked(activeLevelName, obj.roomName || "", obj.joineryCode || "");
+      if (grp || picked){
+        var gring = document.createElementNS(SVG_NS, "circle");
+        gring.setAttribute("class", "marker-group-ring" + (picked ? " picked" : ""));
+        gring.setAttribute("cx", obj.x); gring.setAttribute("cy", obj.y); gring.setAttribute("r", dr * 1.75);
+        gring.setAttribute("stroke-width", Math.max(2, dr * 0.2));
+        planCanvasMarkersG.appendChild(gring);
+      }
       if (obj.autoPlaced){ // (v34) placed from the plan's labels, not checked yet
         var ring = document.createElementNS(SVG_NS, "circle");
         ring.setAttribute("class", "marker-check-ring");
@@ -8928,6 +10282,7 @@
     if (!planSaved) return; // this level's plan hasn't read yet -- nothing to add onto
     if (planMoveMode){ showToast("Moving markers — tap Done to add items again."); return; } // (v34)
     if (planPinMode){ pinModeTap(worldX, worldY); return; } // (v31) placing an imported item -- see startPinMode
+    if (planMergeMode){ mergeModeTap(worldX, worldY); return; } // (2026-09-30) picking the pins of one drawing
     var hit = planMarkerAt(worldX, worldY);
     if (hit){
       var hitLevel = activeLevelName, hitRoom = hit.roomName || "", hitCode = hit.joineryCode || "";
@@ -9173,6 +10528,8 @@
       planImageH = planSaved.imageH || 0;
       planRenderTiles();
       planRenderMarkers();
+      planLoadStatuses(); // (2026-09-30) status icons
+      planLoadGroups(); renderMergeBar(); // (2026-09-30) drawing groups (merge mode picks survive a level change)
       stopPinMode(); planUnplacedPanel.hidden = true; // (v31)
       setPlanMoveMode(false); // (v34)
       var lvAtOpen = activeLevelName;
@@ -9359,7 +10716,7 @@
   function registerMatchesFilters(item){
     if (hiddenByStatusTicks(registerItemStatusKey(item))) return false;
     if (registerLevelFilter.value && item.level !== registerLevelFilter.value) return false;
-    if (registerStatusFilter.value !== "" && registerStatusFilter.selectedIndex >= 0 && registerItemStatusKey(item) !== registerStatusFilter.value) return false;
+    if (!UtzPickFilter.matches(registerStatusFilter, registerItemStatusKey(item))) return false; // (2026-09-30) tick boxes: none ticked = all
     var q = registerSearchInput.value.trim().toLowerCase();
     if (q){
       var hay = ((item.joineryId || "") + " " + (item.description || "") + " " + (item.workOrderNo || "") + " " + registerItemDelayInfo(item).label).toLowerCase();
@@ -9546,6 +10903,8 @@
   }
   registerLevelFilter.addEventListener("change", renderRegisterTable);
   registerStatusFilter.addEventListener("change", renderRegisterTable);
+  // (2026-09-30) Andrew: "these need to be tick boxes (drop down then tick on / off)" -- remembered per device
+  if (window.UtzPickFilter) UtzPickFilter.attach(registerStatusFilter, { noun: "statuses", storageKey: "utzline-projects:register:statusPicks" });
   registerHideDelivered.addEventListener("change", renderRegisterTable);
   registerHideInstalled.addEventListener("change", renderRegisterTable);
   registerSearchInput.addEventListener("input", debounce(renderRegisterTable, 100));
@@ -9598,6 +10957,7 @@
     var seq = ++registerLoadSeq;
     var projName = activeProjectName, projHandle = activeProjectHandle;
     registerProjectLabel.textContent = projName + " — Joinery Register";
+    if (typeof refreshBuilderHeaderLogo === "function") refreshBuilderHeaderLogo(); // (2026-09-30) builder logo beside the title
     var painted = registerRenderedFor === projName && registerAllItems.length > 0;
     if (painted) renderRegisterTable();
     else {
@@ -10891,7 +12251,22 @@
       "<dt>Level</dt><dd>" + escapeHtml(item.level) + "</dd>" +
       "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
       "<dt>Required delivery</dt><dd id=\"jiDeliveryCell\">Loading…</dd>" +
-      "<dt>Has Solid Surface</dt><dd>" + (item.hasSolidSurface ? "Yes" : "No") + "</dd>";
+      "<dt>Has Solid Surface</dt><dd>" + (item.hasSolidSurface ? "Yes" : "No") + "</dd>" +
+      "<dt>Shop drawing</dt><dd id=\"jiDrawingGroupCell\">Loading…</dd>"; // (2026-09-30) drawing group
+    renderJoineryItemDrawingGroup(item);
+  }
+  // (2026-09-30) "One drawing covers N items: …" -- from Project Saves/Drawing Groups (shared/drawing-groups)
+  function renderJoineryItemDrawingGroup(item){
+    var cell = document.getElementById("jiDrawingGroupCell"), ph = activeProjectHandle;
+    if (!cell) return;
+    if (!ph || !window.UtzDrawingGroups){ cell.textContent = "Its own"; return; }
+    UtzDrawingGroups.read(ph).then(function(st){
+      var c = document.getElementById("jiDrawingGroupCell"); if (!c) return;
+      var g = UtzDrawingGroups.groupFor(st, item.level, item.room, item.joineryId);
+      if (!g){ c.textContent = "Its own drawing"; return; }
+      var others = g.members.filter(function(m){ return !(m.level === item.level && (m.room || "") === (item.room || "") && (m.joineryId || "") === (item.joineryId || "")); });
+      c.innerHTML = "<b>One drawing covers " + g.members.length + " items</b> — with " + escapeHtml(others.map(function(m){ return m.joineryId + (m.room ? " (" + m.room + ")" : ""); }).join(", ")) + ". A shop drawing or job note dropped on any of them (in the Scheduler) goes onto all of them.";
+    }, function(){ var c = document.getElementById("jiDrawingGroupCell"); if (c) c.textContent = "Couldn't read the drawing groups just now."; });
   }
   function renderJoineryItemMetaAndHistory(item){
     var statusKey = registerAllItems.length ? registerItemStatusKey(item) : "";
@@ -11512,93 +12887,6 @@
     });
   }
 
-  /* ============================== (v47) "Speed up this project" ==============================
-     Event layout v2 (see the UTZLINE-EVENT-STORE block): the apps read and
-     write every status / schedule / cut / completion / cutting file / note
-     record in one folder per LEVEL; a project started before that still has
-     its older records in one folder per joinery item, which every app still
-     reads -- but that is exactly what made a schedule slow on a tablet
-     (hundreds of folders at a quarter of a second each). This card appears
-     on a project that still has such folders and moves them: each record is
-     copied into its level folder, read back and compared, and only then is
-     the old copy removed; an old item folder goes once it's empty. It can be
-     stopped and run again, and two PCs running it at once is harmless.
-     Only once every device has this version: an older app doesn't look in
-     the level folders, so it would stop seeing the moved records. */
-  var speedUpCard = document.getElementById("speedUpCard");
-  var speedUpText = document.getElementById("speedUpText");
-  var speedUpBtn = document.getElementById("speedUpBtn");
-  var speedUpCancelBtn = document.getElementById("speedUpCancelBtn");
-  var speedUpStatus = document.getElementById("speedUpStatus");
-  var speedUpState = { project: null, handle: null, count: 0, armed: false, running: false };
-  var SPEED_UP_LABEL = "Speed up this project";
-  function speedUpDir(projHandle){ return function(segs, c){ return projectDir(projHandle, [projectSavesDirName()].concat(segs), c); }; }
-  function speedUpExplain(n){
-    return "This project still keeps some of its records the old way, one folder per joinery item (" + n + " folder" + (n === 1 ? "" : "s") + "). " +
-      "The schedules and ITPs open it much faster, above all on a tablet, once they're moved into one folder per level. " +
-      "Only do this once every tablet and PC has this version (RC 1.0 of 30 Sep 2026 or later) -- an older app won't see the records after they move. " +
-      "Nothing is lost: every record is copied, checked, and only then its old copy removed.";
-  }
-  function checkSpeedUpCard(projHandle, projName){
-    if (speedUpState.running) return;
-    speedUpState = { project: projName, handle: projHandle, count: 0, armed: false, running: false };
-    speedUpCard.hidden = true; speedUpStatus.hidden = true; speedUpCancelBtn.hidden = true;
-    speedUpBtn.hidden = false; speedUpBtn.disabled = false; speedUpBtn.textContent = SPEED_UP_LABEL;
-    if (!projHandle) return;
-    UtzEvents.countLegacy({ dir: speedUpDir(projHandle) }).then(function(n){
-      if (activeProjectName !== projName || speedUpState.project !== projName) return;
-      speedUpState.count = n;
-      if (!n) return;
-      speedUpText.textContent = speedUpExplain(n);
-      speedUpCard.hidden = false;
-    }, function(err){ console.warn("Couldn't count the old record folders:", err); });
-  }
-  speedUpBtn.addEventListener("click", function(){
-    if (speedUpState.running) return;
-    if (!speedUpState.armed){
-      speedUpState.armed = true;
-      speedUpBtn.textContent = "Yes -- every device is updated, move them now";
-      speedUpCancelBtn.hidden = false;
-      return;
-    }
-    runSpeedUp();
-  });
-  speedUpCancelBtn.addEventListener("click", function(){
-    speedUpState.armed = false; speedUpBtn.textContent = SPEED_UP_LABEL; speedUpCancelBtn.hidden = true;
-  });
-  function runSpeedUp(){
-    var st = speedUpState;
-    if (!st.handle || st.running) return Promise.resolve(null);
-    st.running = true; st.armed = false;
-    speedUpBtn.disabled = true; speedUpCancelBtn.hidden = true;
-    speedUpStatus.hidden = false;
-    speedUpStatus.textContent = "Moving records… keep this window open.";
-    return UtzEvents.tidy({ dir: speedUpDir(st.handle), cacheId: eventsCacheId(st.handle), onProgress: function(p){
-      speedUpStatus.textContent = "Moving records… " + p.branch + ": " + p.done + " of " + p.total + " folders (" + p.moved + " records moved so far). Keep this window open.";
-    } }).then(function(res){
-      st.running = false; speedUpBtn.disabled = false; speedUpBtn.textContent = SPEED_UP_LABEL;
-      var msg = "Done -- " + res.moved + " record" + (res.moved === 1 ? "" : "s") + " moved.";
-      if (res.left.length){
-        msg += " " + res.left.length + " file" + (res.left.length === 1 ? "" : "s") + " stayed where " + (res.left.length === 1 ? "it was" : "they were") + " (the apps still read " + (res.left.length === 1 ? "it" : "them") + "): " +
-          res.left.slice(0, 5).map(function(l){ return l.branch + " › " + l.folder + (l.name ? " › " + l.name : "") + " (" + l.why + ")"; }).join("; ") + (res.left.length > 5 ? "; …" : "") +
-          ". Press " + SPEED_UP_LABEL + " again later to try " + (res.left.length === 1 ? "it" : "them") + " again.";
-      }
-      speedUpStatus.textContent = msg;
-      showToast("Project sped up -- " + res.moved + " record" + (res.moved === 1 ? "" : "s") + " moved.", 4000);
-      return UtzEvents.countLegacy({ dir: speedUpDir(st.handle) }).then(function(n){
-        st.count = n;
-        if (n) speedUpText.textContent = speedUpExplain(n);
-        else { speedUpText.textContent = "All of this project's records are in one folder per level now."; speedUpBtn.hidden = true; }
-        return res;
-      }, function(){ return res; });
-    }, function(err){
-      st.running = false; speedUpBtn.disabled = false; speedUpBtn.textContent = SPEED_UP_LABEL;
-      console.error("Speed up failed:", err);
-      speedUpStatus.textContent = "Stopped (" + ((err && (err.name || err.message)) || "error") + "). Nothing already moved is lost -- press " + SPEED_UP_LABEL + " again to carry on.";
-      return null;
-    });
-  }
-
   /* ============================== level list ============================== */
   var levelsProjectLabel = document.getElementById("levelsProjectLabel");
   var levelListItems = document.getElementById("levelListItems");
@@ -11612,15 +12900,28 @@
   var levelListRenderedFor = null; // the project name the level list on screen belongs to
   var levelListLoadSeq = 0;
 
+  // (v50) Andrew: "have levels then zones ... zones not shown if there is only one per level" -- a
+  // level split over several plans is a heading with its zones under it; a lone zone shows as its level.
   function renderLevelListNames(names){
+    psLastLevelNames = names;
     levelListItems.innerHTML = "";
     levelListEmpty.hidden = names.length > 0;
-    names.forEach(function(name){
+    function appendRow(name, label, zoneRow){
       var row = document.createElement("button");
-      row.className = "list-item";
-      row.innerHTML = "<span>" + escapeHtml(name) + "</span><span class=\"chev\">&rsaquo;</span>";
+      row.className = "list-item" + (zoneRow ? " list-item-zone" : "");
+      row.setAttribute("data-level", name);
+      row.innerHTML = "<span>" + escapeHtml(label) + "</span><span class=\"chev\">&rsaquo;</span>";
       row.addEventListener("click", function(){ openLevel(name); });
       levelListItems.appendChild(row);
+    }
+    psGroupLevels(names, psZonesMetaFor(activeProjectName)).forEach(function(g){
+      if (g.members.length < 2){ var m = g.members[0]; appendRow(m.name, m.known && m.zone ? g.level : m.name, false); return; }
+      var head = document.createElement("div");
+      head.className = "list-group-head";
+      head.setAttribute("data-level-group", g.level);
+      head.textContent = g.level;
+      levelListItems.appendChild(head);
+      g.members.forEach(function(m){ appendRow(m.name, m.zone || m.name, true); });
     });
   }
   // (v23 sweep -- speed / instant paint + "unreadable is not empty")
@@ -11640,7 +12941,6 @@
     var seq = ++levelListLoadSeq;
     var projName = activeProjectName, projHandle = activeProjectHandle;
     levelsProjectLabel.textContent = projName;
-    checkSpeedUpCard(projHandle, projName); // (v47) old-layout records still here?
     if (levelListRenderedFor === projName){
       showScreen("levels");
       levelListRefreshNote.hidden = false;
@@ -11655,8 +12955,10 @@
         if (seq !== levelListLoadSeq || !snap || !Array.isArray(snap.levels)) return;
         renderLevelListNames(snap.levels);
         renderProjectMetaPreview(snap.meta || null);
+        setBuilderHeader(snap.meta && snap.meta.contractor);
       });
     }
+    psReadZonesMeta(projHandle).then(function(){ if (seq === levelListLoadSeq && psLastLevelNames) renderLevelListNames(psLastLevelNames); }); // (v50) zones under their level
     var metaFailed = false;
     return Promise.all([
       readProjectMeta(projHandle).catch(function(err){
@@ -11670,6 +12972,7 @@
       var meta = res[0], names = res[1];
       if (metaFailed) renderProjectMetaUnreadable();
       else renderProjectMetaPreview(meta);
+      setBuilderHeader(meta && meta.contractor); // (2026-09-30) the builder's logo beside the project's name
       renderLevelListNames(names);
       levelListRenderedFor = projName;
       levelListRefreshNote.hidden = true;
@@ -11981,6 +13284,10 @@
     return card.__tv;
   }
   tableView(document.getElementById("registerTableCard"), "joinery-register");
+  // (2026-09-30) hide / rearrange the register's columns (shared/columns; Andrew: "all schedules need the option to hide, rearrange columns")
+  if (window.UtzColumns){
+    (function(){ var t = document.getElementById("registerTable"); var bar = t && t.parentNode && t.parentNode.previousElementSibling; UtzColumns.attach(t, { storageKey: "utzline-projects:register:columns", frozen: 3, mountBefore: (bar && bar.classList.contains("tv-zoom")) ? bar : null }); })();
+  }
   tableView(document.getElementById("reworkRegisterTableCard"), "rework-register");
   tableView(document.getElementById("reworkRegisterDelivCard"), "rework-register-delivered");
 
@@ -12023,6 +13330,545 @@
   // policy blocks the real cdnjs.cloudflare.com pdf.js fetch, so the real
   // import path can only be exercised in a normally-networked browser (as
   // Site Measure's own identical code already has been, in production).
+
+  /* ============================== (v50) Set up floor plans & report ==============================
+     Andrew (2026-09-30): "in the project setup, as well as imprt levels, lets have a drag and drop
+     where you can drag multiple floor plans in and it creates the zones / levels according to this.
+     then a second tab where we import the report that creates the indicator markers as a secondary
+     step." Then: "have levels then zones, 2 folder breakdown option, zones not shown if there is only
+     one per level."
+
+     TAB 1 -- FLOOR PLANS. Several PDFs / images at once (drag-drop or the picker). Every PDF page is
+     a row (thumbnail, tick, Level, Zone, Code) with suggestions read from the drawing's own title
+     block (biggest text wins: "LEVEL 1", "GROUND FLOOR", "BUILDING H" -> code H1, "ZONE A"), the
+     file name as the fallback. "Levels, then zones" is the two-tier option: a level split over
+     several plans gets one zone per plan. Create renders each ticked page at the same scale as
+     Import floor plan (tiles + the plan's labels), one at a time, and writes one level file each.
+
+     ON DISK nothing new is invented for the other apps: a zone is a level named "<Level> (<Zone>)",
+     so Site Measure, the ITPs and the schedules keep listing it as a level and every item / folder
+     keyed by level name keeps working. Projects itself groups them: the Levels list shows "Level 1"
+     with "Zone A" / "Zone B" under it -- ONLY when a level has 2+ zones; a lone zone shows as its
+     level. The grouping and the report codes live in Project Saves/level-zones.json
+     ({ byLevel: { "<disk level name>": { level, zone, codes: [], source, addedBy, addedAt } } }),
+     written by this dialog (and topped up with the zone -> level map confirmed in a report import,
+     so the next device maps the report by itself). A level file that Site Measure rewrites keeps
+     none of this, which is why it is not stored in the level file.
+
+     TAB 2 -- REPORT. The existing Import work orders (v31/v32/v37), started from here: its zone ->
+     level selects are pre-filled from the codes (then this device's last map, then a guess by the
+     level number / Ground), the items are created, the ones with a label on the plan are placed
+     (autoPlaceFromPlanLabels), and the done panel lists what is left to place per level with a
+     "Place" button straight into that level's plan + To place list (the delivery-pin flow). */
+  var PS_ZONES_FILE = "level-zones.json";
+  var psBackdrop = document.getElementById("psBackdrop");
+  var psTabPlans = document.getElementById("psTabPlans"), psTabReport = document.getElementById("psTabReport");
+  var psPanelPlans = document.getElementById("psPanelPlans"), psPanelReport = document.getElementById("psPanelReport"), psPanelDone = document.getElementById("psPanelDone");
+  var psDrop = document.getElementById("psDrop"), psDropText = document.getElementById("psDropText"), psFileInput = document.getElementById("psFileInput");
+  var psZonesToggle = document.getElementById("psZonesToggle"), psHead = document.getElementById("psHead"), psRows = document.getElementById("psRows"), psRowsEmpty = document.getElementById("psRowsEmpty");
+  var psDupWarn = document.getElementById("psDupWarn"), psProgress = document.getElementById("psProgress");
+  var psCancelBtn = document.getElementById("psCancelBtn"), psToReportBtn = document.getElementById("psToReportBtn"), psCreateBtn = document.getElementById("psCreateBtn");
+  var psReportDrop = document.getElementById("psReportDrop"), psReportFileInput = document.getElementById("psReportFileInput");
+  var psReportBackBtn = document.getElementById("psReportBackBtn"), psSkipReportBtn = document.getElementById("psSkipReportBtn");
+  var psDoneSummary = document.getElementById("psDoneSummary"), psDoneList = document.getElementById("psDoneList"), psDoneCloseBtn = document.getElementById("psDoneCloseBtn");
+  var setupPlansBtn = document.getElementById("setupPlansBtn");
+  var psState = null;            // { rows: [], docs: [], busy, zonesTouched }
+  var psZonesMetaCache = {};     // project name -> { schemaVersion, byLevel }
+  var psLastLevelNames = null;   // what the Levels list last drew (re-grouped when level-zones.json arrives)
+  var psReportFromDialog = false; // the report import was started from tab 2
+
+  // ---- level-zones.json ----
+  function psEmptyZonesMeta(){ return { schemaVersion: 1, byLevel: {} }; }
+  function psZonesMetaFor(projectName){ return psZonesMetaCache[projectName || activeProjectName] || null; }
+  function psReadZonesMeta(projectHandle){
+    var pname = activeProjectName;
+    if (!projectHandle) return Promise.resolve(psEmptyZonesMeta());
+    return projectDir(projectHandle, [projectSavesDirName()], false).then(function(dirH){
+      return readTextFileStrict(dirH, PS_ZONES_FILE, "level zones", function(t){
+        var v = JSON.parse(t);
+        if (!v || typeof v !== "object" || !v.byLevel || typeof v.byLevel !== "object") throw new Error("not a level-zones file");
+        return v;
+      }).then(function(res){ return res.found ? res.value : psEmptyZonesMeta(); });
+    }, function(){ return psEmptyZonesMeta(); }).then(function(meta){
+      psZonesMetaCache[pname] = meta;
+      return meta;
+    }, function(err){
+      console.error("Reading level-zones.json failed:", err);
+      return psZonesMetaCache[pname] || psEmptyZonesMeta();
+    });
+  }
+  function psWriteZonesMeta(projectHandle, mutate){
+    return psReadZonesMeta(projectHandle).then(function(meta){
+      var next = { schemaVersion: 1, updatedAt: new Date().toISOString(), byLevel: meta.byLevel || {} };
+      mutate(next);
+      return projectDir(projectHandle, [projectSavesDirName()], true).then(function(dirH){
+        return writeFileText(dirH, PS_ZONES_FILE, JSON.stringify(next, null, 1));
+      }).then(function(){ psZonesMetaCache[activeProjectName] = next; return next; });
+    });
+  }
+  // ---- grouping: "<Level> (<Zone>)" on disk, or what level-zones.json says ----
+  var PS_ZONE_NAME_RE = /^(.*\S)\s*\(([^()]+)\)\s*$/;
+  function psSplitLevelName(name, meta){
+    var m = meta && meta.byLevel && meta.byLevel[name];
+    if (m && m.level) return { level: String(m.level), zone: String(m.zone || ""), known: true };
+    var mm = PS_ZONE_NAME_RE.exec(String(name || ""));
+    return mm ? { level: mm[1], zone: mm[2], known: false } : { level: String(name || ""), zone: "", known: false };
+  }
+  function psGroupLevels(names, meta){
+    var groups = [], byKey = {};
+    (names || []).forEach(function(name){
+      var sp = psSplitLevelName(name, meta), key = sp.level.toLowerCase();
+      if (!byKey[key]){ byKey[key] = { level: sp.level, members: [] }; groups.push(byKey[key]); }
+      byKey[key].members.push({ name: name, zone: sp.zone, known: sp.known });
+    });
+    return groups;
+  }
+  function psZoneDiskName(level, zone){
+    level = String(level || "").trim(); zone = String(zone || "").trim();
+    return zone ? level + " (" + zone + ")" : level;
+  }
+  // ---- the report's zone code -> a level ----
+  function psLevelForZoneCode(code, levels, meta){
+    code = String(code || "").trim().toUpperCase();
+    if (!code || !meta || !meta.byLevel) return "";
+    var hit = "";
+    Object.keys(meta.byLevel).forEach(function(name){
+      if (hit || levels.indexOf(name) === -1) return;
+      var codes = meta.byLevel[name].codes || [];
+      if (codes.some(function(c){ return String(c).toUpperCase() === code; })) hit = name;
+    });
+    return hit;
+  }
+  function psLevelNumberOf(name){
+    var m = /\b(?:LEVEL|LVL|L)\s*[-:#]?\s*(\d{1,2})\b/i.exec(name) || /^(\d{1,2})$/.exec(String(name).trim());
+    if (m) return String(parseInt(m[1], 10));
+    if (/\bGROUND\b/i.test(name) && !/LOWER|UPPER/i.test(name)) return "G";
+    if (/\bBASEMENT\b/i.test(name)) return "B";
+    return "";
+  }
+  // allZones = every zone code in the report: "C1", "F1" and "H1" all say level 1, so none of them is guessed
+  function psGuessLevelForZone(code, levels, meta, allZones){
+    code = String(code || "").trim().toUpperCase();
+    if (!code) return "";
+    var zl = /^[A-Z]*?(\d{1,2}|G|B)([A-Z])$/.exec(code); // "H1A": level 1, zone A
+    var m = zl || /^[A-Z]*?(\d{1,2}|G|B)$/.exec(code);
+    if (!m) return "";
+    var want = m[1].replace(/^0+(\d)/, "$1");
+    var rivals = (allZones || []).filter(function(z){
+      z = String(z || "").trim().toUpperCase();
+      if (!z || z === code) return false;
+      var r = /^[A-Z]*?(\d{1,2}|G|B)([A-Z])?$/.exec(z);
+      return !!r && r[1].replace(/^0+(\d)/, "$1") === want && (!!r[2]) === (!!zl);
+    });
+    if (rivals.length) return "";
+    var hits = [];
+    levels.forEach(function(name){
+      var sp = psSplitLevelName(name, meta);
+      if (psLevelNumberOf(sp.level) === want && hits.indexOf(name) === -1) hits.push(name);
+    });
+    if (zl && hits.length){ // the zone letter picks the zone
+      var z = hits.filter(function(n){ var sp = psSplitLevelName(n, meta); return new RegExp("(?:^|\\s)(?:ZONE|PART|AREA|WING|SECTOR|STAGE)?\\s*" + zl[2] + "$", "i").test(sp.zone) || new RegExp("\\(" + zl[2] + "\\)$", "i").test(n); });
+      return z.length === 1 ? z[0] : "";
+    }
+    if (hits.length === 1) return hits[0];
+    return ""; // one level, several zones: the report can't tell them apart -- ask
+  }
+  // ---- suggestions from a drawing's title block / file name ----
+  var PS_ORDINALS = ["FIRST", "SECOND", "THIRD", "FOURTH", "FIFTH", "SIXTH", "SEVENTH", "EIGHTH", "NINTH", "TENTH"];
+  function psTitle(s){ return String(s || "").toLowerCase().replace(/\b[a-z]/g, function(c){ return c.toUpperCase(); }); }
+  var PS_LEVEL_RES = [
+    { re: /\b(?:LEVEL|LVL)\s*[-:#]?\s*(\d{1,2})\b/i, w: 3, out: function(m){ return "Level " + parseInt(m[1], 10); } },
+    { re: /\b(LOWER GROUND|UPPER GROUND|GROUND)\s*(?:FLOOR|LEVEL)?\b/i, w: 3, out: function(m){ var g = m[1].toUpperCase(); return g === "GROUND" ? "Ground Floor" : psTitle(g); } },
+    { re: /\b(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH)\s+(?:FLOOR|LEVEL)\b/i, w: 3, out: function(m){ return "Level " + (PS_ORDINALS.indexOf(m[1].toUpperCase()) + 1); } },
+    { re: /\b(BASEMENT|MEZZANINE|ROOF|PODIUM)\b(?:\s*(?:FLOOR|LEVEL|PLAN))?/i, w: 2, out: function(m){ return psTitle(m[1]); } },
+    { re: /\bL\s?(\d{1,2})\b/, w: 1, out: function(m){ return "Level " + parseInt(m[1], 10); } } // "L1" -- grids and sheet numbers use it too, so it only wins on big text
+  ];
+  var PS_BUILDING_RE = /\b(?:BUILDING|BLDG|BLOCK|TOWER)\s*[-:#]?\s*([A-Z])\b/i;
+  var PS_ZONE_RES = [/\b(ZONE|PART|SECTOR|STAGE|WING)\s*[-:#]?\s*([A-Z]|\d{1,2})\b/i, /\b(AREA)\s+([A-Z])\b/i];
+  // rows = [{ text, size }] (one per text line, biggest font first wins ties)
+  function psSuggestFromRows(rows){
+    var best = null, bldg = null, zone = null;
+    rows.forEach(function(r){
+      var t = String(r.text || ""), size = Number(r.size) || 1;
+      PS_LEVEL_RES.forEach(function(d){
+        var m = d.re.exec(t);
+        if (!m) return;
+        var score = size * d.w;
+        if (!best || score > best.score) best = { name: d.out(m), score: score };
+      });
+      var b = PS_BUILDING_RE.exec(t);
+      if (b && (!bldg || size > bldg.score)) bldg = { letter: b[1].toUpperCase(), score: size };
+      PS_ZONE_RES.forEach(function(re){
+        var z = re.exec(t);
+        if (z && (!zone || size > zone.score)) zone = { name: psTitle(z[1]) + " " + z[2].toUpperCase(), score: size };
+      });
+    });
+    var level = best ? best.name : "";
+    var num = level ? psLevelNumberOf(level) : "";
+    var code = bldg && num ? bldg.letter + num : (num === "G" ? "G" : "");
+    return { level: level, zone: zone ? zone.name : "", code: code };
+  }
+  function psSuggestFromFileName(fileName, page, pageCount){
+    var base = String(fileName || "").replace(/\.[A-Za-z0-9]{1,5}$/, "").replace(/[_]+/g, " ").replace(/\s{2,}/g, " ").trim();
+    var s = psSuggestFromRows([{ text: base, size: 1 }]);
+    if (!s.level) s.level = (base || "Plan") + (pageCount > 1 ? " p" + page : "");
+    return s;
+  }
+  // pdf.js text -> lines with their biggest font size
+  function psPageTextRows(pdfDoc, pageNum){
+    return pdfDoc.getPage(pageNum).then(function(page){
+      var vp = page.getViewport({ scale: 1 });
+      return page.getTextContent().then(function(tc){
+        var items = [];
+        (tc.items || []).forEach(function(it){
+          var str = String(it.str || "");
+          if (!str.trim()) return;
+          var pt = vp.convertToViewportPoint(it.transform[4], it.transform[5]);
+          items.push({ x: pt[0], y: pt[1], str: str, size: Math.hypot(it.transform[0], it.transform[1]) || Math.abs(it.transform[3]) || 1 });
+        });
+        var rows = woGroupRows(items).map(function(r){
+          return { text: r.items.map(function(i){ return i.str; }).join(" ").replace(/\s{2,}/g, " "), size: Math.max.apply(null, r.items.map(function(i){ return i.size; })) };
+        });
+        if (page.cleanup) page.cleanup();
+        return rows;
+      });
+    });
+  }
+  // ---- dialog ----
+  function psOpen(opts){
+    if (!activeProjectHandle){ showToast("Open a project first."); return; }
+    psState = { rows: [], docs: [], busy: false, fresh: !!(opts && opts.fresh) };
+    psZonesToggle.checked = false;
+    psProgress.hidden = true; psProgress.textContent = "";
+    psDupWarn.hidden = true;
+    psRenderRows();
+    psShowTab("plans");
+    psBackdrop.hidden = false;
+  }
+  function psClose(){
+    psBackdrop.hidden = true;
+    if (psState){ psState.docs.forEach(function(d){ try{ if (d.pdfDoc && d.pdfDoc.destroy) d.pdfDoc.destroy(); }catch(e){} }); }
+    psState = null;
+    psReportFromDialog = false;
+  }
+  function psShowTab(which){
+    psTabPlans.classList.toggle("active", which === "plans");
+    psTabReport.classList.toggle("active", which === "report" || which === "done");
+    psPanelPlans.hidden = which !== "plans";
+    psPanelReport.hidden = which !== "report";
+    psPanelDone.hidden = which !== "done";
+  }
+  function psZonesOn(){ return !!psZonesToggle.checked; }
+  function psRowDiskName(r){ return sanitizeFileBase(withoutHashPercent(psZoneDiskName(r.level, psZonesOn() ? r.zone : ""))); }
+  function psRenderRows(){
+    var st = psState; if (!st) return;
+    psRows.classList.toggle("no-zones", !psZonesOn());
+    psHead.classList.toggle("no-zones", !psZonesOn());
+    psHead.hidden = !st.rows.length;
+    psRowsEmpty.hidden = !!st.rows.length;
+    psRows.innerHTML = "";
+    st.rows.forEach(function(r, idx){
+      var row = document.createElement("div");
+      row.className = "ps-row" + (r.on ? "" : " off");
+      row.setAttribute("data-idx", idx);
+      row.innerHTML = "<input type=\"checkbox\" class=\"ps-tick\"" + (r.on ? " checked" : "") + (r.result ? " disabled" : "") + " aria-label=\"Import this plan\">" +
+        "<img alt=\"\" src=\"" + (r.thumb || "") + "\">" +
+        "<span class=\"ps-src\">" + escapeHtml(r.srcLabel) + "</span>" +
+        "<input type=\"text\" class=\"ps-level\" placeholder=\"Level name\" value=\"" + escapeHtml(r.level) + "\"" + (r.result ? " disabled" : "") + ">" +
+        "<input type=\"text\" class=\"ps-zone\" placeholder=\"Zone (optional)\" value=\"" + escapeHtml(r.zone) + "\"" + (r.result ? " disabled" : "") + ">" +
+        "<input type=\"text\" class=\"ps-code\" placeholder=\"Code\" value=\"" + escapeHtml(r.code) + "\"" + (r.result ? " disabled" : "") + " title=\"The zone code the work-order report uses for this plan, e.g. H1 or G\">" +
+        "<span class=\"ps-status" + (r.statusCls ? " " + r.statusCls : "") + "\">" + escapeHtml(r.status || "") + "</span>";
+      row.querySelector(".ps-tick").addEventListener("change", function(e){ r.on = e.target.checked; row.classList.toggle("off", !r.on); psValidate(); });
+      row.querySelector(".ps-level").addEventListener("input", function(e){ r.level = e.target.value; if (r.statusCls === "warn" && !r.result) psSetStatus(r, "", ""); psValidate(); });
+      row.querySelector(".ps-zone").addEventListener("input", function(e){ r.zone = e.target.value; psValidate(); });
+      row.querySelector(".ps-code").addEventListener("input", function(e){ r.code = e.target.value; });
+      psRows.appendChild(row);
+    });
+    psValidate();
+  }
+  function psValidate(){
+    var st = psState; if (!st) return;
+    var todo = st.rows.filter(function(r){ return r.on && !r.result; });
+    var seen = {}, dup = "", blank = false;
+    todo.forEach(function(r){
+      if (!String(r.level || "").trim()){ blank = true; return; }
+      var k = psRowDiskName(r).toLowerCase();
+      if (seen[k]) dup = dup || psRowDiskName(r);
+      seen[k] = true;
+    });
+    var msg = "";
+    if (blank) msg = "Every ticked plan needs a level name.";
+    else if (dup) msg = psZonesOn()
+      ? "Two plans would both be “" + dup + "” — give them different zones, or untick one."
+      : "Two plans share the level name “" + dup + "” — turn on “Levels, then zones” and give each a zone, or rename one.";
+    psDupWarn.textContent = msg;
+    psDupWarn.hidden = !msg;
+    psCreateBtn.disabled = st.busy || !!msg || !todo.length;
+    psCreateBtn.textContent = todo.length ? "Create " + todo.length + " level" + (todo.length === 1 ? "" : "s") : "Create levels";
+  }
+  function psSetStatus(r, text, cls){
+    r.status = text; r.statusCls = cls || "";
+    var el = psRows.querySelector(".ps-row[data-idx=\"" + psState.rows.indexOf(r) + "\"] .ps-status");
+    if (el){ el.textContent = text; el.className = "ps-status" + (cls ? " " + cls : ""); }
+  }
+  // files in -> rows (every PDF page; thumbnails; suggestions)
+  function psAddFiles(files){
+    var st = psState; if (!st || !files || !files.length) return Promise.resolve();
+    var list = Array.prototype.slice.call(files);
+    var pdfs = list.filter(isPdfFile), imgs = list.filter(function(f){ return !isPdfFile(f) && /^image\//i.test(f.type || "") ; });
+    var others = list.length - pdfs.length - imgs.length;
+    if (others) showToast(others + " file" + (others === 1 ? " isn't" : "s aren't") + " a PDF or an image — skipped.", 4000);
+    st.busy = true; psValidate();
+    psDropText.textContent = "Reading " + (pdfs.length + imgs.length) + " file" + (pdfs.length + imgs.length === 1 ? "" : "s") + "…";
+    var p = Promise.resolve();
+    if (pdfs.length){
+      p = p.then(function(){ return withPdfImportLibsReady(function(){ ensurePdfWorker(); }); });
+      pdfs.forEach(function(file){
+        p = p.then(function(){
+          return file.arrayBuffer().then(function(buf){ return window.pdfjsLib.getDocument({ data: buf }).promise; }).then(function(pdfDoc){
+            st.docs.push({ file: file, pdfDoc: pdfDoc });
+            var n = pdfDoc.numPages, q = Promise.resolve();
+            for (var i = 1; i <= n; i++) (function(pageNum){
+              q = q.then(function(){
+                return renderPdfPage(pdfDoc, pageNum, 0.2, 260).then(function(t){
+                  return psPageTextRows(pdfDoc, pageNum).catch(function(){ return []; }).then(function(rows){
+                    var sg = psSuggestFromRows(rows), fb = psSuggestFromFileName(file.name, pageNum, n);
+                    st.rows.push({ file: file, pdfDoc: pdfDoc, page: pageNum, pageCount: n, thumb: t.dataUrl, on: true,
+                      srcLabel: file.name + (n > 1 ? " · page " + pageNum + " of " + n : ""),
+                      level: sg.level || fb.level, zone: sg.zone || fb.zone || "", code: sg.code || fb.code || "", status: sg.level ? "From the title block" : "Name from the file — check it", statusCls: sg.level ? "" : "warn" });
+                  });
+                });
+              });
+            })(i);
+            return q;
+          }).catch(function(err){
+            console.error("Reading " + file.name + " failed:", err);
+            showToast("Couldn't open “" + file.name + "”" + (err && err.code === "pdf_import_failed" ? " — PDF import couldn't load (network/firewall)." : "."), 5000);
+          });
+        });
+      });
+    }
+    imgs.forEach(function(file){
+      p = p.then(function(){
+        return downscaleToDataUrl(file, 4000).then(function(res){
+          return downscaleToDataUrl(file, 260).catch(function(){ return { dataUrl: res.dataUrl }; }).then(function(th){
+            var fb = psSuggestFromFileName(file.name, 1, 1);
+            st.rows.push({ file: file, image: res, page: 1, pageCount: 1, thumb: th.dataUrl, on: true, srcLabel: file.name,
+              level: fb.level, zone: fb.zone || "", code: fb.code || "", status: "Name from the file — check it", statusCls: "warn" });
+          });
+        }).catch(function(err){ console.error("Reading image " + file.name + " failed:", err); showToast("Couldn't read “" + file.name + "”.", 4000); });
+      });
+    });
+    return p.then(function(){
+      // the two-tier option switches itself on when two plans suggest the same level (a level split over sheets)
+      if (!psZonesOn()){
+        var seen = {}, same = false;
+        st.rows.forEach(function(r){ var k = String(r.level || "").trim().toLowerCase(); if (k && seen[k]) same = true; seen[k] = true; });
+        if (same){ psZonesToggle.checked = true; showToast("Two plans name the same level, so “Levels, then zones” is on — give each plan its zone.", 6000); }
+      }
+    }).then(function(){ st.busy = false; psDropText.textContent = "Drag more floor plans here (or tap to choose)"; psRenderRows(); },
+      function(err){ st.busy = false; console.error(err); psDropText.textContent = "Drag floor plans here — PDFs or images, several at once (or tap to choose)"; psRenderRows(); });
+  }
+  // one row -> the same image + labels Import floor plan produces
+  function psRenderRowImage(r){
+    if (r.pdfDoc){
+      var importScale = 1 / PX_TO_PT;
+      return renderPdfPageMaybeTiled(r.pdfDoc, r.page, importScale).then(function(res){
+        return pdfPageLabels(r.pdfDoc, r.page, importScale).then(function(lr){
+          return { imageDataURL: res.tiles ? null : res.dataUrl, imageTiles: res.tiles || null, imageW: res.w, imageH: res.h,
+            planLabels: { from: r.file.name || "", page: r.page, at: new Date().toISOString(), labels: lr.labels, boxes: lr.boxes } };
+        }, function(err){ console.error("Reading the plan's labels failed:", err); return { imageDataURL: res.tiles ? null : res.dataUrl, imageTiles: res.tiles || null, imageW: res.w, imageH: res.h, planLabels: null }; });
+      });
+    }
+    return Promise.resolve({ imageDataURL: r.image.dataUrl, imageTiles: null, imageW: r.image.w, imageH: r.image.h, planLabels: null });
+  }
+  function psCreate(){
+    var st = psState; if (!st || st.busy) return Promise.resolve();
+    if (!planNeedName("setting up floor plans")) return Promise.resolve();
+    var rows = st.rows.filter(function(r){ return r.on && !r.result; });
+    if (!rows.length) return Promise.resolve();
+    var who = deviceUserName, created = 0, kept = 0, failed = 0, labelsTotal = 0;
+    st.busy = true; psValidate();
+    psProgress.hidden = false;
+    var zonesOn = psZonesOn();
+    return listExistingLevelsStrict(activeProjectHandle).then(function(existing){
+      var existingLower = existing.map(function(n){ return n.toLowerCase(); });
+      var p = Promise.resolve();
+      rows.forEach(function(r, i){
+        p = p.then(function(){
+          var name = psRowDiskName(r);
+          r.diskName = name;
+          psProgress.textContent = "Creating " + (i + 1) + " of " + rows.length + " — " + name + "…";
+          psSetStatus(r, "Creating…");
+          if (existingLower.indexOf(name.toLowerCase()) !== -1){ r.result = "exists"; kept++; psSetStatus(r, "Already exists — kept as it is", "warn"); return; }
+          return psRenderRowImage(r).then(function(res){
+            var data = { name: name, imageDataURL: res.imageDataURL, imageTiles: res.imageTiles, imageW: res.imageW, imageH: res.imageH, rooms: [], markers: [] };
+            return writeLevelFile(activeProjectHandle, activeProjectName, name, data).then(function(){
+              existingLower.push(name.toLowerCase());
+              return writePlanLabels(activeProjectHandle, activeProjectName, name, res.planLabels).catch(function(err){ console.error("Saving the plan's labels failed:", err); res.planLabels = null; });
+            }).then(function(){
+              var n = res.planLabels && res.planLabels.labels ? res.planLabels.labels.length : 0;
+              labelsTotal += n; created++;
+              r.result = "created";
+              psSetStatus(r, "Created" + (n ? " — " + n + " labels read" : (r.pdfDoc ? " — no text labels in this PDF" : "")), "ok");
+            });
+          }).catch(function(err){
+            console.error("Creating level " + name + " failed:", err);
+            failed++; r.result = "failed";
+            psSetStatus(r, "Couldn't import" + (isReadFailed(err) ? " — the level file couldn't be read" : (err && err.code === "pdf_import_failed" ? " — PDF import couldn't load" : "")), "bad");
+          });
+        });
+      });
+      return p;
+    }).then(function(){
+      var touched = rows.filter(function(r){ return r.result === "created" || r.result === "exists"; });
+      if (!touched.length) return;
+      return psWriteZonesMeta(activeProjectHandle, function(meta){
+        touched.forEach(function(r){
+          var e = meta.byLevel[r.diskName] || {};
+          e.level = String(r.level || "").trim();
+          e.zone = zonesOn ? String(r.zone || "").trim() : "";
+          var code = String(r.code || "").trim().toUpperCase();
+          if (code){ e.codes = (e.codes || []).filter(function(c){ return String(c).toUpperCase() !== code; }); e.codes.push(code); }
+          if (r.result === "created"){ e.source = r.srcLabel; e.addedBy = who; e.addedAt = new Date().toISOString(); }
+          meta.byLevel[r.diskName] = e;
+        });
+      }).catch(function(err){
+        console.error("Saving level-zones.json failed:", err);
+        showToast("Levels made, but the zone list couldn't be saved — the report import will ask which level each zone goes on.", 6000);
+      });
+    }).then(function(){
+      st.busy = false;
+      psProgress.textContent = created + " created" + (kept ? ", " + kept + " already there" : "") + (failed ? ", " + failed + " failed" : "") + (labelsTotal ? " — " + labelsTotal + " plan labels read, ready to place items" : "") + ".";
+      psValidate();
+      levelListRenderedFor = null; // the Levels list behind the dialog is out of date
+      if (typeof populateLevelList === "function") populateLevelList();
+      if (created && !failed) psShowTab("report");
+    }).catch(function(err){
+      console.error("Set up floor plans failed:", err);
+      st.busy = false; psValidate();
+      psProgress.textContent = "";
+      psProgress.hidden = true;
+      if (isReadFailed(err)) readFailedToast("this project's level files");
+      else showToast("Couldn't create the levels — nothing was changed. Try again.", 6000);
+    });
+  }
+  // ---- tab 2: the report ----
+  function psStartReport(file){
+    if (!file) return;
+    if (!isPdfFile(file)){ showToast("Choose the Work Order List or Work Order Cost Analysis PDF from the job system."); return; }
+    psReportFromDialog = true;
+    woStartImportFromFile(file);
+  }
+  // after a report import that was started from tab 2: what is left to place, per level
+  function psAfterWoImport(st, res){
+    if (!psReportFromDialog || !psState) return;
+    psReportFromDialog = false;
+    var levels = [];
+    Object.keys(st.zoneMap || {}).forEach(function(z){ var lv = st.zoneMap[z]; if (lv && levels.indexOf(lv) === -1) levels.push(lv); });
+    // the codes confirmed here go into level-zones.json, so the next device maps the report by itself
+    var codePairs = [];
+    Object.keys(st.zoneMap || {}).forEach(function(z){ if (z && st.zoneMap[z]) codePairs.push({ code: String(z).toUpperCase(), level: st.zoneMap[z] }); });
+    var saveP = codePairs.length ? psWriteZonesMeta(activeProjectHandle, function(meta){
+      codePairs.forEach(function(cp){
+        var e = meta.byLevel[cp.level] || psSplitLevelName(cp.level, meta);
+        if (!e.level){ var sp = psSplitLevelName(cp.level, null); e = { level: sp.level, zone: sp.zone }; }
+        e.codes = (e.codes || []).filter(function(c){ return String(c).toUpperCase() !== cp.code; });
+        e.codes.push(cp.code);
+        meta.byLevel[cp.level] = { level: e.level, zone: e.zone || "", codes: e.codes, source: e.source, addedBy: e.addedBy, addedAt: e.addedAt };
+      });
+    }).catch(function(err){ console.error("Saving the zone codes failed:", err); }) : Promise.resolve();
+    psShowTab("done");
+    psDoneSummary.textContent = "Imported " + (res.added || 0) + " new item" + (res.added === 1 ? "" : "s") + (res.filled ? ", " + res.filled + " WO # added" : "") +
+      (res.autoPlaced ? " — " + res.autoPlaced + " placed on the plans from their labels (amber: check them)" : "") + ". Counting what is left to place…";
+    psDoneList.innerHTML = "";
+    return saveP.then(function(){ return readJoineryItems(activeProjectHandle); }).then(function(items){
+      var p = Promise.resolve(), counts = [];
+      levels.forEach(function(lv){
+        p = p.then(function(){
+          return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){
+            var placed = {};
+            ((level && level.markers) || []).forEach(function(o){ if (o.type === "roomlink") placed[(String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase()] = true; });
+            var n = items.filter(function(it){ return it.level === lv && !placed[woItemKey(it)]; }).length;
+            counts.push({ level: lv, toPlace: n, hasPlan: !!(level && (level.imageDataURL || (level.imageTiles && level.imageTiles.length))) });
+          }, function(err){ console.error("Reading " + lv + " failed:", err); counts.push({ level: lv, toPlace: -1 }); });
+        });
+      });
+      return p.then(function(){ return counts; });
+    }).then(function(counts){
+      if (!psState) return;
+      var left = counts.reduce(function(n, c){ return n + Math.max(0, c.toPlace); }, 0);
+      var noRoom = Number(res.toDrop) || 0; // (v32) work orders the report gave no room: they wait in every level's To place list
+      psDoneSummary.textContent = "Imported " + (res.added || 0) + " new item" + (res.added === 1 ? "" : "s") + (res.filled ? ", " + res.filled + " WO # added" : "") +
+        (res.autoPlaced ? " — " + res.autoPlaced + " placed on the plans from their labels (amber on the plan: check them)" : "") +
+        (left ? ". " + left + " still to place — open a level and tap each one into position." : ". Every item with a room is on a plan.") +
+        (noRoom ? " " + noRoom + " work order" + (noRoom === 1 ? " has" : "s have") + " no room yet — drag them onto the right plan from To place." : "");
+      psDoneList.innerHTML = "";
+      counts.forEach(function(c){
+        var row = document.createElement("div"); row.className = "ps-done-row"; row.setAttribute("data-level", c.level);
+        var txt = c.toPlace < 0 ? "couldn't be read" : c.toPlace ? c.toPlace + " to place" : "all placed ✓";
+        row.innerHTML = "<span><b>" + escapeHtml(c.level) + "</b> <span class=\"ps-done-n\">" + txt + "</span></span>";
+        if (c.toPlace > 0 || c.toPlace === 0){
+          var b = document.createElement("button"); b.type = "button"; b.className = "btn" + (c.toPlace ? "" : " secondary"); b.textContent = c.toPlace ? "Place →" : "Open plan";
+          if (!c.hasPlan){ b.disabled = true; b.title = "This level has no floor plan yet"; }
+          b.addEventListener("click", function(){ psPlaceOn(c.level); });
+          row.appendChild(b);
+        }
+        psDoneList.appendChild(row);
+      });
+    }).catch(function(err){
+      console.error("Counting the items to place failed:", err);
+      if (psState) psDoneSummary.textContent = "Imported. Open a level's plan (Place joinery items) and drag the rest from “To place” into position.";
+    });
+  }
+  function psPlaceOn(levelName){
+    psClose();
+    activeLevelName = levelName;
+    roomsLevelLabel.textContent = activeProjectName + " — " + levelName;
+    planCanvasReturnScreen = "levels";
+    openPlanCanvasForLevel().then(function(){
+      // the To place list fills in after the plan (refreshUnplacedForLevel) -- open it once it is there
+      var tries = 0;
+      (function poll(){
+        if (currentScreenName !== "planCanvas" || activeLevelName !== levelName) return;
+        if (planUnplacedBtn && !planUnplacedBtn.hidden){ if (planUnplacedPanel && planUnplacedPanel.hidden) planUnplacedBtn.click(); return; }
+        if (++tries < 40) setTimeout(poll, 150);
+      })();
+    }).catch(function(err){ console.error("Opening plan failed:", err); showToast("Couldn't open this level's plan."); });
+  }
+  // ---- wiring ----
+  if (setupPlansBtn) setupPlansBtn.addEventListener("click", function(){ psOpen({}); });
+  function psWireDrop(el, input, onFiles){
+    ["dragenter", "dragover"].forEach(function(t){ el.addEventListener(t, function(e){ e.preventDefault(); e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; el.classList.add("dragover"); }); });
+    el.addEventListener("dragleave", function(){ el.classList.remove("dragover"); });
+    el.addEventListener("drop", function(e){ e.preventDefault(); e.stopPropagation(); el.classList.remove("dragover"); var fl = e.dataTransfer && e.dataTransfer.files; if (fl && fl.length) onFiles(fl); });
+    el.addEventListener("click", function(){ input.value = ""; input.click(); });
+    el.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); input.value = ""; input.click(); } });
+    input.addEventListener("change", function(){ var fl = input.files; if (fl && fl.length) onFiles(Array.prototype.slice.call(fl)); input.value = ""; });
+  }
+  psWireDrop(psDrop, psFileInput, function(files){ psAddFiles(files); });
+  psWireDrop(psReportDrop, psReportFileInput, function(files){ psStartReport(files[0]); });
+  psZonesToggle.addEventListener("change", psRenderRows);
+  psCreateBtn.addEventListener("click", function(){ psCreate(); });
+  psCancelBtn.addEventListener("click", psClose);
+  psToReportBtn.addEventListener("click", function(){ psShowTab("report"); });
+  psReportBackBtn.addEventListener("click", function(){ psShowTab("plans"); });
+  psSkipReportBtn.addEventListener("click", psClose);
+  psDoneCloseBtn.addEventListener("click", psClose);
+  psTabPlans.addEventListener("click", function(){ if (psPanelDone.hidden) psShowTab("plans"); });
+  psTabReport.addEventListener("click", function(){ if (psPanelDone.hidden) psShowTab("report"); });
+  psBackdrop.addEventListener("click", function(e){ if (e.target === psBackdrop && psState && !psState.busy && psPanelDone.hidden) psClose(); });
+  // the whole-page drop target: dropping plans onto the Levels screen opens the dialog with them
+  document.addEventListener("dragover", function(e){ if (currentScreenName === "levels" && psBackdrop.hidden && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") !== -1){ e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
+  document.addEventListener("drop", function(e){
+    if (currentScreenName !== "levels" || !psBackdrop.hidden || !activeProjectHandle) return;
+    var fl = e.dataTransfer && e.dataTransfer.files;
+    if (!fl || !fl.length) return;
+    e.preventDefault();
+    psOpen({});
+    psAddFiles(Array.prototype.slice.call(fl));
+  });
+
   /* ============================== Import work orders + pin-drop them (v31, 2026-09-28) ==============================
      Andrew: "would it be possible to create a button in the projects app
      that can add this data. we would then pindrop these like we pindrop the
@@ -12699,11 +14545,13 @@
         console.error("Reading project-meta.json for the import failed:", err);
         return { meta: null, failed: true };
       });
-      return Promise.all([woLoadProjectContext(), metaP]).then(function(both){
-        var ctx = both[0], mr = both[1];
+      return Promise.all([woLoadProjectContext(), metaP, psReadZonesMeta(activeProjectHandle)]).then(function(both){
+        var ctx = both[0], mr = both[1], zonesMeta = both[2];
         var saved = woLoadZoneMap();
         var zoneMap = {};
-        woZonesOf(interp).forEach(function(z){ zoneMap[z] = (saved[z] && ctx.levels.indexOf(saved[z]) !== -1) ? saved[z] : ""; });
+        // (v50) the level whose code matches the report's zone (Set up floor plans / a past import), then this device's last map, then a guess by the level number / Ground
+        var allZones = woZonesOf(interp);
+        allZones.forEach(function(z){ zoneMap[z] = psLevelForZoneCode(z, ctx.levels, zonesMeta) || ((saved[z] && ctx.levels.indexOf(saved[z]) !== -1) ? saved[z] : "") || psGuessLevelForZone(z, ctx.levels, zonesMeta, allZones); });
         // (v35) a blank field is filled from the report; one that already says something else is only replaced if ticked
         var jobInfoUse = {};
         woJobInfoRows(header, mr.meta).forEach(function(r){ jobInfoUse[r.key] = (r.state === "fill"); });
@@ -12822,7 +14670,8 @@
       st.interp = woInterpretCostRows(st.costRows, st.fmt);
       st.interp.roomless = st.interp.roomless || [];
       var saved = woLoadZoneMap(), zm = {};
-      woZonesOf(st.interp).forEach(function(z){ zm[z] = st.zoneMap[z] || ((saved[z] && st.levels.indexOf(saved[z]) !== -1) ? saved[z] : ""); });
+      var allZones = woZonesOf(st.interp);
+      allZones.forEach(function(z){ zm[z] = st.zoneMap[z] || psLevelForZoneCode(z, st.levels, psZonesMetaFor()) || ((saved[z] && st.levels.indexOf(saved[z]) !== -1) ? saved[z] : "") || psGuessLevelForZone(z, st.levels, psZonesMetaFor(), allZones); }); // (v50)
       st.zoneMap = zm;
       woRenderImportDialog();
     }
@@ -13007,6 +14856,7 @@
           woSaveZoneMap(st.zoneMap);
           woCloseImportDialog();
           registerAllItems = [];
+          psAfterWoImport(st, res); // (v50) the done panel of Set up floor plans & report, when it started there
           if (!res.added && !res.filled && !res.listed && !res.valued && res.info && res.info.length){
             showToast("Project info filled in from the report (" + res.info.join(", ") + ").", 5000);
             if (typeof populateLevelList === "function") populateLevelList();
@@ -14170,11 +16020,88 @@
         { label: "Open item page", disabled: !it, run: function(){ openJoineryItemPage(it, "planCanvas"); } },
         { label: "Make it multiples…", note: hasWo ? "more than one — each goes in its own room, the value is shared" : "only for items from a work order", disabled: !hasWo, run: function(){ planAskMultiples(it); } },
         { label: "Move to another level…", note: "zoned wrong? it goes into that level's To place list", disabled: !it, run: function(){ planMoveItemToLevel(it, hit); } },
+        planGroupMenuEntry(hit, it), // (2026-09-30) merge pins into one drawing / ungroup
         { label: "Remove from plan", note: "back into the To place list", run: function(){ planUnplaceMarker(hit); } },
         { label: "Delete — a double-up", note: "takes the item out of the project", cls: "danger", disabled: !it, run: function(){ planDeleteItem(it, hit); } }
       ]);
     }).catch(function(err){ console.error("Reading joinery items for the menu failed:", err); if (isReadFailed(err)) readFailedToast("joinery-items.json"); });
   }
+  /* ---- (2026-09-30) Drawing groups: merge pins that share one shop drawing / job note ----
+     Andrew: "we also need to find a way to show if there are more than one joinery item in a shop drawing
+     / job note. maybe we could have a merge option that merges the pins by selection, then you only upload
+     one drawing for that merge and it flags everything on that merge at once". Right-click / long-press a
+     pin -> "Merge with other pins…": tap the other pins (any level of this project -- swap levels with the
+     Back button and reopen, the picks are kept), Save group. The group is one small file per change under
+     Project Saves/Drawing Groups (shared/drawing-groups); the Scheduler fans a shop drawing / job note
+     dropped on any member out to every member. Grouped pins wear a gold dashed ring; the item page says
+     which items share the drawing. "Ungroup" writes a removed record (nothing is ever rewritten). */
+  var planMergeMode = null; // { picks: [ {level, room, joineryId} ], groupId? }
+  var planGroupsState = null, planGroupsSeq = 0;
+  var planMergeBar = document.getElementById("planMergeBar"), planMergeBarText = document.getElementById("planMergeBarText");
+  var planMergeSaveBtn = document.getElementById("planMergeSaveBtn"), planMergeCancelBtn = document.getElementById("planMergeCancelBtn");
+  function planLoadGroups(){
+    var seq = ++planGroupsSeq, ph = activeProjectHandle;
+    if (!ph || !window.UtzDrawingGroups) return Promise.resolve();
+    return UtzDrawingGroups.read(ph).then(function(st){ if (seq !== planGroupsSeq) return; planGroupsState = st; planRenderMarkers(); }, function(err){ console.warn("Drawing groups couldn't be read just now:", err); });
+  }
+  function planGroupOf(level, room, joineryId){ return window.UtzDrawingGroups ? UtzDrawingGroups.groupFor(planGroupsState, level, room, joineryId) : null; }
+  function mergeKey(m){ return UtzDrawingGroups.key(m.level, m.room, m.joineryId); }
+  function mergePicked(level, room, joineryId){
+    if (!planMergeMode) return false;
+    var k = UtzDrawingGroups.key(level, room, joineryId);
+    return planMergeMode.picks.some(function(m){ return mergeKey(m) === k; });
+  }
+  function planGroupMenuEntry(hit, it){
+    var g = planGroupOf(activeLevelName, hit.roomName || "", hit.joineryCode || "");
+    if (g) return { label: "Ungroup — separate drawings", note: "one drawing covers " + g.members.length + " items now", run: function(){ planUngroup(g); } };
+    return { label: "Merge with other pins…", note: "one shop drawing / job note for several items", disabled: !it, run: function(){ startMergeMode(it); } };
+  }
+  function startMergeMode(it){
+    if (!planNeedName("merging pins")) return;
+    stopPinMode(); if (planMoveMode) setPlanMoveMode(false);
+    planMergeMode = { picks: [{ level: it.level, room: it.room || "", joineryId: it.joineryId || "" }] };
+    renderMergeBar(); planRenderMarkers();
+  }
+  function stopMergeMode(){ planMergeMode = null; if (planMergeBar) planMergeBar.hidden = true; var hint = document.getElementById("planCanvasHint"); if (hint) hint.hidden = false; planRenderMarkers(); }
+  function renderMergeBar(){
+    if (!planMergeBar) return;
+    var hint = document.getElementById("planCanvasHint"); if (hint) hint.hidden = !!planMergeMode;
+    if (!planMergeMode){ planMergeBar.hidden = true; return; }
+    planMergeBar.hidden = false;
+    var names = planMergeMode.picks.map(function(m){ return m.joineryId || "?"; });
+    planMergeBarText.innerHTML = "<b>One drawing for:</b> " + escapeHtml(names.join(", ")) + " — tap the other pins to add them (tap again to take one off), then <b>Save group</b>.";
+    planMergeSaveBtn.disabled = planMergeMode.picks.length < 2;
+  }
+  function mergeModeTap(worldX, worldY){
+    var hit = planMarkerAt(worldX, worldY);
+    if (!hit){ showToast("Tap a pin to add it to the drawing, or Cancel."); return; }
+    var m = { level: activeLevelName, room: hit.roomName || "", joineryId: hit.joineryCode || "" }, k = mergeKey(m);
+    var i = -1; planMergeMode.picks.forEach(function(p, j){ if (mergeKey(p) === k) i = j; });
+    if (i === -1) planMergeMode.picks.push(m); else if (planMergeMode.picks.length > 1) planMergeMode.picks.splice(i, 1);
+    renderMergeBar(); planRenderMarkers();
+  }
+  function planSaveMergeGroup(){
+    if (!planMergeMode || planMergeMode.picks.length < 2 || !activeProjectHandle) return;
+    var picks = planMergeMode.picks.slice(), who = deviceUserName || "";
+    // an item already in a group: that group loses it (a later group wins in the fold) -- the whole picked set becomes one group
+    planMergeSaveBtn.disabled = true;
+    UtzDrawingGroups.write(activeProjectHandle, { members: picks }, who, "Projects").then(function(ev){
+      if (!ev) return;
+      showToast("Saved: one drawing covers " + picks.length + " items (" + picks.map(function(p){ return p.joineryId; }).join(", ") + ").", 4500);
+      stopMergeMode();
+      return planLoadGroups();
+    }).catch(function(err){ console.error("Saving the drawing group failed:", err); showToast("Couldn't save the group — nothing was changed. Try again."); })
+      .then(function(){ planMergeSaveBtn.disabled = false; });
+  }
+  function planUngroup(g){
+    if (!planNeedName("ungrouping")) return;
+    showConfirmDialog("Separate these " + g.members.length + " items again (" + g.members.map(function(m){ return m.joineryId; }).join(", ") + ")? Drawings already uploaded stay on each item.").then(function(ok){
+      if (!ok) return;
+      return UtzDrawingGroups.write(activeProjectHandle, { groupId: g.groupId, members: g.members, removed: true }, deviceUserName || "", "Projects").then(function(){ showToast("Ungrouped."); return planLoadGroups(); });
+    }).catch(function(err){ console.error("Ungrouping failed:", err); showToast("Couldn't ungroup — nothing was changed. Try again."); });
+  }
+  if (planMergeSaveBtn) planMergeSaveBtn.addEventListener("click", planSaveMergeGroup);
+  if (planMergeCancelBtn) planMergeCancelBtn.addEventListener("click", function(){ stopMergeMode(); });
   function planOpenListMenu(entry, clientX, clientY){
     var d = woEntryDisplay(entry), title = (d.joineryId || "(no code)") + (d.room ? " · " + d.room : "");
     if (entry.kind === "item"){
@@ -14601,8 +16528,10 @@
   }
 
   window.__testHooks = {
-    speedUpForTest: function(){ return runSpeedUp(); }, // (v47) skips the confirm step
-    speedUpStateForTest: function(){ return { count: speedUpState.count, running: speedUpState.running, shown: !speedUpCard.hidden, text: speedUpText.textContent, status: speedUpStatus.textContent }; },
+    // (v50) Set up floor plans & report
+    psOpen: function(o){ return psOpen(o || {}); }, psAddFiles: function(f){ return psAddFiles(f); }, psStateForTest: function(){ return psState; },
+    psSuggestFromRows: function(r){ return psSuggestFromRows(r); }, psGroupLevels: function(n, m){ return psGroupLevels(n, m); },
+    psReadZonesMeta: function(h){ return psReadZonesMeta(h || activeProjectHandle); }, psGuessLevelForZone: function(c, l, m, a){ return psGuessLevelForZone(c, l, m, a); },
     itemExtrasForTest: function(){ return itemExtras; }, // (v45)
     setUserForItemExtrasTest: function(n){ deviceUserName = n || ""; },
     // (v31) work order import + pin-drop

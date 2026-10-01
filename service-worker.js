@@ -558,7 +558,10 @@ var ICON_VERSION = "v1";
 // v45 (2026-09-29): RC 1.0 -- REV 0, A, B ...; the Cutting file + Notes cards; the ITPs card reads Delivery ITP by its own rule; same-name saves done in turn.
 // v46 (2026-09-29): RC 1.0 -- the ITP cards read each checklist with its change files.
 // v47 (2026-09-30): RC 1.0 -- event layout v2: status / schedule / cut / completion / cutting file / note records are one folder per LEVEL (Project Saves/UTZLINE Events/<branch>/<Level>/); old per-item folders are still read.
-var CACHE_NAME = "utzline-projects-cache-v55";
+// v48 (2026-09-30): RC 1.0 -- sign in on open (tablets / phones), change-folder button.
+// v49 (2026-09-30): RC 1.0 -- builders with logos, status icons on the plan (blue, 25% smaller, zoom buttons), merge pins into one drawing, tick-box status filter, hide / rearrange register columns, day / night mode.
+// v50 (2026-09-30): RC 1.0 -- Set up floor plans & report: several plans dropped at once -> levels (and zones), then the report -> items + markers
+var CACHE_NAME = "utzline-projects-cache-v58";
 
 var PRECACHE_URLS = [
   "./",
