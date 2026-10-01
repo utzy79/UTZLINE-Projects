@@ -1,6 +1,15 @@
 # UTZLINE Projects — installable app
 
-**Current version: v55 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v56 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v56 (2026-10-01) — RC 1.0: the work order import now finds and drops the pins on the MBH Building H plan (newer PDF reader + the zone put back when matching rooms).**
+
+- Andrew, with the MBH report `3749_MBH.pdf` and the Building H Level 1 OVERALL plan: *"why wont the projects import find and drop the pins on this page"*. Reproduced with both files: the plan imported, the report imported, 288 items, **0 placed**. Two causes:
+  - **The bundled PDF reader missed most of the plan's text.** pdf.js 2.16 (2022) returned 262 of the plan's ~1,300 text runs (135 labels, none of the plain room numbers); **pdf.js 3.11.174** (`pdf.min.js` + `pdf.worker.min.js` in this folder, both cached by the service worker) returns all of it -- 621 labels.
+  - **The import renames the room, the plan keeps the zone.** A 3-part code (`H1.AH.001`) becomes room `AH.001 Sub-Wait` (the report import's automatic format), but the plan's label reads `H1.AH.001`. Placement now looks the room number up as it stands, then with the level's zone codes (`level-zones.json`) put back in front, then the one plain label on the plan that ends `.<room number>` (never a tag like `K1-H1.AH.001`).
+- Result on Andrew's two files: **166 items placed from the plan's labels** (every item whose room is on the plan); the rest are other buildings' (C1/F1) or other levels' (H2-H4) rooms, which belong on their own plans.
+- Only this app was changed (it is the only one that reads a plan's labels). Other apps still carry pdf.js 2.16 for rendering; bump them in a later round if they ever need a plan's text. **Try the A0 plan on the 4 GB tablet** -- the newer reader was only tested on desktop.
+- Test: `pdftest-projects/run_projects_mbh_plan_zone_labels.js` (fixtures: the two PDFs). All 23 PDF import/placement tests pass on the new reader.
 
 **v55 (2026-10-01) — RC 1.0: code-only file names -- joinery codes, not descriptions, in every file and folder name (path-limit round, fourth build).**
 

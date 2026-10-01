@@ -16320,9 +16320,9 @@
   // Resolves { placed, byCode, byRoom, left, candidates, noLabels }.
   function autoPlaceFromPlanLabels(levelName, opts){
     return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){
-      return Promise.all([readJoineryItems(activeProjectHandle), readLevelFile(activeProjectHandle, activeProjectName, levelName), readPlanLabels(activeProjectHandle, activeProjectName, levelName)]);
+      return Promise.all([readJoineryItems(activeProjectHandle), readLevelFile(activeProjectHandle, activeProjectName, levelName), readPlanLabels(activeProjectHandle, activeProjectName, levelName), psReadZonesMeta(activeProjectHandle)]);
     }).then(function(res){
-      var items = res[0], level = res[1], labels = res[2];
+      var items = res[0], level = res[1], labels = res[2], zonesMeta = res[3];
       if (!level || !levelHasPlanLabels(labels)) return { placed: 0, byCode: 0, byRoom: 0, left: 0, candidates: 0, noLabels: true };
       var idx = planLabelIndex(labels);
       level.markers = level.markers || [];
@@ -16343,7 +16343,26 @@
       if (opts && opts.onlyMoveOld) todo = todo.filter(function(it){ return !!redo[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()]; });
       var existingMaxId = level.markers.reduce(function(m, o){ return Math.max(m, parseInt(String(o.id || "o0").slice(1), 10) || 0); }, 0);
       if (existingMaxId >= planNextId) planNextId = existingMaxId + 1;
-      function roomPos(it){ var r = idx[planRoomNumber(it.room)]; return r ? r[0] : null; }
+      // (2026-10-01) Andrew's MBH Building H plan: the report import drops the zone from a 3-part room code ("H1.AH.001" -> room "AH.001 Sub-Wait")
+      // but the plan's label keeps it ("H1.AH.001"), so no room was found. Look the number up as it stands, then with this level's zone codes
+      // (level-zones.json) put back in front, then the one plain label on the plan that ends ".<number>" (not a tag like K1-H1.AH.001).
+      var zoneCodes = (zonesMeta && zonesMeta.byLevel && zonesMeta.byLevel[levelName] && Array.isArray(zonesMeta.byLevel[levelName].codes)) ? zonesMeta.byLevel[levelName].codes : [];
+      var suffixIdx = null;
+      function labelSpots(num){
+        if (!num) return null;
+        if (idx[num]) return idx[num];
+        for (var zi = 0; zi < zoneCodes.length; zi++){ var zk = String(zoneCodes[zi] || "").toUpperCase() + "." + num; if (idx[zk]) return idx[zk]; }
+        if (!suffixIdx){
+          suffixIdx = {};
+          Object.keys(idx).forEach(function(k){
+            if (k.indexOf("-") !== -1) return;
+            for (var p = k.indexOf("."); p !== -1; p = k.indexOf(".", p + 1)) (suffixIdx[k.slice(p + 1)] = suffixIdx[k.slice(p + 1)] || []).push(k);
+          });
+        }
+        var c = suffixIdx[num];
+        return c && c.length === 1 ? idx[c[0]] : null;
+      }
+      function roomPos(it){ var r = labelSpots(planRoomNumber(it.room)); return r ? r[0] : null; }
       function dist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
       // code tags: each copy of a code goes to the item whose room label is nearest
       var byCode = {};

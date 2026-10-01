@@ -563,7 +563,7 @@ var ICON_VERSION = "v1";
 // v50 (2026-09-30): RC 1.0 -- Set up floor plans & report: several plans dropped at once -> levels (and zones), then the report -> items + markers
 // v51 (2026-10-01): RC 1.0 -- the PC date lands on every new item even when one save fails; light-mode leftovers
 // v52 (2026-10-01): RC 1.0 -- the work-order import finds each zone's level from the plans' room labels
-var CACHE_NAME = "utzline-projects-cache-v63";
+var CACHE_NAME = "utzline-projects-cache-v64";
 
 var PRECACHE_URLS = [
   "./",
