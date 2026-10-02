@@ -179,8 +179,15 @@
   .utz-theme-btn:hover, .utz-theme-btn:focus{ opacity: 1; outline: none; }
   header:has(.utz-theme-btn){ padding-right: 60px; }
   /* light palette (day mode) */
-  :root[data-theme="light"]{ --bg: #f6f2f1; --panel: #ffffff; --panel2: #f1e9e8; --border: #dccfcd; --text: #1d1414; --muted: #6e5a5a; --muted2: #937e7e; --accent: #d12b2b; --accent-ink: #ffffff; --accent-soft: #fbe3e3; --danger: #d12b2b; --utz-header: #ffffff; --utz-deep: #efe6e5; --utz-stage: #e9e2e1; --utz-undo-bg: #dff1e5; --utz-move-bg: #f6ead0; }
+  :root[data-theme="light"]{ --bg: #f6f2f1; --panel: #ffffff; --panel2: #f1e9e8; --border: #dccfcd; --text: #1d1414; --muted: #6e5a5a; --muted2: #937e7e; --accent: #d12b2b; --accent-ink: #ffffff; --accent-soft: #fbe3e3; --danger: #d12b2b; --ok: #1a8a47; --warn: #b45309; --utz-header: #ffffff; --utz-deep: #efe6e5; --utz-stage: #e9e2e1; --utz-undo-bg: #dff1e5; --utz-move-bg: #f6ead0; }
   :root[data-theme="light"] select, :root[data-theme="light"] input, :root[data-theme="light"] textarea{ color-scheme: light; }
+  /* (2026-10-02) dark mode: a control no app style has touched gets a real dark background AND readable text (zero specificity, so every
+     app's own control styles still win). A native select's open list and its options take the page's light text colour but the browser's
+     default white background otherwise -- "white writing on a pale background, unreadable". */
+  :where(:root:not([data-theme="light"])) :where(select, option, optgroup, textarea, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=button]):not([type=submit])){ background-color: var(--panel2, var(--surface-2, #202020)); color: var(--text, var(--text-primary, #eee)); }
+  :where(:root:not([data-theme="light"])) :where(select, input, textarea){ color-scheme: dark; }
+  :where(:root:not([data-theme="light"])) :where(option:checked, option:hover){ background-color: var(--accent-soft, var(--surface-3, #33415c)); color: var(--text, var(--text-primary, #fff)); }
+  :where(:root:not([data-theme="light"])) :where(select:disabled, input:disabled, textarea:disabled, option:disabled){ color: var(--muted, var(--text-secondary, #9aa)); }
 </style>
 <!-- UTZLINE-THEME END -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -203,9 +210,11 @@
 <script src="./jspdf.umd.min.js" onerror="window.__jsPdfLibFailed = true;"></script>
 <style>
   :root{
-    --bg: var(--bg);
+    --bg: #140d0d;
     --panel: #1d1414;
-    --panel2: var(--panel2);
+    --panel2: #241818;
+    --ok: #33c46a;
+    --warn: #f5a623;
     --border: #3a2626;
     --text: #f6ecec;
     --muted: #b99;
@@ -320,6 +329,14 @@
   .meta-grid{ display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
   .meta-grid dt{ color: var(--muted); }
   .meta-grid dd{ margin: 0; }
+  /* (v57) shop drawing status pill (Sent / Returned to resubmit / Approved) */
+  .sd-status{ display: inline-block; border: 1.5px solid currentColor; border-radius: 8px; padding: 1px 9px; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .sd-status.sent{ color: var(--accent); }
+  .sd-status.returned{ color: var(--warn); }
+  .sd-status.approved{ color: var(--ok); }
+  .sd-status.none{ color: var(--muted); border-style: dashed; font-weight: 600; }
+  .sd-status-sub{ display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  #jiShopStatus{ display: block; }
   .status-line{ display:flex; align-items:center; gap:8px; font-size: 13px; color: var(--muted); margin-top: 4px; }
   .dot{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .dot.yes{ background: #33c46a; }
@@ -343,7 +360,27 @@
     color: var(--text); padding: 9px 12px; font-size: 14px; color-scheme: light dark; font-family: inherit;
   }
   .field input[type=date]:focus, .field select:focus{ outline: none; border-color: var(--accent); }
-  .pi-fill-row{ margin: -6px 0 12px; }
+  .pi-report-drop{ margin: -6px 0 12px; min-height: 64px; justify-content: center; font-size: 14px; }
+  .pi-report-drop.has-report{ border-style: solid; border-color: var(--ok); color: var(--text); }
+  .pi-report-drop.bad{ border-color: var(--danger); }
+  .pi-report-drop.busy{ opacity: .7; }
+  .pi-report-drop .pi-rd-sub{ font-size: 12px; color: var(--muted); }
+  .ps-kept{ background: var(--panel2); border: 1px solid var(--ok); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; }
+  .ps-kept p{ margin: 0 0 8px; font-size: 14px; }
+  .ps-kept .modal-actions{ margin-top: 4px; }
+  /* (v57) Andrew: "add an import splash or progress screen" -- covers the app from reading the report until the result */
+  .utz-splash{ position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); }
+  .utz-splash[hidden]{ display: none; }
+  .utz-splash-card{ width: min(420px, 100%); text-align: center; }
+  .utz-splash-mark{ font-size: 26px; font-weight: 800; letter-spacing: .18em; color: var(--accent); margin-bottom: 22px; }
+  .utz-splash-title{ font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .utz-splash-step{ font-size: 14px; color: var(--muted); min-height: 20px; margin-bottom: 14px; overflow-wrap: anywhere; }
+  .utz-splash-bar{ height: 8px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--border); overflow: hidden; }
+  .utz-splash-bar > i{ display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
+  .utz-splash-bar.indet > i{ width: 35%; animation: utzSplashSlide 1.1s ease-in-out infinite alternate; }
+  @keyframes utzSplashSlide{ from{ margin-left: 0; } to{ margin-left: 65%; } }
+  .utz-splash-count{ font-size: 12.5px; color: var(--muted2); margin-top: 8px; min-height: 16px; }
+  .utz-splash-note{ font-size: 12px; color: var(--muted2); margin-top: 18px; }
   .pi-fill-note{ font-size: 12.5px; color: var(--muted); margin: -4px 0 12px; line-height: 1.45; }
   .pi-fill-note b{ color: var(--text); }
   .pi-bd-thumb{ height: 34px; max-width: 120px; object-fit: contain; background: #fff; border-radius: 6px; padding: 2px; flex: none; }
@@ -567,6 +604,12 @@
   .wo-zones{ display:flex; flex-direction:column; gap:8px; margin: 0 0 12px; }
   .wo-zone-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size: 14px; }
   .wo-zone-row select{ background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 14px; min-width: 180px; }
+  /* (v57) Andrew: "fix the zone-to-level dropdown in dark mode". The popup list takes the select's own colours, so
+     the options (and the highlighted one) get explicit ones, and the control follows the day / night switch. */
+  .wo-zone-row select{ color-scheme: dark; }
+  :root[data-theme="light"] .wo-zone-row select{ color-scheme: light; }
+  .wo-zone-row select option, .wo-zone-row select optgroup{ background: var(--panel2); color: var(--text); }
+  .wo-zone-row select option:checked, .wo-zone-row select option:hover{ background: var(--accent-soft); color: var(--text); }
   .wo-zone-how{ font-size: 12px; color: var(--ok); }
   .wo-preview{ max-height: 48vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 4px 10px; margin-bottom: 12px; }
   .wo-group{ padding: 8px 0; border-bottom: 1px solid var(--border); }
@@ -3229,6 +3272,8 @@
       S.locked = !ok;
       S.staleName = ok ? "" : savedName;
       writeSession({ name: ok ? savedName : "", hiddenAt: 0 });
+      if (ok && S.holding) hideGate();                 // already signed in on this visit: no cover after all
+      else if (!ok) drawHold();                        // (no-op when the early cover is already up)
     }
     if (S.locked && (savedName === S.staleName) && savedName !== S.pendingName) return "";
     return savedName;
@@ -3267,6 +3312,11 @@
       var np = document.getElementById("numberpadBackdrop");
       (np && np.parentNode ? np.parentNode : document.body).appendChild(g);
       S.gate = g;
+    } else if (S.holding){
+      // the early "Opening..." cover becomes the names list: move it next to the app's own dialogs (see above)
+      var np2 = document.getElementById("numberpadBackdrop");
+      if (np2 && np2.parentNode && S.gate.parentNode !== np2.parentNode) np2.parentNode.appendChild(S.gate);
+      S.gate.setAttribute("aria-label", "Sign in"); S.holding = false;
     }
     var g2 = S.gate;
     g2.innerHTML = "";
@@ -3292,7 +3342,26 @@
   function hideGate(){
     if (S.gate){ S.gate.hidden = true; if (S.gate.parentNode) S.gate.parentNode.removeChild(S.gate); S.gate = null; }
     document.body.classList.remove("utz-signin-on");
-    S.showing = false;
+    S.showing = false; S.holding = false;
+  }
+  /* (2026-10-01) Andrew: "the login splash screen comes up after the app has started, this could cause issues ... it opens the app, then
+     opens the user selector just after, so someone could maybe make changes before logging in." The names list can only be drawn once the
+     app has read utzline-users.csv (an async folder read), so until then the app sat there live. Now a plain "Opening..." cover goes up
+     the moment this module runs (tablets / phones, unless this is a reload of a page that is already signed in) and is swapped for the
+     names list when it arrives -- or dropped when the app is already signed in, there are no names yet, or the names list hasn't arrived in 15 s
+     (so a fault can never lock anyone out of the app). */
+  function drawHold(){
+    if (S.gate || !document.body) return;
+    ensureStyle();
+    var g = document.createElement("div");
+    g.id = "utzSignIn"; g.setAttribute("role", "dialog"); g.setAttribute("aria-modal", "true"); g.setAttribute("aria-label", "Opening");
+    var card = document.createElement("div"); card.className = "usi-card";
+    var h = document.createElement("h1"); h.textContent = "UTZLINE";
+    var p = document.createElement("p"); p.textContent = "Opening…";
+    card.appendChild(h); card.appendChild(p); g.appendChild(card);
+    document.body.appendChild(g);
+    document.body.classList.add("utz-signin-on");
+    S.gate = g; S.holding = true;
   }
   function unlocked(){
     S.locked = false; S.staleName = ""; S.pendingName = "";
@@ -3368,6 +3437,20 @@
   });
   window.addEventListener("pagehide", onHide);
 
+  // the early cover (see drawHold): tablets / phones only; not for a reload / back-forward of a page that is already signed in
+  (function earlyHold(){
+    if (!isLight()) return;
+    var s0 = readSession();
+    if (sameVisit() && s0 && s0.name) return;
+    if (document.body) drawHold();
+    else {
+      // this module sits in the page head: put the cover up the moment <body> exists (before the page has painted its own content)
+      try { var mo = new MutationObserver(function(){ if (document.body){ mo.disconnect(); drawHold(); } }); mo.observe(document.documentElement, { childList: true }); } catch (e) {}
+      document.addEventListener("DOMContentLoaded", drawHold);
+    }
+    setTimeout(function(){ if (S.holding) hideGate(); }, 15000);
+  })();
+
   window.UtzSignIn = {
     init: function(adapter){ A = adapter || null; if (S.booted && S.locked) check(); },
     boot: boot,
@@ -3398,10 +3481,14 @@
    Andrew: "can each project when started input the builders logo, this could be saved per builder. when
    we start a project the builder name can be a drop down with option to add new, if adding new it asks
    to drag and drop their logo. this can be used on the project headers" (screens + PDFs).
-   Kept once at the Projects ROOT (beside company-logo.png and utzline-users.csv), never per project:
-     utzline-builders.json                  { schemaVersion: 1, updatedAt, builders: [ { name, logo, addedBy, addedAt } ] }
-     utzline-builder-logo - <slug>.png      the logo (PNG, longest side <= 600 px) -- a root FILE, so no app
-                                            ever lists it as a project and no exclusion list needs changing
+   Kept once in the "logos" folder at the Projects ROOT (2026-10-02: Andrew, "move the company and builders logos
+   into a logos folder"), never per project. Readers look in logos/ FIRST and fall back to the Projects root, so
+   files an older version left at the root keep working; only UTZLINE Projects writes (always into logos/) and it
+   copies the root files across once (UtzBuilders.migrate -- copies, never moves or deletes):
+     logos/company-logo.png
+     logos/utzline-builders.json            { schemaVersion: 1, updatedAt, builders: [ { name, logo, addedBy, addedAt } ] }
+     logos/utzline-builder-logo - <slug>.png  the logo (PNG, longest side <= 600 px)
+   ("logos" is a reserved root folder name in every app, so it is never listed as a project.)
    A project only stores the builder's NAME (project-meta.json "contractor", as before); the logo is looked
    up by name (case-insensitive). Written by UTZLINE Projects only; every app reads.
      UtzBuilders.list(rootH)                      -> Promise<[{name, logo}]>   ([] when the file isn't there)
@@ -3410,7 +3497,12 @@
      UtzBuilders.logoUrl(rootH, name)             -> Promise<string|null>      (object URL, cached per root)
      UtzBuilders.logoDataUrl(rootH, name, maxPx)  -> Promise<string|null>      (for PDFs)
      UtzBuilders.contractorOf(projectH)           -> Promise<string>           (project-meta.json "contractor", "" if none)
-     UtzBuilders.mount(el, rootH, name)           -> shows the logo in/next to a header element (adds <img class="utz-builder-logo">)
+     UtzBuilders.mount(el, rootH, name)           -> shows the logo in/next to a header element (adds <img class="utz-builder-logo">);
+                                                     an element carrying data-utz-top="screenA,screenB" (the ids of the project screens)
+                                                     puts it at the FAR RIGHT OF THE TOP BAR instead (<img class="utz-top-builder"> in the
+                                                     <header>, shown only while one of those screens is up and the project has a logo)
+     UtzBuilders.logoFileHandle(rootH, name)      -> Promise<FileSystemFileHandle>  (logos/ first, then the root) -- company-logo.png etc.
+     UtzBuilders.migrate(rootH)                   -> Promise<number>           (Projects only: copies root-level logo files into logos/)
      UtzBuilders.forget(rootH)                    -> drops the caches (after a save)
    Plain ES5. */
 (function(){
@@ -3425,8 +3517,18 @@
     return h.getFileHandle(name, { create: false }).then(function(fh){ return fh.getFile(); }).then(function(f){ return f.text(); });
   }
   function notFound(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError")); }
+  var LOGOS = "logos";
+  function logosDir(rootH, create){
+    if (!rootH || typeof rootH.getDirectoryHandle !== "function"){ var e = new Error("no logos folder"); e.name = "NotFoundError"; return Promise.reject(e); }
+    return rootH.getDirectoryHandle(LOGOS, { create: !!create });
+  }
+  // the file `name` as a handle: logos/ first, the Projects root as the fallback (older layouts, test stand-ins)
+  function logoFileHandle(rootH, name){
+    return logosDir(rootH, false).then(function(d){ return d.getFileHandle(name, { create: false }); }).then(null, function(){ return rootH.getFileHandle(name, { create: false }); });
+  }
+  function readLogoText(rootH, name){ return logoFileHandle(rootH, name).then(function(fh){ return fh.getFile(); }).then(function(f){ return f.text(); }); }
   function readDoc(rootH){
-    return readText(rootH, FILE).then(function(t){
+    return readLogoText(rootH, FILE).then(function(t){
       var d = JSON.parse(t);
       if (!d || typeof d !== "object" || !Array.isArray(d.builders)) throw new Error("utzline-builders.json isn't the expected shape");
       d.builders = d.builders.filter(function(b){ return b && typeof b.name === "string" && b.name.trim(); });
@@ -3468,15 +3570,17 @@
     name = String(name || "").trim();
     if (!name) return Promise.reject(new Error("The builder needs a name"));
     return readDoc(rootH).then(function(d){
-      var logoName = null;
-      var p = file ? downscale(file, 600).then(function(b){ logoName = PREFIX + slug(name) + ".png"; return writeBlob(rootH, logoName, b); }) : Promise.resolve();
-      return p.then(function(){
-        var found = null;
-        d.builders.forEach(function(b){ if (norm(b.name) === norm(name)) found = b; });
-        if (!found){ found = { name: name, logo: "", addedBy: by || "", addedAt: new Date().toISOString() }; d.builders.push(found); }
-        if (logoName){ found.logo = logoName; found.logoBy = by || ""; found.logoAt = new Date().toISOString(); }
-        d.schemaVersion = 1; d.updatedAt = new Date().toISOString();
-        return writeText(rootH, FILE, JSON.stringify(d, null, 2)).then(function(){ forget(rootH); return { name: found.name, logo: found.logo || "" }; });
+      return logosDir(rootH, true).then(function(dir){
+        var logoName = null;
+        var p = file ? downscale(file, 600).then(function(b){ logoName = PREFIX + slug(name) + ".png"; return writeBlob(dir, logoName, b); }) : Promise.resolve();
+        return p.then(function(){
+          var found = null;
+          d.builders.forEach(function(b){ if (norm(b.name) === norm(name)) found = b; });
+          if (!found){ found = { name: name, logo: "", addedBy: by || "", addedAt: new Date().toISOString() }; d.builders.push(found); }
+          if (logoName){ found.logo = logoName; found.logoBy = by || ""; found.logoAt = new Date().toISOString(); }
+          d.schemaVersion = 1; d.updatedAt = new Date().toISOString();
+          return writeText(dir, FILE, JSON.stringify(d, null, 2)).then(function(){ forget(rootH); return { name: found.name, logo: found.logo || "" }; });
+        });
       });
     });
   }
@@ -3491,7 +3595,7 @@
     if (!cache[k]) cache[k] = { list: null, urls: {} };
     if (!cache[k].urls[n]) cache[k].urls[n] = entryFor(rootH, name).then(function(b){
       if (!b || !b.logo) return null;
-      return rootH.getFileHandle(b.logo, { create: false }).then(function(fh){ return fh.getFile(); }).then(function(f){
+      return logoFileHandle(rootH, b.logo).then(function(fh){ return fh.getFile(); }).then(function(f){
         if (f instanceof Blob) return URL.createObjectURL(f);
         // a stand-in file object (tests, some wrappers): build a Blob from its bytes
         return f.arrayBuffer().then(function(ab){ return URL.createObjectURL(new Blob([ab], { type: "image/png" })); });
@@ -3524,6 +3628,7 @@
   // el: a header element (or a container); the logo goes in a <img class="utz-builder-logo"> inside it (kept, updated, hidden)
   function mount(el, rootH, name){
     if (!el) return Promise.resolve(null);
+    if (el.hasAttribute && el.hasAttribute("data-utz-top")) return mountTop(el, rootH, name);
     var img = el.querySelector(":scope > img.utz-builder-logo");
     if (!img){ img = document.createElement("img"); img.className = "utz-builder-logo"; img.alt = ""; img.hidden = true; el.appendChild(img); }
     var token = (img.__utzToken = (img.__utzToken || 0) + 1);
@@ -3535,15 +3640,203 @@
       return url;
     });
   }
-  window.UtzBuilders = { FILE: FILE, PREFIX: PREFIX, list: list, add: add, setLogo: setLogo, logoUrl: logoUrl, logoDataUrl: logoDataUrl, contractorOf: contractorOf, mount: mount, forget: forget, slug: slug, downscale: downscale };
+  // ---- the logo at the far right of the top bar (2026-10-02: "builder logo on the far right of the top bar") ----
+  // one <img class="utz-top-builder"> in the app's <header> (the last flex item, just left of the day / night button);
+  // el's data-utz-top lists the ids of the project screens it belongs to -- it shows while one of them is up.
+  var watching = {};
+  function topImg(){
+    var header = document.querySelector("header");
+    if (!header) return null;
+    var img = header.querySelector(":scope > img.utz-top-builder");
+    if (!img){
+      img = document.createElement("img"); img.className = "utz-top-builder"; img.alt = ""; img.hidden = true;
+      header.insertBefore(img, header.querySelector(":scope > .utz-theme-btn"));
+    }
+    return img;
+  }
+  function screenUp(id){ var sc = document.getElementById(id); return !!(sc && !sc.hidden && sc.getClientRects().length); }
+  function refreshTop(){
+    var img = topImg();
+    if (!img) return;
+    var ids = img.__utzScreens || [], up = !ids.length;
+    for (var i = 0; i < ids.length && !up; i++) if (screenUp(ids[i])) up = true;
+    img.hidden = !(up && img.__utzName && img.getAttribute("src"));
+  }
+  function watchScreens(ids){
+    ids.forEach(function(id){
+      var sc = document.getElementById(id);
+      if (!sc || watching[id] === sc || typeof MutationObserver === "undefined") return;
+      watching[id] = sc;
+      new MutationObserver(function(){ refreshTop(); }).observe(sc, { attributes: true, attributeFilter: ["class", "hidden", "style"] });
+    });
+  }
+  function mountTop(el, rootH, name){
+    var img = topImg();
+    if (!img) return Promise.resolve(null);
+    var ids = String(el.getAttribute("data-utz-top") || "").split(/[\s,]+/).filter(Boolean);
+    img.__utzScreens = ids; watchScreens(ids);
+    var token = (img.__utzToken = (img.__utzToken || 0) + 1);
+    img.__utzName = name || "";
+    img.hidden = true;
+    if (!name){ img.removeAttribute("src"); return Promise.resolve(null); }
+    img.title = name;
+    return logoUrl(rootH, name).then(function(url){
+      if (img.__utzToken !== token) return url;
+      if (url) img.src = url; else img.removeAttribute("src");
+      refreshTop();
+      return url;
+    });
+  }
+  // Projects only: copy the logo files an older layout left at the Projects root into logos/ (copies, never moves or deletes)
+  function migrate(rootH){
+    if (!rootH || typeof rootH.values !== "function") return Promise.resolve(0);
+    var found = [], it = rootH.values();
+    function collect(){
+      return it.next().then(function(r){
+        if (r.done) return;
+        var e = r.value;
+        if (e && e.kind === "file" && (e.name === "company-logo.png" || e.name === FILE || e.name.indexOf(PREFIX) === 0)) found.push(e);
+        return collect();
+      });
+    }
+    return collect().then(function(){
+      if (!found.length) return 0;
+      return logosDir(rootH, true).then(function(dir){
+        var n = 0;
+        function next(i){
+          if (i >= found.length) return n;
+          var e = found[i];
+          return dir.getFileHandle(e.name, { create: false }).then(function(){ return next(i + 1); }, function(err){
+            if (!notFound(err)) throw err;
+            return e.getFile().then(function(f){ return writeBlob(dir, e.name, f); }).then(function(){ n++; return next(i + 1); });
+          });
+        }
+        return next(0);
+      });
+    }).then(function(n){ if (n) forget(rootH); return n; }, function(){ return 0; });
+  }
+  window.UtzBuilders = { FILE: FILE, PREFIX: PREFIX, list: list, add: add, setLogo: setLogo, logoUrl: logoUrl, logoDataUrl: logoDataUrl, contractorOf: contractorOf, mount: mount, forget: forget, slug: slug, downscale: downscale, logoFileHandle: logoFileHandle, logosDir: logosDir, migrate: migrate, LOGOS: LOGOS };
 })();
 </script>
 <style>
   /* ---- UTZLINE builder logo on project headers (2026-09-30) -- see shared/builders/builders.js ---- */
-  img.utz-builder-logo{ height: 30px; max-width: 140px; width: auto; object-fit: contain; vertical-align: middle; margin-left: 10px; border-radius: 4px; background: #fff; padding: 2px; }
+  img.utz-builder-logo{ height: 30px; max-width: 240px; width: auto; flex: 0 0 auto; box-sizing: border-box; object-fit: contain; vertical-align: middle; margin-left: 10px; border-radius: 4px; background: #fff; padding: 2px; } /* (2026-10-01) the window stretches to suit the logo, same height */
   img.utz-builder-logo[hidden]{ display: none; }
+  /* ---- the logo at the far right of the top bar (2026-10-02) ---- */
+  img.utz-top-builder{ order: 99; height: 30px; max-width: 200px; width: auto; flex: 0 0 auto; box-sizing: border-box; object-fit: contain; border-radius: 4px; background: #fff; padding: 2px; margin-left: 4px; }
+  img.utz-top-builder[hidden]{ display: none; }
+  @media (max-width: 700px){ img.utz-top-builder{ max-width: 110px; } }
 </style>
 <!-- UTZLINE-BUILDERS END -->
+<!-- UTZLINE-DROP BEGIN (generated from shared/drop -- don't edit here) -->
+<script>
+/* ============================== UTZLINE drag and drop (2026-10-02) ==============================
+   Andrew (2026-10-01): "i want the entire system to be drag and drop (no file selector) for all shop drawings,
+   job notes, orders, workorders, (basically everything)". Every place a file comes in is a drop zone -- no Browse
+   button, no click-to-choose. One tiny module, inlined into every app that takes a file:
+     UtzDrop.zone(el, onFiles, opts)   makes `el` a drop target: lit (class utz-drop-over) while a file is dragged over it,
+                                       onFiles(arrayOfFiles) when one is dropped. opts: { accept: ["pdf","png"] | function(file),
+                                       multiple: false (only the first file is passed), reject: function(files) (nothing acceptable),
+                                       picker: <input type=file> (hidden, kept ONLY for the tablet fallback below) }
+     UtzDrop.feed(input, files)        hands dropped files to an existing hidden <input type=file> change handler unchanged
+     UtzDrop.wire(el, input, opts)     zone + feed in one: the input's own change handler receives the drop
+   Tablets: a long press on a zone opens the system picker, but only on a touch-only device (pointer: coarse and no hover) --
+   where a drop from a file manager is not possible. On a PC / laptop there is no picker anywhere.
+   A file dropped OUTSIDE a zone is ignored (it never navigates the window away from the app and loses the work).
+   Plain ES5. */
+(function(){
+  "use strict";
+  if (window.UtzDrop) return;
+  function hasFiles(e){
+    var t = e && e.dataTransfer && e.dataTransfer.types;
+    if (!t) return false;
+    for (var i = 0; i < t.length; i++) if (t[i] === "Files") return true;
+    return false;
+  }
+  function touchOnly(){
+    try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches && !window.matchMedia("(hover: hover)").matches); } catch (e) { return false; }
+  }
+  function ext(name){ var m = /\.([A-Za-z0-9]+)$/.exec(String(name || "")); return m ? m[1].toLowerCase() : ""; }
+  function accepts(file, accept){
+    if (!accept) return true;
+    if (typeof accept === "function") return !!accept(file);
+    var x = ext(file.name), t = String(file.type || "").toLowerCase();
+    for (var i = 0; i < accept.length; i++){
+      var a = String(accept[i]).toLowerCase();
+      if (a === x) return true;
+      if (a === "image" && t.indexOf("image/") === 0) return true;
+      if (a === "pdf" && t === "application/pdf") return true;
+    }
+    return false;
+  }
+  // touch-only tablets: a long press opens the system picker (the one place a file selector still exists). `picker` is the hidden
+  // <input type=file>, or anything with a click() (an app that wants a confirm first passes { click: fn }).
+  function longPress(el, picker){
+    if (!el || !picker) return;
+    var timer = null;
+    function clear(){ if (timer){ clearTimeout(timer); timer = null; } }
+    el.addEventListener("pointerdown", function(e){
+      if (!touchOnly() || e.pointerType === "mouse") return;
+      clear(); timer = setTimeout(function(){ timer = null; try { picker.value = ""; picker.click(); } catch (x) {} }, 650);
+    });
+    ["pointerup", "pointercancel", "pointermove", "pointerleave"].forEach(function(t){ el.addEventListener(t, clear); });
+  }
+  function zone(el, onFiles, opts){
+    if (!el || el.__utzDrop) return el;
+    opts = opts || {};
+    el.__utzDrop = true;
+    el.setAttribute("data-utz-drop", "1");
+    var depth = 0;
+    function over(e){
+      if (!hasFiles(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      try { e.dataTransfer.dropEffect = "copy"; } catch (x) {}
+      el.classList.add("utz-drop-over");
+    }
+    el.addEventListener("dragenter", function(e){ if (hasFiles(e)) depth++; over(e); });
+    el.addEventListener("dragover", over);
+    el.addEventListener("dragleave", function(){ depth = Math.max(0, depth - 1); if (!depth) el.classList.remove("utz-drop-over"); });
+    el.addEventListener("drop", function(e){
+      if (!hasFiles(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      depth = 0; el.classList.remove("utz-drop-over");
+      var all = Array.prototype.slice.call(e.dataTransfer.files || []);
+      var ok = all.filter(function(f){ return accepts(f, opts.accept); });
+      if (!ok.length){ if (all.length && typeof opts.reject === "function") opts.reject(all); return; }
+      if (!opts.multiple) ok = ok.slice(0, 1);
+      onFiles(ok);
+    });
+    if (opts.picker) longPress(el, opts.picker);
+    return el;
+  }
+  function feed(input, files){
+    if (!input) return;
+    try {
+      var dt = new DataTransfer();
+      for (var i = 0; i < files.length; i++) dt.items.add(files[i]);
+      input.files = dt.files;
+    } catch (e) { return; }
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function wire(el, input, opts){
+    opts = opts || {};
+    var o = { accept: opts.accept, multiple: opts.multiple !== undefined ? opts.multiple : !!(input && input.multiple), reject: opts.reject, picker: input };
+    return zone(el, function(files){ feed(input, files); }, o);
+  }
+  // a file dropped anywhere that is NOT a zone must never navigate the window to it
+  function guard(e){ if (hasFiles(e) && !(e.target && e.target.closest && e.target.closest("[data-utz-drop]"))) e.preventDefault(); }
+  window.addEventListener("dragover", guard);
+  window.addEventListener("drop", guard);
+  window.UtzDrop = { longPress: longPress, zone: zone, feed: feed, wire: wire, hasFiles: hasFiles, touchOnly: touchOnly };
+})();
+</script>
+<style>
+  /* ---- UTZLINE drop zones (2026-10-02) -- see shared/drop/drop.js ---- */
+  .utz-drop{ border: 2px dashed var(--border, rgba(128,128,128,.5)); border-radius: 10px; padding: 14px 16px; text-align: center; font-size: 13px; color: var(--muted, var(--text-secondary, inherit)); cursor: default; background: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  .utz-drop b{ color: var(--text, var(--text-primary, inherit)); }
+  .utz-drop.utz-drop-over, [data-utz-drop].utz-drop-over{ outline: 3px solid var(--accent, #3b82f6); outline-offset: -3px; background: rgba(59,130,246,.14); }
+</style>
+<!-- UTZLINE-DROP END -->
 <!-- UTZLINE-PLAN-MARKER BEGIN (generated from shared/plan-marker -- don't edit here) -->
 <script>
 /* ============================== UTZLINE plan marker (2026-09-30) ==============================
@@ -4016,7 +4309,7 @@
       <div class="logo-row">
         <div class="logo-preview" id="companyLogoPreviewBox"><span class="placeholder">No logo</span></div>
         <div class="row">
-          <button class="btn secondary" id="chooseCompanyLogoBtn">Choose logo image</button>
+          <div class="pi-bd-drop" id="chooseCompanyLogoBtn" tabindex="0" role="group" aria-label="Drop the company logo here"><span>Drag and drop the company logo here</span></div>
           <button class="btn link" id="removeCompanyLogoBtn" hidden>Remove</button>
         </div>
         <input type="file" id="companyLogoFileInput" accept="image/*" hidden>
@@ -4054,7 +4347,7 @@
   <!-- ---- Level list (inside a project) ---- -->
   <section id="screenLevels" class="screen">
     <div class="backrow"><button class="btn secondary" id="backToProjectsBtn">&larr; All projects</button></div>
-    <h1 id="levelsProjectLabel">Levels</h1>
+    <h1 id="levelsProjectLabel" data-utz-top="screenLevels,screenRooms,screenRoomDetail,screenRegister,screenReworkRegister,screenReworkDetail,screenJoineryItem,screenPlanCanvas">Levels</h1>
     <div class="card" id="projectMetaCard" hidden>
       <dl class="meta-grid" id="projectMetaGrid"></dl>
       <button class="btn secondary" id="editProjectInfoBtn" style="margin-top:14px;">Edit project info</button>
@@ -4071,9 +4364,8 @@
         <button class="btn secondary" id="setupPlansBtn">Import floor plans &amp; report…</button>
         <button class="btn secondary" id="openRegisterBtn">Joinery Register</button>
         <button class="btn secondary" id="openReworkRegisterBtn">Rework register</button>
-        <!-- (v31) job system's Work Order List PDF -> joinery items (WO #, joinery code, room), then pin-drop them on a level's plan -->
-        <button class="btn secondary" id="importWorkOrdersBtn">Import work orders (PDF)</button>
-        <input type="file" id="woImportFileInput" accept=".pdf,application/pdf" hidden>
+        <!-- (v57) the "Import work orders (PDF)" button is gone: the report is dropped once (Project info, or the Report
+             tab of the setup dialog this button opens) -- Andrew: "Remove the Import work orders (PDF) button" -->
       </div>
     </div>
     <div class="card">
@@ -4091,7 +4383,7 @@
       <div class="status-line" id="levelPlanStatus"></div>
       <div class="plan-preview" id="levelPlanPreview" hidden></div>
       <div class="row" style="margin-top:12px;">
-        <button class="btn secondary" id="levelImportPlanBtn">Import floor plan</button>
+        <div class="pi-bd-drop" id="levelImportPlanBtn" tabindex="0" role="group" aria-label="Drop a floor plan here"><span>Drag and drop a floor plan here (image or PDF)</span></div>
         <button class="btn" id="openPlanCanvasBtn" hidden>Place joinery items</button>
       </div>
       <input type="file" id="levelPlanFileInput" accept="image/*,.pdf,application/pdf" hidden>
@@ -4132,7 +4424,7 @@
        of which level/room it's on. ---- -->
   <section id="screenRegister" class="screen wide-table">
     <div class="backrow"><button class="btn secondary" id="backFromRegisterBtn">&larr; Levels</button></div>
-    <h1 id="registerProjectLabel">Joinery Register</h1>
+    <h1 id="registerProjectLabel" data-utz-top="screenLevels,screenRooms,screenRoomDetail,screenRegister,screenReworkRegister,screenReworkDetail,screenJoineryItem,screenPlanCanvas">Joinery Register</h1>
     <p class="sub">Every joinery item in this project, in one place.<span id="registerDollarTotalNote"></span></p>
     <div class="card">
       <div class="row">
@@ -4477,8 +4769,8 @@
     </div>
     <div id="psPanelPlans">
       <p class="sub">Drop every floor plan for this project at once. Each plan becomes a level; a multi-page PDF gives one row per page (untick cover sheets). Names are read from each drawing's title block — fix any before creating.</p>
-      <div class="pi-bd-drop ps-drop" id="psDrop" tabindex="0" role="button" aria-label="Drop floor plans here, or tap to choose them">
-        <span id="psDropText">Drag floor plans here — PDFs or images, several at once (or tap to choose)</span></div>
+      <div class="pi-bd-drop ps-drop" id="psDrop" tabindex="0" role="button" aria-label="Drop floor plans here">
+        <span id="psDropText">Drag floor plans here — PDFs or images, several at once</span></div>
       <input type="file" id="psFileInput" accept="image/*,.pdf,application/pdf" multiple hidden>
       <div class="ps-opt"><label><input type="checkbox" id="psZonesToggle"> <b>Levels, then zones</b> — two tiers, for a level that is split over several plans</label>
         <span class="ps-hint">Zones only show in the list when a level has more than one.</span></div>
@@ -4495,8 +4787,14 @@
     </div>
     <div id="psPanelReport" hidden>
       <p class="sub">Now the job system's <b>Work Order List</b> or <b>Work Order Cost Analysis</b> report. Its zones are matched to the levels by their codes, the items are created, and each one is placed on its label on the plan. Anything the plan doesn't label goes to <b>To place</b>.</p>
-      <div class="pi-bd-drop ps-drop" id="psReportDrop" tabindex="0" role="button" aria-label="Drop the report PDF here, or tap to choose it"><span>Drag the report PDF here (or tap to choose)</span></div>
-      <input type="file" id="psReportFileInput" accept=".pdf,application/pdf" hidden>
+      <div class="ps-kept" id="psKept" hidden>
+        <p id="psKeptLine"></p>
+        <div class="modal-actions">
+          <button class="btn" id="psKeptUseBtn" type="button">Review the import</button>
+          <button class="btn secondary" id="psKeptChangeBtn" type="button">Choose a different one</button>
+        </div>
+      </div>
+      <div class="pi-bd-drop ps-drop" id="psReportDrop" tabindex="0" role="group" aria-label="Drop the report PDF here"><span id="psReportDropText">Drag the report PDF here</span></div>
       <div class="modal-actions">
         <button class="btn secondary" id="psReportBackBtn" type="button">← Floor plans</button>
         <button class="btn secondary" id="psSkipReportBtn" type="button">Finish without the report</button>
@@ -4721,8 +5019,9 @@
     <h2>Project info</h2>
     <p class="sub">Shown to Site Measure, Viewer, and both ITP apps.</p>
     <!-- (v35) Andrew: "the import can also give you the job #, (Job Id) Project (Job Description) and Builder (Customer)" -->
-    <div class="pi-fill-row"><button class="btn secondary" id="piFillFromReportBtn" type="button">Fill from work order report…</button>
-      <input type="file" id="piReportFileInput" accept="application/pdf,.pdf" hidden></div>
+    <!-- (v57) Andrew: "Fill from work order report becomes a drop target instead of a file picker" and "one drop of the
+         work order report does the whole setup": read once here, kept for the floor plan setup that follows -->
+    <div class="pi-bd-drop pi-report-drop" id="piReportDrop" tabindex="0" role="group" aria-label="Drop the work order report here"><span id="piReportDropText">Drop the work order report here</span><span class="pi-rd-sub" id="piReportDropSub">It fills Job number, Project name and Builder, and is used again for the items after the floor plans.</span></div>
     <p class="pi-fill-note" id="piFillNote" hidden></p>
     <div class="field"><label for="piNoInput">Job number</label><input type="text" id="piNoInput"></div>
     <div class="field"><label for="piNameInput">Project name</label><input type="text" id="piNameInput"></div>
@@ -4733,8 +5032,8 @@
         <button class="btn secondary" id="piBuilderLogoChangeBtn" type="button" hidden title="Change this builder's logo">Change logo…</button></div>
       <div class="pi-pm-add pi-bd-add" id="piBuilderAddRow" hidden>
         <input type="text" id="piBuilderInput" placeholder="Builder's name, e.g. Hansen Yuncken" autocomplete="off">
-        <div class="pi-bd-drop" id="piBuilderLogoDrop" tabindex="0" role="button" aria-label="Drop the builder's logo here, or tap to choose it">
-          <img id="piBuilderLogoPreview" alt="" hidden><span id="piBuilderLogoDropText">Drag and drop the builder's logo here (or tap to choose)</span></div>
+        <div class="pi-bd-drop" id="piBuilderLogoDrop" tabindex="0" role="button" aria-label="Drop the builder's logo here">
+          <img id="piBuilderLogoPreview" alt="" hidden><span id="piBuilderLogoDropText">Drag and drop the builder's logo here</span></div>
         <input type="file" id="piBuilderLogoFile" accept="image/*" hidden>
         <div class="pi-bd-add-actions"><button class="btn" id="piBuilderAddBtn" type="button">Add builder</button><button class="btn secondary" id="piBuilderAddCancel" type="button">Cancel</button></div>
       </div>
@@ -4794,6 +5093,17 @@
   </div>
 </div>
 
+<!-- (v57) import splash / progress screen -->
+<div class="utz-splash" id="utzSplash" hidden role="status" aria-live="polite">
+  <div class="utz-splash-card">
+    <div class="utz-splash-mark">UTZLINE</div>
+    <div class="utz-splash-title" id="utzSplashTitle">Working…</div>
+    <div class="utz-splash-step" id="utzSplashStep"></div>
+    <div class="utz-splash-bar indet" id="utzSplashBar"><i id="utzSplashFill"></i></div>
+    <div class="utz-splash-count" id="utzSplashCount"></div>
+    <div class="utz-splash-note">Please wait — nothing is lost if this takes a minute.</div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <!-- UTZLINE-REWORK-MODULE BEGIN (generated from shared/utzline-rework.js -- don't edit here) -->
@@ -4977,6 +5287,10 @@
 
   /* ------------------------------ reading reworks ------------------------------ */
   // Keeps everything but the photo/snapshot pixels (4 GB tablets).
+  // (2026-10-02) Andrew: "the rework register shows where the rework was logged and by who" -- the app that created an
+  // entry is stored on it (createdApp, e.g. "UTZLINE Install ITP"); shown without the "UTZLINE " prefix. Entries logged
+  // before this change have none and show a dash (no guessing).
+  function appLabel(app){ return String(app || "").replace(/^UTZLINE\s+/i, ""); }
   function slimEntry(e){
     var out = {};
     Object.keys(e).forEach(function(k){ if (k !== "photos" && k !== "locationSnapshot") out[k] = e[k]; });
@@ -5227,7 +5541,7 @@
   function logLines(entry, events){
     var f = fold(entry, events);
     var out = [];
-    if (entry.createdAt) out.push({ at: entry.createdAt, by: entry.createdBy || "", what: "Logged", kind: "logged", app: "" });
+    if (entry.createdAt) out.push({ at: entry.createdAt, by: entry.createdBy || "", what: "Logged", kind: "logged", app: entry.createdApp || "" });
     var skippedFirstLogged = false;
     f.changes.forEach(function(c){
       if (c.src === "file" && c.status === "logged" && !skippedFirstLogged && (!entry.createdAt || !c.at || c.at === entry.createdAt || Math.abs(new Date(c.at) - new Date(entry.createdAt)) < 5000)){
@@ -5363,7 +5677,7 @@
       ["Project No.", proj.no || "—"], ["Project", proj.name || row.project || "—"],
       ["Head Contractor / Builder", proj.contractor || "—"], ["Level", row.level || "—"],
       ["Area / Room", row.room || "—"], ["Joinery No.", row.code || "—"],
-      ["Cabinet", entry.cabinetNumber || "—"], ["Logged", [fmtDate(entry.createdAt, true), entry.createdBy || ""].filter(Boolean).join(" — ") || "—"],
+      ["Cabinet", entry.cabinetNumber || "—"], ["Logged", [fmtDate(entry.createdAt, true), entry.createdBy || "", entry.createdApp ? "in " + appLabel(entry.createdApp) : ""].filter(Boolean).join(" — ") || "—"],
       ["Current state", f.closed ? "Closed out" : stateLabel(f.status)], ["State set", [fmtDate(f.closed ? f.closed.at : f.statusAt, true), f.closed ? f.closed.by : f.statusBy].filter(Boolean).join(" — ") || "—"],
       ["Delivered to site", f.delivered ? [f.delivered.date || fmtDate(f.delivered.at), f.delivered.by || ""].filter(Boolean).join(" — ") : "Not yet"], ["Photos", String(photos.filter(function(p){ return !/^Delivery location/.test(p.caption); }).length)],
     ];
@@ -5692,7 +6006,7 @@
       return st.rows.filter(function(r){
         if (st.projectFilter && r.project !== st.projectFilter) return false;
         if (q){
-          var hay = [r.project, r.level, r.room, r.code, r.entry.cabinetNumber, r.entry.text, r.entry.createdBy].join(" ").toLowerCase();
+          var hay = [r.project, r.level, r.room, r.code, r.entry.cabinetNumber, r.entry.text, r.entry.createdBy, appLabel(r.entry.createdApp)].join(" ").toLowerCase();
           if (hay.indexOf(q) === -1) return false;
         }
         return true;
@@ -5706,6 +6020,7 @@
           case "project": return r.project; case "level": return r.level; case "room": return r.room; case "code": return r.code;
           case "cabinet": return r.entry.cabinetNumber || ""; case "text": return r.entry.text || ""; case "photos": return r.entry.photoCount || 0;
           case "state": return STATE_ORDER.indexOf(f.status);
+          case "loggedIn": return appLabel(r.entry.createdApp);
           case "latest": var l = logLines(r.entry, eventsOf(r) || [])[0]; return l ? l.at : "";
           default: return r.entry.createdAt || "";
         }
@@ -5718,7 +6033,7 @@
     }
     // State and the action sit right after the item's identity, so on a
     // tablet in portrait they're on screen without scrolling sideways.
-    var COLS = [["project", "Project"], ["level", "Level"], ["room", "Room"], ["code", "Joinery ID"], ["cabinet", "Cabinet"], ["state", "State"], ["", ""], ["text", "Rework"], ["photos", "Photos"], ["logged", "Logged"], ["latest", "Latest"]];
+    var COLS = [["project", "Project"], ["level", "Level"], ["room", "Room"], ["code", "Joinery ID"], ["cabinet", "Cabinet"], ["state", "State"], ["", ""], ["text", "Rework"], ["photos", "Photos"], ["logged", "Logged"], ["loggedIn", "Logged in"], ["latest", "Latest"]];
     function theadHtml(){
       return "<thead><tr>" + COLS.map(function(c){
         if (!c[0]) return "<th></th>";
@@ -5742,6 +6057,7 @@
         "<td class=\"urw-text\">" + escapeHtml(e.text || "(no description)") + "</td>" +
         "<td>" + (e.photoCount ? e.photoCount : "—") + "</td>" +
         "<td>" + escapeHtml(fmtDate(e.createdAt, true)) + (e.createdBy ? "<div class=\"urw-small urw-muted\">" + escapeHtml(e.createdBy) + "</div>" : "") + "</td>" +
+        "<td class=\"urw-loggedin\">" + (e.createdApp ? escapeHtml(appLabel(e.createdApp)) : "<span class=\"urw-muted\">—</span>") + "</td>" +
         "<td class=\"urw-latest\">" + (evs ? escapeHtml(latestLine(r, evs)) : "…") + "</td></tr>";
     }
     var regRows = [];
@@ -5755,7 +6071,7 @@
           "<div class=\"filters-bar\">" +
             "<select data-urw=\"project\"><option value=\"\">All projects</option></select>" +
             "<select data-urw=\"state\"><option value=\"\">All outstanding</option><option value=\"logged\">Logged</option><option value=\"machined\">Cut</option><option value=\"manufactured\">Ready to deliver</option></select>" +
-            "<input type=\"text\" data-urw=\"search\" placeholder=\"Search code, cabinet, room or text\">" +
+            "<input type=\"text\" data-urw=\"search\" placeholder=\"Search code, cabinet, room, text, who or app\">" +
             "<button class=\"btn secondary sm\" data-urw=\"refresh\">Refresh</button>" +
           "</div>" +
           "<p class=\"table-count\" data-urw=\"count\"></p>" +
@@ -5915,7 +6231,7 @@
     function companyLogo(){
       var root = cfg.getRootHandle && cfg.getRootHandle();
       if (!root) return Promise.resolve(null);
-      return root.getFileHandle("company-logo.png", { create: false }).then(function(fh){ return fh.getFile(); }).then(function(file){
+      return UtzBuilders.logoFileHandle(root, "company-logo.png").then(function(fh){ return fh.getFile(); }).then(function(file){
         if (!(file instanceof Blob)) return null;
         return downscaleToDataUrl(file, 500);
       }).catch(function(){ return null; });
@@ -6094,7 +6410,7 @@
             "<dt>Room</dt><dd>" + escapeHtml(row.room || "—") + "</dd>" +
             "<dt>Joinery ID</dt><dd><b>" + escapeHtml(row.code) + "</b></dd>" +
             "<dt>Cabinet</dt><dd>" + escapeHtml(e.cabinetNumber || "—") + "</dd>" +
-            "<dt>Logged</dt><dd>" + escapeHtml([fmtDate(e.createdAt, true), e.createdBy || ""].filter(Boolean).join(" — ") || "—") + "</dd>" +
+            "<dt>Logged</dt><dd>" + escapeHtml([fmtDate(e.createdAt, true), e.createdBy || "", e.createdApp ? "in " + appLabel(e.createdApp) : ""].filter(Boolean).join(" — ") || "—") + "</dd>" +
             "<dt>State</dt><dd>" + pillHtml(f) + (f.statusAt ? " <span class=\"urw-small urw-muted\">" + escapeHtml([f.statusBy, fmtDate(f.statusAt, true)].filter(Boolean).join(", ")) + "</span>" : "") + "</dd>" +
             (f.delivered ? "<dt>Delivered</dt><dd>" + escapeHtml([f.delivered.date || fmtDate(f.delivered.at), f.delivered.by].filter(Boolean).join(" — ")) + "</dd>" : "") +
             (f.drafter ? "<dt>Drafter</dt><dd>" + escapeHtml(f.drafter) + (f.drafterAction ? " — <b>" + escapeHtml(drafterActionLabel(f.drafterAction.action)) + "</b> <span class=\"urw-small urw-muted\">" + escapeHtml([f.drafterAction.by, fmtDate(f.drafterAction.at, true)].filter(Boolean).join(", ")) + "</span>" : " <span class=\"urw-small urw-muted\">(flagged" + (f.drafterBy ? " by " + escapeHtml(f.drafterBy) : "") + ")</span>") + "</dd>" : "") +
@@ -6360,6 +6676,24 @@
     clearTimeout(showToast._t);
     showToast._t = setTimeout(function(){ toastEl.classList.remove("show"); }, durationMs || 2600);
   }
+  /* (v57) Andrew: "add an import splash or progress screen". One full-screen cover, from reading the report (or
+     pressing Import) until the result toast: what it is doing, a count, a bar. Shown with splashShow(title, step),
+     moved on with splashStep(text, done, total) and always taken down with splashHide() before any toast. */
+  var splashEl = document.getElementById("utzSplash"), splashLog = [];
+  function splashShow(title, step){
+    splashEl.hidden = false;
+    document.getElementById("utzSplashTitle").textContent = title || "Working…";
+    splashStep(step || "", 0, 0);
+  }
+  function splashStep(text, done, total){
+    document.getElementById("utzSplashStep").textContent = text || "";
+    var bar = document.getElementById("utzSplashBar"), fill = document.getElementById("utzSplashFill");
+    if (total > 0){ bar.classList.remove("indet"); fill.style.width = Math.max(2, Math.min(100, Math.round(done * 100 / total))) + "%"; document.getElementById("utzSplashCount").textContent = done + " of " + total; }
+    else { bar.classList.add("indet"); fill.style.width = ""; document.getElementById("utzSplashCount").textContent = ""; }
+    splashLog.push({ text: text || "", done: done || 0, total: total || 0 });
+    if (splashLog.length > 200) splashLog.shift();
+  }
+  function splashHide(){ splashEl.hidden = true; }
 
   // Own IndexedDB database for this app's own session state (the Projects
   // root folder handle) -- deliberately separate from Site Measure's own
@@ -7107,7 +7441,7 @@
      backups, kept directly in the main Projects folder -- isn't a project,
      so it's left out of the project list (the same one-line rule is in
      every app in the family). */
-  function isReservedRootFolderName(name){ return String(name || "").trim().toLowerCase() === "schedule backups"; }
+  function isReservedRootFolderName(name){ return String(name || "").trim().toLowerCase() === "schedule backups" || String(name || "").trim().toLowerCase() === "logos"; }
   function listExistingProjects(rootHandle){
     return listSubdirNames(rootHandle).then(function(names){ return names.filter(function(n){ return !isReservedRootFolderName(n); }); });
   }
@@ -7710,8 +8044,6 @@
   var piPmAddInput = document.getElementById("piPmAddInput");
   var piPmAddBtn = document.getElementById("piPmAddBtn");
   var piPmAddCancel = document.getElementById("piPmAddCancel");
-  var piFillFromReportBtn = document.getElementById("piFillFromReportBtn");
-  var piReportFileInput = document.getElementById("piReportFileInput");
   var piFillNote = document.getElementById("piFillNote");
   var piPcDateInput = document.getElementById("piPcDateInput"); // (v35)
   var projectInfoSave = document.getElementById("projectInfoSave");
@@ -7729,6 +8061,7 @@
     pmRenderSelect(pmDialogCurrent);
     piPmAddRow.hidden = true;
     piFillNote.hidden = true; piFillNote.textContent = "";
+    keptReport = null; piResetReportDrop(); // (v57) a report dropped for an earlier project is not this one's
     pmLoadIntoDialog();
     piPcDateInput.value = (current && current.pcDate) || "";
     projectInfoBackdrop.hidden = false;
@@ -7736,6 +8069,7 @@
     return new Promise(function(resolve){ projectInfoResolve = resolve; });
   }
   function closeProjectInfo(value){
+    if (!value) keptReport = null; // (v57) cancelled: the report dropped into it is forgotten too
     projectInfoBackdrop.hidden = true;
     var resolve = projectInfoResolve; projectInfoResolve = null;
     if (resolve) resolve(value);
@@ -7837,7 +8171,7 @@
     bdPendingLogo = null;
     if (piBuilderLogoPreview.src) { try{ URL.revokeObjectURL(piBuilderLogoPreview.src); }catch(e){} }
     piBuilderLogoPreview.removeAttribute("src"); piBuilderLogoPreview.hidden = true;
-    piBuilderLogoDropText.textContent = "Drag and drop the builder's logo here (or tap to choose)";
+    piBuilderLogoDropText.textContent = "Drag and drop the builder's logo here";
   }
   function bdSetPendingLogo(file){
     if (!file) return;
@@ -7881,7 +8215,7 @@
     if (!projectsRootHandle){ showToast("Choose the Projects folder first."); return Promise.resolve(); }
     if (!bdPendingLogo && !bdChangingLogoFor && !bdOnList(name)){
       // Andrew: adding new "asks to drag and drop their logo" -- asked for, but a builder can still be added without one
-      if (!piBuilderAddRow.__askedLogo){ piBuilderAddRow.__askedLogo = true; showToast("Drop the builder's logo on the box (or tap it to choose) — or press Add builder again to add the name without a logo.", 5000); piBuilderLogoDrop.focus(); return Promise.resolve(); }
+      if (!piBuilderAddRow.__askedLogo){ piBuilderAddRow.__askedLogo = true; showToast("Drop the builder's logo on the box — or press Add builder again to add the name without a logo.", 5000); piBuilderLogoDrop.focus(); return Promise.resolve(); }
     }
     piBuilderAddBtn.disabled = true;
     var file = bdPendingLogo;
@@ -7906,8 +8240,7 @@
     else if (e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); piBuilderAddRow.hidden = true; }
   });
   piBuilderAddCancel.addEventListener("click", function(){ piBuilderAddRow.hidden = true; piBuilderAddRow.__askedLogo = false; bdChangingLogoFor = ""; bdClearPendingLogo(); });
-  piBuilderLogoDrop.addEventListener("click", function(){ piBuilderLogoFile.click(); });
-  piBuilderLogoDrop.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); piBuilderLogoFile.click(); } });
+  UtzDrop.longPress(piBuilderLogoDrop, piBuilderLogoFile); // (2026-10-02) drop only -- no click-to-choose
   piBuilderLogoFile.addEventListener("change", function(){ var f = piBuilderLogoFile.files && piBuilderLogoFile.files[0]; piBuilderLogoFile.value = ""; bdSetPendingLogo(f); });
   ["dragenter", "dragover"].forEach(function(t){ piBuilderLogoDrop.addEventListener(t, function(e){ e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; piBuilderLogoDrop.classList.add("dragover"); }); });
   piBuilderLogoDrop.addEventListener("dragleave", function(){ piBuilderLogoDrop.classList.remove("dragover"); });
@@ -8071,37 +8404,58 @@
     }).then(function(){ piPmRemoveBtn.disabled = false; });
   });
 
-  /* ---- (v35) "Fill from work order report…" ----
-     Reads just the header of the job system's report (Work Order Cost
-     Analysis: "Job Id", "Job Description", "Customer:"; Work Order List:
-     "ID:", "Job:", "Customer") into Job number, Project name and Builder.
-     The report's Project Manager is left alone -- that's picked from the
-     list above. */
-  piFillFromReportBtn.addEventListener("click", function(){ piReportFileInput.value = ""; piReportFileInput.click(); });
-  piReportFileInput.addEventListener("change", function(){
-    var file = piReportFileInput.files && piReportFileInput.files[0];
-    piReportFileInput.value = "";
-    if (!file) return;
-    if (!isPdfFile(file)){ showToast("Choose the work order report PDF from the job system."); return; }
-    piFillFromReportBtn.disabled = true;
-    woReadReportHeaderFromFile(file).then(function(h){
+  /* ---- (v35) "Fill from work order report…" -> (v57) a drop target ----
+     Reads the header of the job system's report (Work Order Cost Analysis: "Job Id", "Job Description",
+     "Customer:"; Work Order List: "ID:", "Job:", "Customer") into Job number, Project name and Builder.
+     The report's Project Manager is left alone -- that's picked from the list above.
+     (v57) Andrew: "One drop of the work order report does the whole setup" and "Fill from work order report…
+     becomes a drop target instead of a file picker". The report is read ONCE here; its rows are kept (in memory,
+     for this project only) and the floor plan setup that follows imports the items from them -- no second drop. */
+  var piReportDrop = document.getElementById("piReportDrop");
+  var piReportDropText = document.getElementById("piReportDropText"), piReportDropSub = document.getElementById("piReportDropSub");
+  var PI_DROP_TEXT = piReportDropText.textContent, PI_DROP_SUB = piReportDropSub.textContent;
+  var keptReport = null; // { name, pages, header, at, project }
+  var PI_STILL = " The report you dropped before is still in use.";
+  function piResetReportDrop(){
+    piReportDrop.classList.remove("has-report", "bad", "busy");
+    piReportDropText.textContent = PI_DROP_TEXT; piReportDropSub.textContent = PI_DROP_SUB;
+  }
+  function piTakeReport(file){
+    if (!file || piReportDrop.classList.contains("busy")) return Promise.resolve();
+    piReportDrop.classList.remove("bad"); piReportDrop.classList.add("busy");
+    if (!isPdfFile(file)){
+      piReportDrop.classList.remove("busy"); piReportDrop.classList.add("bad");
+      piReportDropText.textContent = "That isn't a PDF"; piReportDropSub.textContent = "Drop the work order report PDF from the job system." + (keptReport ? PI_STILL : "");
+      return Promise.resolve();
+    }
+    splashShow("Reading the work order report", file.name);
+    return woReadReportFile(file, function(n, total){ splashStep("Reading page " + n + " of " + total, n, total); }).then(function(rep){
+      var h = rep.header;
       if (!h.jobNo && !h.name && !h.builder){
-        showToast("Couldn't find the Job Id, Job Description or Customer in that PDF — is it the Work Order Cost Analysis report?", 6000);
+        piReportDrop.classList.add("bad");
+        piReportDropText.textContent = "Couldn't read this one";
+        piReportDropSub.textContent = "No Job Id, Job Description or Customer found in “" + file.name + "” — is it the Work Order Cost Analysis report?" + (keptReport ? PI_STILL : "");
         return;
       }
+      keptReport = rep;
       if (h.jobNo) piNoInput.value = h.jobNo;
       if (h.name) piNameInput.value = h.name;
       if (h.builder) bdPickOrOfferToAdd(h.builder); // (2026-09-30) on the list -> picked; new -> the add row opens with it typed in, asking for the logo
+      piReportDrop.classList.add("has-report");
+      piReportDropText.textContent = "✓ " + file.name;
+      piReportDropSub.textContent = "Read once — it will be used again for the items after the floor plans. Drop another report here to replace it.";
       piFillNote.innerHTML = "From <b>" + escapeHtml(file.name) + "</b>: " +
         [h.jobNo ? "Job # <b>" + escapeHtml(h.jobNo) + "</b>" : "", h.name ? "<b>" + escapeHtml(h.name) + "</b>" : "", h.builder ? "builder <b>" + escapeHtml(h.builder) + "</b>" : ""].filter(Boolean).join(" · ") +
         ". The report's project manager isn't used — pick one from the list.";
       piFillNote.hidden = false;
     }).catch(function(err){
-      console.error("Reading the report header failed:", err);
-      if (err && (err.code === "pdf_import_failed" || err.code === "pdf_import_loading")) showToast(pdfImportErrorToast(err));
-      else showToast("Couldn't read that PDF — is it the Work Order Cost Analysis report?", 6000);
-    }).then(function(){ piFillFromReportBtn.disabled = false; });
-  });
+      console.error("Reading the report failed:", err);
+      piReportDrop.classList.add("bad");
+      piReportDropText.textContent = "Couldn't read this one";
+      piReportDropSub.textContent = ((err && (err.code === "pdf_import_failed" || err.code === "pdf_import_loading")) ? pdfImportErrorToast(err) : "That PDF couldn't be read — is it the Work Order Cost Analysis report?") + (keptReport ? PI_STILL : "");
+    }).then(function(){ splashHide(); piReportDrop.classList.remove("busy"); });
+  }
+  psWireDrop(piReportDrop, null, function(files){ piTakeReport(files[0]); });
   projectInfoSave.addEventListener("click", function(){
     var v = currentProjectInfoValue();
     // (2026-09-30) a builder typed in the add row (e.g. filled from the report) but not added yet goes onto the list too, with the dropped logo if any
@@ -8127,7 +8481,7 @@
   var companyLogoObjectUrl = null;
   function readCompanyLogo(){
     if (!projectsRootHandle) return Promise.resolve(null);
-    return projectsRootHandle.getFileHandle(companyLogoFilename(), { create: false }).then(function(fh){
+    return UtzBuilders.logoFileHandle(projectsRootHandle, companyLogoFilename()).then(function(fh){
       return fh.getFile();
     }).then(function(file){
       return file.arrayBuffer();
@@ -8139,11 +8493,17 @@
   }
   function writeCompanyLogo(file){
     return file.arrayBuffer().then(function(buf){
-      return writeVerified(projectsRootHandle, companyLogoFilename(), new Blob([buf], { type: file.type || "image/png" })); // (v44) retried + checked
+      // (2026-10-02) the logos folder, not the Projects root
+      return UtzBuilders.logosDir(projectsRootHandle, true).then(function(dir){
+        return writeVerified(dir, companyLogoFilename(), new Blob([buf], { type: file.type || "image/png" })); // (v44) retried + checked
+      });
     }).then(function(){});
   }
   function removeCompanyLogo(){
-    return projectsRootHandle.removeEntry(companyLogoFilename()).catch(function(){});
+    // (2026-10-02) gone from the logos folder AND from the root (an older layout's copy would otherwise come back as the fallback)
+    return UtzBuilders.logosDir(projectsRootHandle, false).then(function(dir){ return dir.removeEntry(companyLogoFilename()); }).catch(function(){}).then(function(){
+      return projectsRootHandle.removeEntry(companyLogoFilename()).catch(function(){});
+    });
   }
   var companyLogoPreviewBox = document.getElementById("companyLogoPreviewBox");
   var removeCompanyLogoBtn = document.getElementById("removeCompanyLogoBtn");
@@ -8160,7 +8520,7 @@
       }
     });
   }
-  chooseCompanyLogoBtn.addEventListener("click", function(){ companyLogoFileInput.click(); });
+  UtzDrop.wire(chooseCompanyLogoBtn, companyLogoFileInput, { accept: ["image"], multiple: false, reject: function(){ showToast("That isn't an image."); } });
   companyLogoFileInput.addEventListener("change", function(){
     var file = companyLogoFileInput.files && companyLogoFileInput.files[0];
     companyLogoFileInput.value = "";
@@ -8394,6 +8754,7 @@
           showToast("Created “" + finalName + "”.");
           return populateLevelList();
         }).then(function(){
+          if (keptReport) keptReport.project = activeProjectName; // (v57) the report dropped in Project info belongs to this project
           psOpen({ fresh: true }); // (v50) project setup: drop the floor plans, then the report
         });
       });
@@ -8413,6 +8774,7 @@
     }).then(function(info){
       if (!info) return;
       return writeProjectMeta(activeProjectHandle, info).then(function(){
+        if (keptReport) keptReport.project = activeProjectName; // (v57)
         var pc = info.pcDate || "";
         // (v35) a new or changed PC date goes onto every item still using it
         // (v35 test fix) items skipped last time (unreadable) are rechecked on the next Save, as the toast asks
@@ -8981,18 +9343,21 @@
   // (v23 sweep) A level file that can't be read right now no longer
   // reads as "no plan yet" (which skipped the Replace confirm) -- it says
   // so and does nothing.
-  levelImportPlanBtn.addEventListener("click", function(){
+  function levelPlanGate(proceed){
     readLevelFile(activeProjectHandle, activeProjectName, activeLevelName).then(function(level){
-      if (!level || !level.imageDataURL && !level.imageTiles){ levelPlanFileInput.click(); return; }
+      if (!level || !level.imageDataURL && !level.imageTiles){ proceed(); return; }
       showConfirmDialog("Replace this level's floor plan? This won't affect any rooms.").then(function(ok){
-        if (ok) levelPlanFileInput.click();
+        if (ok) proceed();
       });
     }).catch(function(err){
       console.error("Reading level before import failed:", err);
       if (isReadFailed(err)) readFailedToast("this level's file");
       else showToast("Couldn't open this level's file.");
     });
-  });
+  }
+  // (2026-10-02) drag and drop only -- no file selector (a touch-only tablet can long-press for the picker)
+  UtzDrop.zone(levelImportPlanBtn, function(files){ levelPlanGate(function(){ UtzDrop.feed(levelPlanFileInput, files); }); },
+    { accept: ["image", "pdf"], picker: { click: function(){ levelPlanGate(function(){ levelPlanFileInput.click(); }); } }, reject: function(){ showToast("Drop an image or a PDF."); } });
   levelPlanFileInput.addEventListener("change", function(){
     var file = levelPlanFileInput.files && levelPlanFileInput.files[0];
     levelPlanFileInput.value = "";
@@ -9402,8 +9767,9 @@
      cleanly is remembered -- a fold that had to skip a mid-sync file is
      recomputed next time ("unreadable is not empty" carries through to the
      cache). */
+  var EVENT_FOLD_CACHE_VERSION = { "Joinery Status": "2" }; // (2026-10-02) the status fold honours statusRetract (reversed Machined)
   function readFoldedEventBranch(projectHandle, rootH, branch, foldFn){
-    var cacheKey = "eventFolds\u0000" + (projectsRootName || "") + "\u0000" + ((projectHandle && projectHandle.name) || "") + "\u0000" + branch;
+    var cacheKey = "eventFolds" + (EVENT_FOLD_CACHE_VERSION[branch] || "") + "\u0000" + (projectsRootName || "") + "\u0000" + ((projectHandle && projectHandle.name) || "") + "\u0000" + branch;
     return Promise.all([listEventItemDirs(rootH), idbGet(cacheKey).catch(function(){ return null; })]).then(function(r){
       var dirs = r[0], cached = (r[1] && typeof r[1] === "object") ? r[1] : {};
       var next = {};
@@ -9447,17 +9813,34 @@
   function foldJoineryStatusEvents(events){
     if (!events || !events.length) return null;
     var statusEvents = events.filter(function(e){ return e.kind === "status" && e.status; });
+    // (2026-10-01) Andrew: "if something is flagged as machined, but then the machining gets reversed, the flags need to be
+    // reversed also". The status pipeline is forward-only (highest rank wins), so a reversal is its OWN event, never a
+    // deleted file: { kind: "statusRetract", from: "machined", by, at } cancels every EARLIER status event of the stage it
+    // names; a stage written AFTER the reversal (the item machined again) counts normally. Apps that don't know this event
+    // yet simply ignore it (they filter on kind) and keep showing the old stage until they are updated.
+    var retractEvents = events.filter(function(e){ return e.kind === "statusRetract" && e.from; });
     var jobNoteEvents = events.filter(function(e){ return e.kind === "jobNote"; });
     if (!statusEvents.length && !jobNoteEvents.length) return null;
     var any = statusEvents[0] || jobNoteEvents[0];
     var rec = { level: any.level || "", room: any.room || "", joineryId: any.joineryId || "" };
+    function cancelled(s){
+      return retractEvents.some(function(r){ return r.from === s.status && (r.at || "") > (s.at || ""); });
+    }
     var best = null;
-    statusEvents.forEach(function(e){ if (!best || joineryStatusRank(e.status) > joineryStatusRank(best.status)) best = e; });
-    if (best){
-      rec.status = best.status; rec.updatedAt = best.at; rec.updatedBy = best.by || "";
-      rec.history = statusEvents.slice().sort(function(a, b){
+    statusEvents.forEach(function(e){
+      if (cancelled(e)) return;
+      if (!best || joineryStatusRank(e.status) > joineryStatusRank(best.status)) best = e;
+    });
+    if (statusEvents.length){
+      if (best){ rec.status = best.status; rec.updatedAt = best.at; rec.updatedBy = best.by || ""; }
+      else { rec.status = ""; rec.updatedAt = ""; rec.updatedBy = ""; }
+      rec.history = statusEvents.map(function(e){
+        var h = { status: e.status, at: e.at, by: e.by || "" };
+        if (cancelled(e)) h.cancelled = true;
+        return h;
+      }).concat(retractEvents.map(function(r){ return { status: r.from, at: r.at, by: r.by || "", reversed: true }; })).sort(function(a, b){
         return (a.at || "") < (b.at || "") ? -1 : (a.at || "") > (b.at || "") ? 1 : 0;
-      }).map(function(e){ return { status: e.status, at: e.at, by: e.by || "" }; });
+      });
     } else {
       rec.status = ""; rec.updatedAt = ""; rec.updatedBy = ""; rec.history = [];
     }
@@ -11320,7 +11703,7 @@
     var hist = joineryStatusHistoryFor(registerStatusList, item);
     var rows = hist.length
       ? hist.map(function(h, i){
-          var rowHtml = "<div class=\"shp-row\"><span class=\"shp-status\">" + statusLabelHtml(h.status) + "</span><span class=\"shp-meta\">" + escapeHtml(formatHistoryDate(h.at)) + (h.by ? "<br>" + escapeHtml(h.by) : "") + "</span></div>";
+          var rowHtml = "<div class=\"shp-row\"><span class=\"shp-status\">" + (h.reversed ? statusLabelHtml(h.status) + " <em class=\"shp-rev\">reversed</em>" : (h.cancelled ? "<s>" + statusLabelHtml(h.status) + "</s>" : statusLabelHtml(h.status))) + "</span><span class=\"shp-meta\">" + escapeHtml(formatHistoryDate(h.at)) + (h.by ? "<br>" + escapeHtml(h.by) : "") + "</span></div>";
           // A gap marker sits BETWEEN this row and the next-older one, so
           // there's one fewer gap than there are rows -- none after the
           // very last (oldest) entry, since there's nothing older to
@@ -11649,7 +12032,7 @@
     var q = reworkRegisterSearchInput.value.trim().toLowerCase();
     if (q){
       var e = row.entry;
-      var hay = [row.code, row.level, row.room, e.cabinetNumber, e.text, e.createdBy].join(" ").toLowerCase();
+      var hay = [row.code, row.level, row.room, e.cabinetNumber, e.text, e.createdBy, rrAppLabel(e.createdApp)].join(" ").toLowerCase();
       if (hay.indexOf(q) === -1) return false;
     }
     return true;
@@ -11662,6 +12045,7 @@
       case "joineryId": return String(r.code || "");
       case "cabinetNumber": return String(e.cabinetNumber || "");
       case "text": return String(e.text || "");
+      case "loggedIn": return rrAppLabel(e.createdApp);
       case "state": f = reworkFoldOf(r); return f.closed ? 4 : (REWORK_STATE_RANK[f.status] || 0);
       case "received": f = reworkFoldOf(r); return f.delivered ? String(f.delivered.at || f.delivered.date || "") : "";
       case "closedAt": f = reworkFoldOf(r); return f.closed ? String(f.closed.at || "") : "";
@@ -11698,8 +12082,10 @@
   // tablet in portrait they're on screen without scrolling sideways.
   var REWORK_REGISTER_COLS = [
     ["level", "Level"], ["room", "Room"], ["joineryId", "Joinery ID"], ["cabinetNumber", "Cabinet #"], ["state", "State"], ["", ""],
-    ["text", "Detail"], ["createdAt", "Logged"], ["received", "Delivered to site"], ["closedAt", "Signed off date"], ["latest", "Latest"]
+    ["text", "Detail"], ["createdAt", "Logged"], ["loggedIn", "Logged in"], ["received", "Delivered to site"], ["closedAt", "Signed off date"], ["latest", "Latest"]
   ];
+  // (v58) which app logged the rework ("UTZLINE Install ITP" -> "Install ITP"); "" for entries logged before it was recorded
+  function rrAppLabel(app){ return String(app || "").replace(/^UTZLINE\s+/i, ""); }
   function reworkRegisterTheadHtml(){
     return "<tr>" + REWORK_REGISTER_COLS.map(function(c){
       if (!c[0]) return "<th></th>";
@@ -11719,6 +12105,7 @@
         "<button type=\"button\" class=\"btn secondary sm\" data-rr-item=\"" + idx + "\">Item</button></td>" +
       "<td class=\"urw-text\">" + escapeHtml(reworkRegisterRowDetailText(e)) + "</td>" +
       "<td>" + escapeHtml(formatHistoryDate(e.createdAt)) + (e.createdBy ? "<div class=\"urw-small urw-muted\">" + escapeHtml(e.createdBy) + "</div>" : "") + "</td>" +
+      "<td class=\"rr-nw\">" + (e.createdApp ? escapeHtml(rrAppLabel(e.createdApp)) : "<span class=\"muted-cell\">—</span>") + "</td>" +
       "<td>" + (f.delivered ? escapeHtml(reworkDeliveredText(f)) : "<span class=\"muted-cell\">Not yet</span>") + "</td>" +
       "<td>" + (f.closed ? "<span class=\"rr-signoff-date\">" + escapeHtml(formatHistoryDate(f.closed.at)) + "</span>" : "<span class=\"muted-cell\">—</span>") + "</td>" +
       "<td class=\"rr-latest\">" + (l ? escapeHtml(l.what + " — " + [l.by, formatHistoryDate(l.at)].filter(Boolean).join(", ")) : "…") + "</td></tr>";
@@ -11918,8 +12305,9 @@
       { key: "joineryId", label: "JOINERY ID", frac: 0.08 },
       { key: "cabinetNumber", label: "CABINET #", frac: 0.07 },
       { key: "state", label: "STATE", frac: 0.1 },
-      { key: "text", label: "DETAIL", frac: 0.2 },
+      { key: "text", label: "DETAIL", frac: 0.14 },
       { key: "createdAt", label: "LOGGED", frac: 0.1 },
+      { key: "loggedIn", label: "LOGGED IN", frac: 0.06 },
       { key: "received", label: "DELIVERED", frac: 0.1 },
       { key: "closedAt", label: "SIGNED OFF", frac: 0.08 },
       { key: "latest", label: "LATEST", frac: 0.11 }
@@ -11956,6 +12344,7 @@
         state: f.closed ? "Closed out" : window.UtzRework.stateLabel(f.status, true),
         text: entry.text || "—",
         createdAt: formatHistoryDate(entry.createdAt) + (entry.createdBy ? " — " + entry.createdBy : ""),
+        loggedIn: rrAppLabel(entry.createdApp) || "—",
         received: reworkDeliveredText(f),
         closedAt: f.closed ? formatHistoryDate(f.closed.at) : "—",
         latest: l ? (l.what + " — " + [l.by, formatHistoryDate(l.at)].filter(Boolean).join(", ")) : "—"
@@ -12169,6 +12558,8 @@
     listShopDrawingsForItem(activeProjectHandle, item).then(function(groups){
       if (activeJoineryItem !== item) return; // navigated away before this resolved
       renderShopDrawingParts(groups, itemShopDrawingsList, itemShopReturnedList, itemShopApprovedList); // (v35) Sent / Returned to resubmit / Approved
+      jiShopStatusCache = { item: item, html: shopDrawingStatusHtml(groups) }; // (v57) the status pill in the Shop drawing row
+      var jiPill = document.getElementById("jiShopStatus"); if (jiPill) jiPill.innerHTML = jiShopStatusCache.html;
     }).catch(function(err){
       console.error("Listing shop drawings failed:", err);
       itemShopDrawingsList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load shop drawings.</p>";
@@ -12795,21 +13186,42 @@
       "<dt>Room</dt><dd>" + escapeHtml(item.room) + "</dd>" +
       "<dt>Required delivery</dt><dd id=\"jiDeliveryCell\">Loading…</dd>" +
       "<dt>Has Solid Surface</dt><dd>" + (item.hasSolidSurface ? "Yes" : "No") + "</dd>" +
-      "<dt>Shop drawing</dt><dd id=\"jiDrawingGroupCell\">Loading…</dd>"; // (2026-09-30) drawing group
+      "<dt>Shop drawing</dt><dd id=\"jiDrawingGroupCell\"><span id=\"jiShopStatus\">" + (jiShopStatusCache.item === item ? jiShopStatusCache.html : "") + "</span><span id=\"jiShopGroup\">Loading…</span></dd>"; // (2026-09-30) drawing group; (v57) the status pill above it
     renderJoineryItemDrawingGroup(item);
+  }
+  /* (v57) Andrew: "this to tell the shop drawing status (sent / returned / approved)" -- one pill in the item page's
+     Shop drawing row: the newest of the latest sent revision, the latest "returned to resubmit" copy and the latest
+     approved copy (a tie goes to the later stage). Same rule as the Viewer's summary. */
+  var jiShopStatusCache = { item: null, html: "" };
+  function shopDrawingStatus(groups){
+    var parts = shopDrawingParts(groups), c = [];
+    if (parts.sent.length) c.push({ kind: "sent", r: parts.sent[0], rank: 1 });
+    if (parts.returned.length) c.push({ kind: "returned", r: parts.returned[0], rank: 2 });
+    if (parts.approved.length) c.push({ kind: "approved", r: parts.approved[0], rank: 3 });
+    if (!c.length) return null;
+    c.sort(function(a, b){ return String(b.r.stamp || "").localeCompare(String(a.r.stamp || "")) || (b.rank - a.rank); });
+    return c[0];
+  }
+  function shopDrawingStatusHtml(groups){
+    var st = shopDrawingStatus(groups);
+    if (!st) return "<span class=\"sd-status none\" data-shop-status=\"none\">No shop drawing yet</span>";
+    var word = st.kind === "approved" ? "Approved" : st.kind === "returned" ? "Returned to resubmit" : "Sent";
+    var when = st.r.stamp ? shopStampDate(st.r.stamp) : "";
+    return "<span class=\"sd-status " + st.kind + "\" data-shop-status=\"" + st.kind + "\">" + word + (st.r.revLabel ? " · " + escapeHtml(st.r.revLabel) : "") + "</span>" +
+      (when || st.r.by ? "<span class=\"sd-status-sub\">" + escapeHtml([st.r.by, when].filter(Boolean).join(", ")) + "</span>" : "");
   }
   // (2026-09-30) "One drawing covers N items: …" -- from Project Saves/Drawing Groups (shared/drawing-groups)
   function renderJoineryItemDrawingGroup(item){
-    var cell = document.getElementById("jiDrawingGroupCell"), ph = activeProjectHandle;
+    var cell = document.getElementById("jiShopGroup"), ph = activeProjectHandle;
     if (!cell) return;
     if (!ph || !window.UtzDrawingGroups){ cell.textContent = "Its own"; return; }
     UtzDrawingGroups.read(ph).then(function(st){
-      var c = document.getElementById("jiDrawingGroupCell"); if (!c) return;
+      var c = document.getElementById("jiShopGroup"); if (!c) return;
       var g = UtzDrawingGroups.groupFor(st, item.level, item.room, item.joineryId);
       if (!g){ c.textContent = "Its own drawing"; return; }
       var others = g.members.filter(function(m){ return !(m.level === item.level && (m.room || "") === (item.room || "") && (m.joineryId || "") === (item.joineryId || "")); });
       c.innerHTML = "<b>One drawing covers " + g.members.length + " items</b> — with " + escapeHtml(others.map(function(m){ return m.joineryId + (m.room ? " (" + m.room + ")" : ""); }).join(", ")) + ". A shop drawing or job note dropped on any of them (in the Scheduler) goes onto all of them.";
-    }, function(){ var c = document.getElementById("jiDrawingGroupCell"); if (c) c.textContent = "Couldn't read the drawing groups just now."; });
+    }, function(){ var c = document.getElementById("jiShopGroup"); if (c) c.textContent = "Couldn't read the drawing groups just now."; });
   }
   function renderJoineryItemMetaAndHistory(item){
     var statusKey = registerAllItems.length ? registerItemStatusKey(item) : "";
@@ -13395,7 +13807,8 @@
     }
     if (companyLogoLoadedFor !== rootName){
       companyLogoLoadedFor = rootName;
-      refreshCompanyLogoPreview().catch(function(){});
+      // (2026-10-02) logos live in <root>/logos now: copy any the older layout left at the root across once (copies, never moves)
+      (window.UtzBuilders ? UtzBuilders.migrate(projectsRootHandle) : Promise.resolve(0)).then(function(){ return refreshCompanyLogoPreview(); }).catch(function(){});
     }
     return paintP.then(function(){
       return listExistingProjects(projectsRootHandle);
@@ -13925,7 +14338,8 @@
   var psZonesToggle = document.getElementById("psZonesToggle"), psHead = document.getElementById("psHead"), psRows = document.getElementById("psRows"), psRowsEmpty = document.getElementById("psRowsEmpty");
   var psDupWarn = document.getElementById("psDupWarn"), psProgress = document.getElementById("psProgress");
   var psCancelBtn = document.getElementById("psCancelBtn"), psToReportBtn = document.getElementById("psToReportBtn"), psCreateBtn = document.getElementById("psCreateBtn");
-  var psReportDrop = document.getElementById("psReportDrop"), psReportFileInput = document.getElementById("psReportFileInput");
+  var psReportDrop = document.getElementById("psReportDrop");
+  var psKept = document.getElementById("psKept"), psKeptLine = document.getElementById("psKeptLine"), psKeptUseBtn = document.getElementById("psKeptUseBtn"), psKeptChangeBtn = document.getElementById("psKeptChangeBtn");
   var psReportBackBtn = document.getElementById("psReportBackBtn"), psSkipReportBtn = document.getElementById("psSkipReportBtn");
   var psDoneSummary = document.getElementById("psDoneSummary"), psDoneList = document.getElementById("psDoneList"), psDoneCloseBtn = document.getElementById("psDoneCloseBtn");
   var setupPlansBtn = document.getElementById("setupPlansBtn");
@@ -14099,7 +14513,12 @@
     psProgress.hidden = true; psProgress.textContent = "";
     psDupWarn.hidden = true;
     psRenderRows();
-    psShowTab("plans");
+    // (v57) a report dropped for another project is not this one's
+    if (keptReport && keptReport.project && keptReport.project !== activeProjectName) keptReport = null;
+    // the "Import floor plans & report…" button opens on the Report tab when the project already has levels (a later
+    // report is one drop away, now that the Import work orders button is gone); a new project starts on the plans
+    var hasLevels = !!(psLastLevelNames && psLastLevelNames.length);
+    psShowTab(opts && opts.auto && hasLevels && !psState.fresh ? "report" : "plans");
     psBackdrop.hidden = false;
   }
   function psClose(){
@@ -14114,6 +14533,17 @@
     psPanelPlans.hidden = which !== "plans";
     psPanelReport.hidden = which !== "report";
     psPanelDone.hidden = which !== "done";
+    if (which === "report") psPaintReportPanel();
+  }
+  // (v57) tab 2: the report dropped earlier (Project info) is used from here; the drop zone is for a different one
+  function psPaintReportPanel(showDrop){
+    var own = keptReport && (!keptReport.project || keptReport.project === activeProjectName);
+    psKept.hidden = !own || !!showDrop;
+    psReportDrop.hidden = !!own && !showDrop;
+    if (own){
+      var when = ""; try{ when = new Date(keptReport.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }catch(e){}
+      psKeptLine.innerHTML = "Using the work order report you dropped: <b>" + escapeHtml(keptReport.name) + "</b>" + (when ? " <span class=\"ps-done-n\">(read " + escapeHtml(when) + ")</span>" : "") + ".";
+    }
   }
   function psZonesOn(){ return !!psZonesToggle.checked; }
   function psRowDiskName(r){ return sanitizeFileBase(withoutHashPercent(psZoneDiskName(r.level, psZonesOn() ? r.zone : ""))); }
@@ -14223,8 +14653,8 @@
         st.rows.forEach(function(r){ var k = String(r.level || "").trim().toLowerCase(); if (k && seen[k]) same = true; seen[k] = true; });
         if (same){ psZonesToggle.checked = true; showToast("Two plans name the same level, so “Levels, then zones” is on — give each plan its zone.", 6000); }
       }
-    }).then(function(){ st.busy = false; psDropText.textContent = "Drag more floor plans here (or tap to choose)"; psRenderRows(); },
-      function(err){ st.busy = false; console.error(err); psDropText.textContent = "Drag floor plans here — PDFs or images, several at once (or tap to choose)"; psRenderRows(); });
+    }).then(function(){ st.busy = false; psDropText.textContent = "Drag more floor plans here"; psRenderRows(); },
+      function(err){ st.busy = false; console.error(err); psDropText.textContent = "Drag floor plans here — PDFs or images, several at once"; psRenderRows(); });
   }
   // one row -> the same image + labels Import floor plan produces
   function psRenderRowImage(r){
@@ -14300,7 +14730,10 @@
       psValidate();
       levelListRenderedFor = null; // the Levels list behind the dialog is out of date
       if (typeof populateLevelList === "function") populateLevelList();
-      if (created && !failed) psShowTab("report");
+      if (created && !failed){
+        psShowTab("report");
+        if (keptReport && (!keptReport.project || keptReport.project === activeProjectName)){ keptReport.project = activeProjectName; return psStartKeptReport(); } // (v57) one drop: the import preview opens by itself
+      }
     }).catch(function(err){
       console.error("Set up floor plans failed:", err);
       st.busy = false; psValidate();
@@ -14315,12 +14748,19 @@
     if (!file) return;
     if (!isPdfFile(file)){ showToast("Choose the Work Order List or Work Order Cost Analysis PDF from the job system."); return; }
     psReportFromDialog = true;
-    woStartImportFromFile(file);
+    woStartImportFromFile(file, function(rep){ rep.project = activeProjectName; keptReport = rep; psPaintReportPanel(); }); // (v57) kept, so Cancel in the preview leaves "Review the import" here
+  }
+  // (v57) the report dropped in Project info: no second drop
+  function psStartKeptReport(){
+    if (!keptReport) return Promise.resolve();
+    psReportFromDialog = true;
+    return woStartImportFromReport(keptReport);
   }
   // after a report import that was started from tab 2: what is left to place, per level
   function psAfterWoImport(st, res){
     if (!psReportFromDialog || !psState) return;
     psReportFromDialog = false;
+    keptReport = null; // (v57) imported -- done with it
     var levels = [];
     Object.keys(st.zoneMap || {}).forEach(function(z){ var lv = st.zoneMap[z]; if (lv && levels.indexOf(lv) === -1) levels.push(lv); });
     // the codes confirmed here go into level-zones.json, so the next device maps the report by itself
@@ -14394,17 +14834,20 @@
     }).catch(function(err){ console.error("Opening plan failed:", err); showToast("Couldn't open this level's plan."); });
   }
   // ---- wiring ----
-  if (setupPlansBtn) setupPlansBtn.addEventListener("click", function(){ psOpen({}); });
+  if (setupPlansBtn) setupPlansBtn.addEventListener("click", function(){ psOpen({ auto: true }); });
+  // (v57) input = null: a drop target only (no file picker behind it)
   function psWireDrop(el, input, onFiles){
     ["dragenter", "dragover"].forEach(function(t){ el.addEventListener(t, function(e){ e.preventDefault(); e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; el.classList.add("dragover"); }); });
     el.addEventListener("dragleave", function(){ el.classList.remove("dragover"); });
     el.addEventListener("drop", function(e){ e.preventDefault(); e.stopPropagation(); el.classList.remove("dragover"); var fl = e.dataTransfer && e.dataTransfer.files; if (fl && fl.length) onFiles(fl); });
-    el.addEventListener("click", function(){ input.value = ""; input.click(); });
-    el.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); input.value = ""; input.click(); } });
+    if (!input) return;
+    UtzDrop.longPress(el, input); // (2026-10-02) no click-to-choose -- only a touch-only tablet's long press opens the picker
     input.addEventListener("change", function(){ var fl = input.files; if (fl && fl.length) onFiles(Array.prototype.slice.call(fl)); input.value = ""; });
   }
   psWireDrop(psDrop, psFileInput, function(files){ psAddFiles(files); });
-  psWireDrop(psReportDrop, psReportFileInput, function(files){ psStartReport(files[0]); });
+  psWireDrop(psReportDrop, null, function(files){ psStartReport(files[0]); }); // (v57) drag and drop only
+  psKeptUseBtn.addEventListener("click", function(){ psStartKeptReport(); });
+  psKeptChangeBtn.addEventListener("click", function(){ psPaintReportPanel(true); });
   psZonesToggle.addEventListener("change", psRenderRows);
   psCreateBtn.addEventListener("click", function(){ psCreate(); });
   psCancelBtn.addEventListener("click", psClose);
@@ -14473,7 +14916,7 @@
     return tok.length <= 24 && /\d/.test(tok) && /[.\-]/.test(tok) && /^[A-Z]/i.test(tok) && WO_CODE_RE.test(tok);
   }
   // pdf.js -> [page][row]{y, items:[{x, str}]} (top-down, left-right).
-  function woExtractPdfRows(pdfDoc, maxPages){
+  function woExtractPdfRows(pdfDoc, maxPages, onPage){
     var pages = [];
     var p = Promise.resolve();
     var last = maxPages ? Math.min(maxPages, pdfDoc.numPages) : pdfDoc.numPages; // (v35) the header needs page 1 only
@@ -14492,6 +14935,7 @@
               });
               pages.push(woGroupRows(items));
               if (page.cleanup) page.cleanup();
+              if (onPage) onPage(n, last); // (v57) the splash's page count
             });
           });
         });
@@ -14552,15 +14996,17 @@
     if (out.jobNo && !/^[A-Za-z0-9][A-Za-z0-9 ._\/-]{0,30}$/.test(out.jobNo)) out.jobNo = ""; // not a job number
     return out;
   }
-  function woReadReportHeaderFromFile(file){
+  // (v57) The whole report read ONCE: its rows (every page), its header and when. The Project info drop fills the
+  // form from the header and keeps the rest for the items import that follows the floor plans.
+  function woReadReportFile(file, onProgress){
     return withPdfImportLibsReady(function(){
       ensurePdfWorker();
       return file.arrayBuffer().then(function(buf){
         return window.pdfjsLib.getDocument({ data: buf }).promise;
       }).then(function(pdfDoc){
-        return woExtractPdfRows(pdfDoc, 1).then(function(pages){
+        return woExtractPdfRows(pdfDoc, 0, onProgress).then(function(pages){
           if (pdfDoc.destroy) pdfDoc.destroy();
-          return woParseReportHeader(pages);
+          return { name: file.name || "report.pdf", pages: pages, header: woParseReportHeader(pages), at: new Date().toISOString() };
         });
       });
     });
@@ -15046,8 +15492,6 @@
   }
 
   // ---------------- UI: Import dialog ----------------
-  var woImportBtn = document.getElementById("importWorkOrdersBtn");
-  var woImportFileInput = document.getElementById("woImportFileInput");
   var woImportBackdrop = document.getElementById("woImportBackdrop");
   var woImportSummaryEl = document.getElementById("woImportSummary");
   var woImportZonesEl = document.getElementById("woImportZones");
@@ -15059,31 +15503,31 @@
   function woZoneMapKey(){ return "utzline-projects:woImportZones:" + (activeProjectName || ""); }
   function woLoadZoneMap(){ try{ return JSON.parse(localStorage.getItem(woZoneMapKey()) || "{}") || {}; }catch(e){ return {}; } }
   function woSaveZoneMap(m){ try{ localStorage.setItem(woZoneMapKey(), JSON.stringify(m)); }catch(e){} }
-  if (woImportBtn) woImportBtn.addEventListener("click", function(){
-    if (!activeProjectHandle){ showToast("Open a project first."); return; }
-    woImportFileInput.value = "";
-    woImportFileInput.click();
-  });
-  if (woImportFileInput) woImportFileInput.addEventListener("change", function(){
-    var file = woImportFileInput.files && woImportFileInput.files[0];
-    woImportFileInput.value = ""; // so picking the same file again still fires
-    if (!file) return;
-    woStartImportFromFile(file);
-  });
-  function woStartImportFromFile(file){
+  /* (v57) The "Import work orders (PDF)" button and its file picker are gone (Andrew). The report is dropped once --
+     in Project info, or on the Report tab of "Import floor plans & report…" (which opens on that tab for a project that
+     already has levels, so a later report is still one drop away). */
+  function woImportErrorToast(err){
+    console.error("Reading the work order PDF failed:", err);
+    if (err && (err.code === "pdf_import_failed" || err.code === "pdf_import_loading")){ showToast(pdfImportErrorToast(err)); return; }
+    if (isReadFailed(err)){ readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : /work-orders/.test(err.message) ? "work-orders.json" : "a level file"); return; }
+    showToast("Couldn't read that PDF — is it the Work Order List or Work Order Cost Analysis report?", 6000);
+  }
+  // (v57) onRead(report) runs once the PDF is read (the setup dialog keeps the report for "Review the import")
+  function woStartImportFromFile(file, onRead){
     if (!isPdfFile(file)){ showToast("Choose the Work Order List PDF from the job system."); return Promise.resolve(); }
-    showToast("Reading “" + file.name + "”…", 2500);
-    return withPdfImportLibsReady(function(){
-      ensurePdfWorker();
-      return file.arrayBuffer().then(function(buf){
-        return window.pdfjsLib.getDocument({ data: buf }).promise;
-      }).then(function(pdfDoc){
-        return woExtractPdfRows(pdfDoc).then(function(pages){
-          if (pdfDoc.destroy) pdfDoc.destroy();
-          return pages;
-        });
-      });
-    }).then(function(pages){
+    splashShow("Reading the work order report", file.name);
+    return woReadReportFile(file, function(n, total){ splashStep("Reading page " + n + " of " + total, n, total); }).then(function(rep){
+      if (onRead) onRead(rep);
+      return woStartImportFromReport(rep);
+    }, function(err){ splashHide(); woImportErrorToast(err); });
+  }
+  // The preview (zones -> levels, what is new / filled) from a report already read: { name, pages, header }
+  function woStartImportFromReport(rep){
+    if (!activeProjectHandle){ showToast("Open a project first."); return Promise.resolve(); }
+    splashShow("Preparing the import", rep.name);
+    splashStep("Reading the project's levels and items…");
+    var file = { name: rep.name };
+    return Promise.resolve(rep.pages).then(function(pages){
       // (v32) two report layouts: "Work Order List" (v31) and "Work Order Cost Analysis" (sell prices)
       // (v37) a Cost Analysis report's rows are kept, so "How to read this report" can re-read them
       var costRows = woIsCostAnalysisReport(pages) ? woParseCostAnalysisRows(pages).rows : null;
@@ -15097,7 +15541,7 @@
         showToast("Couldn't find any joinery work orders in that PDF — is it the Work Order List or Work Order Cost Analysis report?", 6000);
         return;
       }
-      var header = woParseReportHeader(pages); // (v35) Job # / Project / Builder
+      var header = rep.header || woParseReportHeader(pages); // (v35) Job # / Project / Builder
       var metaP = readProjectMeta(activeProjectHandle).then(function(m){ return { meta: m, failed: false }; }, function(err){
         console.error("Reading project-meta.json for the import failed:", err);
         return { meta: null, failed: true };
@@ -15124,12 +15568,7 @@
         woRenderImportDialog();
         woImportBackdrop.hidden = false;
       });
-    }).catch(function(err){
-      console.error("Reading the work order PDF failed:", err);
-      if (err && (err.code === "pdf_import_failed" || err.code === "pdf_import_loading")){ showToast(pdfImportErrorToast(err)); return; }
-      if (isReadFailed(err)){ readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : /work-orders/.test(err.message) ? "work-orders.json" : "a level file"); return; }
-      showToast("Couldn't read that PDF — is it the Work Order List or Work Order Cost Analysis report?", 6000);
-    });
+    }).then(function(){ splashHide(); }, function(err){ splashHide(); woImportErrorToast(err); });
   }
   function woZonesOf(interp){
     var z = [];
@@ -15494,7 +15933,10 @@
       }).then(function(pin){
         if (pin === null){ showToast("Import cancelled — nothing was changed."); return; }
         woImportConfirmBtn.disabled = true;
+        splashShow("Importing the work orders", "Starting…"); // (v57) the progress screen, until the result below
+        st.progress = splashStep;
         return woApplyImport(st, who).then(function(res){
+          splashHide();
           woSaveZoneMap(st.zoneMap);
           woCloseImportDialog();
           registerAllItems = [];
@@ -15525,6 +15967,7 @@
       });
     }).catch(function(err){
       console.error("Work order import failed:", err);
+      splashHide();
       if (woImportConfirmBtn) woImportConfirmBtn.disabled = false;
       if (isReadFailed(err)) readFailedToast(/joinery-items/.test(err.message) ? "joinery-items.json" : "a level file");
       else showToast("Couldn't import — nothing was changed. Try again.", 6000);
@@ -15568,6 +16011,9 @@
   // Re-reads everything strictly, re-plans against what's on disk NOW,
   // writes each changed level file, then joinery-items.json once.
   function woApplyImportItems(st, who){
+    var prog = st.progress || function(){}, stepNo = 0, stepTotal = 0;
+    function say(text){ stepNo++; prog(text, Math.min(stepNo, stepTotal), stepTotal); }
+    prog("Reading the project's levels and items…", 0, 0);
     return woLoadProjectContext().then(function(ctx){
       var plan = woApplyLeftOut(st, woPlanImport(st.interp, st.zoneMap, ctx.levelRooms, ctx.items)); // (v40)
       var at = new Date().toISOString();
@@ -15604,6 +16050,9 @@
       // uploading the plan the Set up step just wrote, the SharePoint test's "changed by someone else") is
       // retried once and otherwise left for the next import, which adds the missing rooms by itself.
       var levels = Object.keys(newRoomsByLevel), roomsFailed = [];
+      var placeLevels = [];
+      plan.forEach(function(r){ if (r.level && placeLevels.indexOf(r.level) === -1) placeLevels.push(r.level); });
+      stepTotal = 1 + levels.length + placeLevels.length + 1; // (v57) items, each level's room list, each level's plan labels, the PC date
       function addRooms(lv){
         if ((ctx.unreadableLevels || []).indexOf(lv) !== -1) return Promise.reject(new Error("level file unreadable at the start"));
         return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){
@@ -15615,12 +16064,14 @@
         });
       }
       var roomsAdded = 0;
+      say("Creating " + added + " item" + (added === 1 ? "" : "s") + (filled ? " and adding " + filled + " work order number" + (filled === 1 ? "" : "s") : "") + "…");
       return migrateLegacyLevelsIfNeeded(activeProjectHandle).then(function(){ return itemsChanged ? writeJoineryItems(activeProjectHandle, items) : null; }).then(function(){
         return itemsChanged ? woListWrite(activeProjectHandle, list) : null;
       }).then(function(){
         var r = Promise.resolve();
         levels.forEach(function(lv){
           r = r.then(function(){
+            say("Adding rooms to " + lv + "…");
             return addRooms(lv).catch(function(err){
               console.warn("Adding the rooms to " + lv + " failed (retrying once):", err);
               return new Promise(function(res){ setTimeout(res, 1500); }).then(function(){ return addRooms(lv); }).catch(function(err2){
@@ -15634,16 +16085,15 @@
       }).then(function(){
         var out = { roomsFailed: roomsFailed, roomsAdded: roomsAdded, added: added, filled: filled, listed: listed, valued: valued, toDrop: list.workOrders.filter(function(w){ return !items.some(function(it){ return String(it.workOrderNo || "").trim() === w.wo; }); }).length, autoPlaced: 0, autoByRoom: 0 };
         // (v34) each level whose plan has labels: its new items go straight onto them
-        var lvls = [];
-        plan.forEach(function(r){ if (r.level && lvls.indexOf(r.level) === -1) lvls.push(r.level); });
+        var lvls = placeLevels;
         var q = Promise.resolve();
         lvls.forEach(function(lv){
-          q = q.then(function(){ return autoPlaceFromPlanLabels(lv); }).then(function(ar){
+          q = q.then(function(){ say("Placing items on the " + lv + " plan from its labels…"); return autoPlaceFromPlanLabels(lv); }).then(function(ar){
             out.autoPlaced += ar.placed; out.autoByRoom += ar.byRoom;
           }, function(err){ console.error("Placing from " + lv + "'s plan labels failed:", err); });
         });
         // (v35) the new items get the project's PC date as their required delivery date
-        q = q.then(function(){ return applyPcDateToNewItems(); }).then(function(r){ out.pcSet = r ? r.set : 0; out.pcFailed = r ? (r.failed || 0) : 0; });
+        q = q.then(function(){ say("Giving the new items the project's PC date…"); return applyPcDateToNewItems(); }).then(function(r){ out.pcSet = r ? r.set : 0; out.pcFailed = r ? (r.failed || 0) : 0; });
         return q.then(function(){ return out; });
       });
     });
@@ -17243,6 +17693,8 @@
     woParseReportRowsForTest: function(pages){ return woParseReportRows(pages); },
     woInterpretGroupsForTest: function(groups){ return woInterpretGroups(groups); },
     woImportStateForTest: function(){ return woImportState; },
+    keptReportForTest: function(){ return keptReport; }, splashStateForTest: function(){ return { visible: !splashEl.hidden, title: document.getElementById("utzSplashTitle").textContent, log: splashLog.slice() }; },
+    piTakeReportForTest: function(file){ return piTakeReport(file); },
     woParseReportHeaderForTest: function(pages){ return woParseReportHeader(pages); },
     woParseRoomCodeForTest: function(t){ return woParseRoomCode(t); }, // (v37)
     woSplitCodeByFormatForTest: function(t, rule){ return woSplitCodeByFormat(t, rule); },

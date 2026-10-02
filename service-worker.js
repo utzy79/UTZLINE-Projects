@@ -563,7 +563,10 @@ var ICON_VERSION = "v1";
 // v50 (2026-09-30): RC 1.0 -- Set up floor plans & report: several plans dropped at once -> levels (and zones), then the report -> items + markers
 // v51 (2026-10-01): RC 1.0 -- the PC date lands on every new item even when one save fails; light-mode leftovers
 // v52 (2026-10-01): RC 1.0 -- the work-order import finds each zone's level from the plans' room labels
-var CACHE_NAME = "utzline-projects-cache-v64";
+// v57 (2026-10-01): RC 1.0 -- one drop of the work order report does the whole setup (drop targets, no Import work orders button), import splash, shop drawing status line, dark-mode fix (cache v65)
+// v58 (2026-10-02): RC 1.0 -- Rework register "Logged in" column (cache v66)
+// v59 (2026-10-02): RC 1.0 -- builder logo far right of the top bar, logos folder, reversed Machined, dark-mode controls, drag and drop only.
+var CACHE_NAME = "utzline-projects-cache-v67";
 
 var PRECACHE_URLS = [
   "./",
