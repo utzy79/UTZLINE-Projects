@@ -566,7 +566,7 @@ var ICON_VERSION = "v1";
 // v57 (2026-10-01): RC 1.0 -- one drop of the work order report does the whole setup (drop targets, no Import work orders button), import splash, shop drawing status line, dark-mode fix (cache v65)
 // v58 (2026-10-02): RC 1.0 -- Rework register "Logged in" column (cache v66)
 // v59 (2026-10-02): RC 1.0 -- builder logo far right of the top bar, logos folder, reversed Machined, dark-mode controls, drag and drop only.
-var CACHE_NAME = "utzline-projects-cache-v67";
+var CACHE_NAME = "utzline-projects-cache-v69";
 
 var PRECACHE_URLS = [
   "./",

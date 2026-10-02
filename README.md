@@ -1,6 +1,17 @@
 # UTZLINE Projects — installable app
 
-**Current version: v59 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+**Current version: v61 (RC 1.0)** (its own independent version line, separate from Site Measure/Viewer's and both ITP apps' — bump this line every time a new build ships. NOTE: this number, this file's own cache-name counter, and the "(vN, ...)" comment count at the top of `service-worker.js` have never tracked each other 1:1 in this app — e.g. this v29 ships as `utzline-projects-cache-v37` — so don't assume one from another; the README's own number here is the one Andrew-facing release count.)
+
+**v61 (2026-10-02) — RC 1.0: the item page shows the room's site measure.** Site Measure now makes ONE site measure per room (`Project Saves/Site Measures/Room - <level> - <room>/`, `UtzItemFiles.roomMeasureKey`); the "Site measures" card and the item's measured overlay read the room's folder first, then the item's own older one. Shared `item-files` module regenerated.
+
+**v60 (2026-10-02) — RC 1.0: marker size and text size per plan.**
+
+- **A size for each plan** (Andrew: *"when bringing in the location markers, they need to be scalable and the text. (set a default per page) as some drawings may come in as a4, a3, a1, a0"*). Markers used to be the same size in plan pixels on every sheet, so on an A4 plan they looked about four times bigger than on an A0. Each plan now has its own **marker size** and **text size**.
+- **Default from the sheet size** for a plan imported from a PDF (floor plan import, and "Set up floor plans & report"): A0 100% (the size the markers were tuned at), A1 71%, A2 50%, A3 35%, A4 25%, in between for other sizes (lowest 20%, highest 200%). A plan imported from a picture, and every plan that already exists, keeps 100% -- nothing changes until you change it.
+- **Marker size button** on the plan screen: Markers − / +, Text − / + (steps of 25%) and **Use this sheet's default**. It resizes **every marker on that plan** and saves it (each marker's own size and text size, and how far its text sits from it), so Site Measure, the Viewer, the ITPs and the schedules show the new size with no change of their own. The size is also what every new marker on that plan gets: tap to add, dropped from the To place list, placed from the report, the pin being placed, and the copies' pins.
+- Saved on the plan's file as `markerScale` / `textScale` (1 = the A0 size). If Site Measure ever rewrites that file without them, the size is read back from the markers themselves.
+- Only UTZLINE Projects changes; the other apps just draw whatever size each marker carries.
+
 
 **v59 (2026-10-02) — RC 1.0: builder logo on the top bar, logos folder, reversed Machined, drag and drop only.**
 

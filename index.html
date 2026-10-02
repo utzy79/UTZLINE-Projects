@@ -2311,10 +2311,26 @@
     return p(d.getFullYear() % 100) + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + "-" + p(d.getMinutes()) + "-" + p(d.getSeconds()) + (ms ? "-" + p(d.getMilliseconds(), 3) : "");
   }
 
+  // (2026-10-02) One site measure covers every item linked to a room: the folder under Site Measures that holds
+  // it is named by level + room ("Room - L1 - Room 101"), never by an item. A long name is cut and given a short
+  // hash so two long room names can't meet. -> a name that goes on disk as given.
+  function roomMeasureKey(level, room){
+    var l = clean(level, 14), r = clean(room, 24) || "Room";
+    var cut = String(level == null ? "" : level).length > 14 || String(room == null ? "" : room).length > 24;
+    var k = "Room - " + (l ? l + " - " : "") + r;
+    if (cut || l !== String(level == null ? "" : level).trim() || r !== String(room == null ? "" : room).trim()){
+      var h = 0, src = low(level) + "|" + low(room);
+      for (var i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) >>> 0;
+      var hs = h.toString(36).slice(0, 4);
+      if (cut) k = k + " ~" + hs;
+    }
+    return k;
+  }
+
   window.UtzItemFiles = {
     version: 1, MAX: MAX,
     clean: clean, baseOf: baseOf, valid: valid, assign: assign, register: register, fileKey: fileKey,
-    initials: initials, stamp: stamp, tripleKey: tripleKey,
+    initials: initials, stamp: stamp, tripleKey: tripleKey, roomMeasureKey: roomMeasureKey,
     _maps: function(){ return maps; }
   };
 })();
@@ -4706,6 +4722,7 @@
         <!-- (v34) markers placed from the plan's own labels, not yet checked -->
         <button class="btn" id="planCheckBtn" hidden>Check placed (0)</button>
         <button class="btn secondary" id="planMoveBtn">Move markers</button>
+        <button class="btn secondary" id="planSizeBtn" type="button" title="Marker and text size for this plan">Marker size</button>
         <button class="btn" id="planUnplacedBtn" hidden>To place (0)</button>
         <!-- (2026-09-30) the same zoom buttons as the schedules' plans -->
         <span class="plan-zoom-btns"><button class="btn secondary" id="planZoomOutBtn" type="button" title="Zoom out" aria-label="Zoom out">−</button><button class="btn secondary" id="planZoomResetBtn" type="button" title="Fit the whole plan">Reset view</button><button class="btn secondary" id="planZoomInBtn" type="button" title="Zoom in" aria-label="Zoom in">+</button></span>
@@ -4857,6 +4874,26 @@
     <div class="modal-actions">
       <button class="btn secondary" id="planQtyCancelBtn">Cancel</button>
       <button class="btn" id="planQtyOkBtn">OK</button>
+    </div>
+  </div>
+</div>
+<!-- (2026-10-02) marker and text size for this plan -->
+<div class="modal-backdrop" id="planSizeBackdrop" hidden>
+  <div class="modal">
+    <h2>Marker and text size</h2>
+    <p class="sub" id="planSizeSheet"></p>
+    <div class="qty-row"><span style="min-width:84px;text-align:left;">Markers</span>
+      <button type="button" class="btn secondary" id="planSizeMkMinus" aria-label="Smaller markers">−</button>
+      <span id="planSizeMkVal" style="min-width:60px;text-align:center;font-weight:600;">100%</span>
+      <button type="button" class="btn secondary" id="planSizeMkPlus" aria-label="Bigger markers">+</button></div>
+    <div class="qty-row"><span style="min-width:84px;text-align:left;">Text</span>
+      <button type="button" class="btn secondary" id="planSizeTxMinus" aria-label="Smaller text">−</button>
+      <span id="planSizeTxVal" style="min-width:60px;text-align:center;font-weight:600;">100%</span>
+      <button type="button" class="btn secondary" id="planSizeTxPlus" aria-label="Bigger text">+</button></div>
+    <p class="sub">Resizes every marker on this plan, and sets the size for the ones placed from now on. 100% is the size used on an A0 sheet.</p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="planSizeAutoBtn" type="button">Use this sheet's default</button>
+      <button class="btn" id="planSizeDoneBtn" type="button">Done</button>
     </div>
   </div>
 </div>
@@ -7596,6 +7633,8 @@
       imageH: parsed.imageH || 0,
       rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
       markers: Array.isArray(parsed.markers) ? parsed.markers : [],
+      markerScale: Number(parsed.markerScale) > 0 ? Number(parsed.markerScale) : undefined, // (2026-10-02) this plan's marker / text size
+      textScale: Number(parsed.textScale) > 0 ? Number(parsed.textScale) : undefined,
       // `objects`/`savedBy` (2026-09-22, Site Measure flat-structure
       // interop): this app never draws anything, so it never populates
       // either field itself -- but Site Measure now stores its own
@@ -7674,6 +7713,8 @@
           imageH: data.imageH || 0,
           rooms: data.rooms || [],
           markers: data.markers || [],
+          markerScale: Number(data.markerScale) > 0 ? Number(data.markerScale) : undefined, // (2026-10-02)
+          textScale: Number(data.textScale) > 0 ? Number(data.textScale) : undefined,
           // See parseLevelFileText's own comment -- carried through
           // unchanged by every caller here (each already reads the current
           // file into `data` before mutating just the field it actually
@@ -9369,6 +9410,7 @@
         data.imageTiles = res.imageTiles;
         data.imageW = res.imageW;
         data.imageH = res.imageH;
+        if (res.planLabels && !(data.markers && data.markers.length)){ data.markerScale = planAutoScale(res.imageW, res.imageH); data.textScale = data.markerScale; } // (2026-10-02) a PDF sheet's default marker / text size
         return writeLevelFile(activeProjectHandle, activeProjectName, activeLevelName, data);
       }).then(function(){
         // (v34) the plan's own labels (a PDF with a text layer), or none --
@@ -10471,9 +10513,13 @@
     return m[1] + " " + m[2] + ":" + m[3];
   }
   function listJoineryOverlaysForItem(projectHandle, item){
-    return getJoineryOverlaysDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
-      return listFilesInDir(dirH, function(name){ return /\.json$/i.test(name); });
-    }, function(){ return []; }).then(function(list){
+    // (2026-10-02) one site measure per room: the room's own folder first, then this item's older one
+    var keys = (item && item.room) ? [UtzItemFiles.roomMeasureKey(item.level, item.room), joineryItemKey(item)] : [joineryItemKey(item)];
+    return Promise.all(keys.map(function(k){
+      return getJoineryOverlaysDirForItem(projectHandle, k).then(function(dirH){
+        return listFilesInDir(dirH, function(name){ return /\.json$/i.test(name); });
+      }, function(){ return []; });
+    })).then(function(arrs){ return [].concat.apply([], arrs); }).then(function(list){
       var parsed = list.map(function(f){
         var p = parseJoineryOverlayFileName(f.fileName);
         return { fileName: f.fileName, handle: f.handle, user: p.user, stamp: p.stamp };
@@ -10959,10 +11005,60 @@
     return out;
   }
   function planTextWidth(text, size){ return String(text || "").length * size * 0.6; }
-  function makeRoomLinkObject(x, y, roomName, joineryCode){
+  /* (2026-10-02) Andrew: "when bringing in the location markers, they need to be scalable and the text. (set a default
+     per page) as some drawings may come in as a4, a3, a1, a0 etc". A marker used to be the same size in plan pixels on
+     every sheet, so it looked about four times bigger on an A4 plan than on an A0. Each plan now has its own marker size
+     and text size (level file: markerScale / textScale, 1 = the size the markers were tuned at, on an A0 sheet). A plan
+     imported from a PDF gets a default from its sheet size (A0 100%, A1 71%, A2 50%, A3 35%, A4 25%); a plan without the
+     fields stays at 1, exactly as before. Every marker keeps its own saved r and label.fontSize, so Site Measure, the
+     Viewer, the ITPs and the schedules draw it at the right size with no change of their own. The "Marker size" button
+     on the plan resizes every marker on that plan (and what is placed from then on). */
+  var PLAN_REF_LONG_PX = 3370.4 / PX_TO_PT; // an A0 sheet's long side as imported
+  var PLAN_SHEETS = [["A0", 1189], ["A1", 841], ["A2", 594], ["A3", 420], ["A4", 297]];
+  function planLongMm(w, h){ return Math.max(Number(w) || 0, Number(h) || 0) * PX_TO_PT / 72 * 25.4; }
+  function planSheetName(w, h){
+    var mm = planLongMm(w, h), best = "", bd = 0.06;
+    PLAN_SHEETS.forEach(function(sh){ var d = Math.abs(mm - sh[1]) / sh[1]; if (d < bd){ bd = d; best = sh[0]; } });
+    return best;
+  }
+  function planAutoScale(w, h){
+    var L = Math.max(Number(w) || 0, Number(h) || 0);
+    if (!(L > 0)) return 1;
+    return Math.round(Math.min(2, Math.max(0.2, L / PLAN_REF_LONG_PX)) * 100) / 100;
+  }
+  // The plan's marker / text size: its saved fields, else (Site Measure rewrote the file without them, or an old plan) what its
+  // markers already are, else 1. A plan whose markers are the old standard size reads as 1.
+  function planMedianScale(a){
+    if (!a.length) return 1;
+    a = a.slice().sort(function(x, y){ return x - y; });
+    var v = a[Math.floor(a.length / 2)];
+    return Math.abs(v - 1) < 0.03 ? 1 : Math.round(v * 100) / 100;
+  }
+  function planScalesFor(level){
+    var m = Number(level && level.markerScale), t = Number(level && level.textScale);
+    if (!(m > 0) || !(t > 0)){
+      var mk = ((level && (level.markers || level.objects)) || []).filter(function(o){ return o && o.type === "roomlink"; });
+      if (!(m > 0)) m = planMedianScale(mk.map(function(o){ return (Number(o.r) || 27.2) / 27.2; }));
+      if (!(t > 0)) t = planMedianScale(mk.map(function(o){ return (Number(o.label && o.label.fontSize) || 32) / 32; }));
+    }
+    return { m: m > 0 ? m : 1, t: t > 0 ? t : 1 };
+  }
+  function planRescaleMarker(o, mk, tk){
+    var r0 = Number(o.r) || 27.2, fs0 = Number(o.label && o.label.fontSize) || 32;
+    var r1 = r0 * mk, fs1 = fs0 * tk;
+    o.r = Math.round(r1 * 100) / 100;
+    if (o.label){
+      var f = (r1 + 0.95 * fs1) / (r0 + 0.95 * fs0);
+      o.label.x = Math.round((o.x + (Number(o.label.x) - o.x) * f) * 100) / 100;
+      o.label.y = Math.round((o.y + (Number(o.label.y) - o.y) * f) * 100) / 100;
+      o.label.fontSize = Math.round(fs1 * 100) / 100;
+    }
+  }
+  function makeRoomLinkObject(x, y, roomName, joineryCode, level){
     var color = "#c8391c"; // COLORS[0], same default defaultColorFor("roomlink") resolves to on a fresh style
-    var fontSize = 32; // defaultFontSize() on this app's own always-fresh defaultStyleObject()
-    var r = fontSize * 0.85;
+    var sc = planScalesFor(level || planSaved);
+    var fontSize = 32 * sc.t; // defaultFontSize() on this app's own always-fresh defaultStyleObject(); (2026-10-02) x this plan's text size
+    var r = 27.2 * sc.m;
     var labelText = joineryCode ? (roomName + " · " + joineryCode) : roomName;
     return {
       id: planUid(), type: "roomlink", x: x, y: y, r: r, roomName: roomName, joineryCode: joineryCode || "", color: color,
@@ -11375,7 +11471,7 @@
       }, 0);
       if (existingMaxId >= planNextId) planNextId = existingMaxId + 1;
 
-      var marker = makeRoomLinkObject(worldPt.x, worldPt.y, finalRoomName, finalCode);
+      var marker = makeRoomLinkObject(worldPt.x, worldPt.y, finalRoomName, finalCode, entry);
       entry.markers = entry.markers || [];
       entry.markers.push(marker);
 
@@ -11440,6 +11536,7 @@
         imageTiles: level ? level.imageTiles : null,
         imageW: level ? level.imageW : 0,
         imageH: level ? level.imageH : 0,
+        markerScale: level ? level.markerScale : undefined, textScale: level ? level.textScale : undefined, // (2026-10-02)
         objects: markers.slice(),
         style: defaultStyleObject(),
         savedBy: ""
@@ -14690,6 +14787,7 @@
           if (existingLower.indexOf(name.toLowerCase()) !== -1){ r.result = "exists"; kept++; psSetStatus(r, "Already exists — kept as it is", "warn"); return; }
           return psRenderRowImage(r).then(function(res){
             var data = { name: name, imageDataURL: res.imageDataURL, imageTiles: res.imageTiles, imageW: res.imageW, imageH: res.imageH, rooms: [], markers: [] };
+            if (res.planLabels){ data.markerScale = planAutoScale(res.imageW, res.imageH); data.textScale = data.markerScale; } // (2026-10-02) a PDF sheet's default marker / text size
             return writeLevelFile(activeProjectHandle, activeProjectName, name, data).then(function(){
               existingLower.push(name.toLowerCase());
               return writePlanLabels(activeProjectHandle, activeProjectName, name, res.planLabels).catch(function(err){ console.error("Saving the plan's labels failed:", err); res.planLabels = null; });
@@ -16405,14 +16503,14 @@
     if (!planDraftG) return;
     while (planDraftG.firstChild) planDraftG.removeChild(planDraftG.firstChild);
     if (!planPinMode || !planPinMode.draft) return;
-    var d = planPinMode.draft, r = 26 * PLAN_DOT_SCALE; // (v42)
+    var psc = planScalesFor(planSaved), d = planPinMode.draft, r = 26 * psc.m * PLAN_DOT_SCALE; // (v42); (2026-10-02) this plan's marker size
     var ring = document.createElementNS(SVG_NS, "circle");
     ring.setAttribute("cx", d.x); ring.setAttribute("cy", d.y); ring.setAttribute("r", r);
     ring.setAttribute("fill", "rgba(255,59,59,0.35)"); ring.setAttribute("stroke", "#ffffff"); ring.setAttribute("stroke-width", 4); ring.setAttribute("stroke-dasharray", "8 6");
     planDraftG.appendChild(ring);
     var t = document.createElementNS(SVG_NS, "text");
-    t.setAttribute("x", d.x); t.setAttribute("y", d.y + r + 30); t.setAttribute("text-anchor", "middle");
-    t.setAttribute("font-size", 30); t.setAttribute("fill", "#fff"); t.setAttribute("paint-order", "stroke"); t.setAttribute("stroke", "#0b0707"); t.setAttribute("stroke-width", 5);
+    t.setAttribute("x", d.x); t.setAttribute("y", d.y + r + 30 * psc.t); t.setAttribute("text-anchor", "middle");
+    t.setAttribute("font-size", 30 * psc.t); t.setAttribute("fill", "#fff"); t.setAttribute("paint-order", "stroke"); t.setAttribute("stroke", "#0b0707"); t.setAttribute("stroke-width", Math.max(2, 5 * psc.t));
     t.textContent = planPinMode.item.joineryId || planPinMode.item.room;
     planDraftG.appendChild(t);
   }
@@ -16505,7 +16603,7 @@
       if (!level.rooms.some(function(r){ return r.name.toLowerCase() === String(room).toLowerCase(); })) level.rooms.push({ name: room });
       var existingMaxId = (level.markers || []).reduce(function(m, o){ return Math.max(m, parseInt((o.id || "o0").slice(1), 10) || 0); }, 0);
       if (existingMaxId >= planNextId) planNextId = existingMaxId + 1;
-      var marker = makeRoomLinkObject(pt.x, pt.y, room, code || "");
+      var marker = makeRoomLinkObject(pt.x, pt.y, room, code || "", level);
       level.markers = level.markers || [];
       level.markers.push(marker);
       return writeLevelFile(activeProjectHandle, activeProjectName, levelName, level).then(function(){ return { marker: marker }; });
@@ -16726,8 +16824,8 @@
      the spot that covers least. Above the label the code goes above the
      dot; everywhere else under it. Pure. */
   var AUTO_PLACE_V = 2; // markers placed this way; a v34 one (on the label) has none
-  function autoPlaceSpot(anchor, text, obstacles, bounds){
-    var fs = 32, r = fs * 0.85 * PLAN_DOT_SCALE, T = fs * PLAN_TEXT_SCALE, g = 10, tw = planTextWidth(text, T); // (v42) the dot as drawn
+  function autoPlaceSpot(anchor, text, obstacles, bounds, level){
+    var sc = planScalesFor(level), fs = 32 * sc.t, r = 27.2 * sc.m * PLAN_DOT_SCALE, T = fs * PLAN_TEXT_SCALE, g = 10 * sc.m, tw = planTextWidth(text, T); // (v42) the dot as drawn
     var rr = planMarkerRingR(r); // it's placed amber: its ring, not just its dot, stays off the text
     var stepX = Math.max(2 * rr, tw) + g, stepY = 2 * rr + T + g;
     var sides = ["left", "right", "above", "below"];
@@ -16854,9 +16952,9 @@
       var ordered = todo.filter(function(it){ return how.get(it) === "code"; }).concat(todo.filter(function(it){ return how.get(it) === "room"; }));
       ordered.forEach(function(it){
         var anchor = pos.get(it);
-        var spot = autoPlaceSpot(anchor, it.joineryId, obstacles, bounds);
+        var spot = autoPlaceSpot(anchor, it.joineryId, obstacles, bounds, level);
         if (!level.rooms.some(function(r){ return String(r.name).toLowerCase() === String(it.room).toLowerCase(); })) level.rooms.push({ name: it.room });
-        var marker = makeRoomLinkObject(spot.x, spot.y, it.room, it.joineryId);
+        var marker = makeRoomLinkObject(spot.x, spot.y, it.room, it.joineryId, level);
         if (spot.textAbove) marker.label.y = marker.y - marker.r - marker.label.fontSize * 0.3;
         var old = redo[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()];
         if (old){ marker.id = old.id; delete redo[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()]; moved++; }
@@ -17407,12 +17505,55 @@
       });
       if (!anchor) return;
       // a column to its right, each with room for its code under it
-      var r = planDotR(anchor), tsz = 32 * PLAN_TEXT_SCALE; // (v42) as drawn
+      var r = planDotR(anchor), tsz = planMarkerTextSize(anchor); // (v42) as drawn; (2026-10-02) at the plan's text size
       var dx = Math.max(r * 2.9, planTextWidth((w.code || "") + " +", tsz) / 2 + planTextWidth(String(anchor.joineryCode || ""), tsz) / 2 + 16);
-      for (var i = 0; i < Math.min(n, 12); i++) out.push({ w: w, have: mine.length, x: anchor.x + dx, y: anchor.y + i * (2 * r + tsz + 16), r: r, i: i });
+      for (var i = 0; i < Math.min(n, 12); i++) out.push({ w: w, have: mine.length, x: anchor.x + dx, y: anchor.y + i * (2 * r + tsz + 16), r: r, tsz: tsz, i: i });
     });
     return out;
   }
+  // ---- (2026-10-02) the "Marker size" dialog ----
+  var planSizeBackdrop = document.getElementById("planSizeBackdrop"), planSizeChain = Promise.resolve();
+  function planSizePct(v){ return Math.round(v * 100) + "%"; }
+  function planSizeShow(){
+    var sc = planScalesFor(planSaved), w = planSaved && planSaved.imageW, h = planSaved && planSaved.imageH;
+    var sheet = planSheetName(w, h), auto = planAutoScale(w, h);
+    document.getElementById("planSizeMkVal").textContent = planSizePct(sc.m);
+    document.getElementById("planSizeTxVal").textContent = planSizePct(sc.t);
+    document.getElementById("planSizeSheet").textContent = (sheet ? "This plan is about " + sheet + "." : "This plan has no standard sheet size.") + " The default for it is " + planSizePct(auto) + ".";
+  }
+  // Resize every marker on the open plan to (m, t), save, redraw. One at a time, so quick taps never overlap.
+  function planSizeApply(m, t){
+    m = Math.min(4, Math.max(0.1, m)); t = Math.min(4, Math.max(0.1, t));
+    planSizeChain = planSizeChain.then(function(){
+      if (!activeProjectHandle || !activeLevelName) return;
+      var lv = activeLevelName;
+      return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){
+        if (!level) return;
+        var old = planScalesFor(level);
+        (level.markers || []).forEach(function(o){ if (o && o.type === "roomlink") planRescaleMarker(o, m / old.m, t / old.t); });
+        level.markerScale = Math.round(m * 1000) / 1000; level.textScale = Math.round(t * 1000) / 1000;
+        return writeLevelFile(activeProjectHandle, activeProjectName, lv, level).then(function(){
+          if (planSaved && lv === activeLevelName){
+            planSaved.objects = (level.markers || []).slice(); planSaved.markerScale = level.markerScale; planSaved.textScale = level.textScale;
+            planRenderMarkers(); planSizeShow();
+          }
+        });
+      });
+    }).catch(function(err){ console.error("Resizing the markers failed:", err); showToast("Couldn't resize the markers — try again."); });
+    return planSizeChain;
+  }
+  function planSizeStep(which, dir){
+    var sc = planScalesFor(planSaved), k = dir > 0 ? 1.25 : 0.8;
+    return which === "m" ? planSizeApply(sc.m * k, sc.t) : planSizeApply(sc.m, sc.t * k);
+  }
+  document.getElementById("planSizeBtn").addEventListener("click", function(){ if (!planSaved) return; planSizeShow(); planSizeBackdrop.hidden = false; });
+  document.getElementById("planSizeMkMinus").addEventListener("click", function(){ planSizeStep("m", -1); });
+  document.getElementById("planSizeMkPlus").addEventListener("click", function(){ planSizeStep("m", 1); });
+  document.getElementById("planSizeTxMinus").addEventListener("click", function(){ planSizeStep("t", -1); });
+  document.getElementById("planSizeTxPlus").addEventListener("click", function(){ planSizeStep("t", 1); });
+  document.getElementById("planSizeAutoBtn").addEventListener("click", function(){ var a = planAutoScale(planSaved && planSaved.imageW, planSaved && planSaved.imageH); planSizeApply(a, a); });
+  document.getElementById("planSizeDoneBtn").addEventListener("click", function(){ planSizeBackdrop.hidden = true; });
+  planSizeBackdrop.addEventListener("click", function(e){ if (e.target === planSizeBackdrop) planSizeBackdrop.hidden = true; });
   function planRenderCopies(){
     planCopies = planComputeCopies();
     planCopies.forEach(function(c){
@@ -17423,7 +17564,7 @@
       dot.setAttribute("stroke-width", Math.max(2, c.r * 0.12));
       planCanvasMarkersG.appendChild(dot);
       var t = document.createElementNS(SVG_NS, "text");
-      var tsz = 32 * PLAN_TEXT_SCALE;
+      var tsz = c.tsz || 32 * PLAN_TEXT_SCALE;
       t.setAttribute("class", "copy-pin-label");
       t.setAttribute("x", d.x); t.setAttribute("y", d.y + c.r + tsz * 0.95); t.setAttribute("text-anchor", "middle");
       t.setAttribute("font-size", tsz); t.setAttribute("fill", "#fff"); t.setAttribute("paint-order", "stroke"); t.setAttribute("stroke", "#0b0707"); t.setAttribute("stroke-width", Math.max(4, tsz * 0.12));
@@ -17753,6 +17894,7 @@
     renderPdfPageGrid: renderPdfPageGrid,
     renderPdfPageMaybeTiled: renderPdfPageMaybeTiled,
     makeRoomLinkObject: makeRoomLinkObject,
+    planAutoScale: planAutoScale, planSheetName: planSheetName, planSizeApplyForTest: planSizeApply, planScalesForTest: function(){ return planScalesFor(planSaved); }, // (2026-10-02)
     readJoineryItems: readJoineryItems,
     readSavedPlanRaw: readSavedPlanRaw,
     readLevelFile: readLevelFile,
