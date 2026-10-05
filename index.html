@@ -9040,7 +9040,17 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       return true;
     });
   }
+  // (2026-10-04) Andrew: "once a rework is marked as cut, it goes to the factory managers, once they flag it ready to deliver, it goes to delivery, once
+  // flagged delivered, it goes to install" -- ready to deliver (state manufactured) flags it to Delivery, delivered flags it to Install, whichever app
+  // writes it; the cut -> Factory managers step is in applyAction (it depends on the Machine shop flag). A failed flag never undoes the write.
   function writeEvent(projectHandle, row, kind, fields, by, app){
+    return writeEventRaw(projectHandle, row, kind, fields, by, app).then(function(ev){
+      var next = kind === "state" && fields && fields.status === "manufactured" && !fields.undo ? "delivery" : (kind === "delivered" ? "install" : "");
+      if (!next) return ev;
+      return writeEventRaw(projectHandle, row, "flaggedTo", { group: next }, by, app).then(function(fl){ ev._flag = fl; return ev; }, function(err){ console.error("Automatic flag to " + next + " failed:", err); return ev; });
+    });
+  }
+  function writeEventRaw(projectHandle, row, kind, fields, by, app){
     var at = new Date();
     var ev = {
       kind: kind, reworkId: row.entry.id || "", level: row.level, room: row.room, joineryId: row.code, fileBase: row.fileBase,
@@ -9110,6 +9120,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     // (2026-09-30) drafter step, Viewer: the latest assignment (a passedOn hands it on), and the drafter's latest answer since
     var drafter = "", drafterAt = "", drafterBy = "", drafterAction = null, drafterHistory = [];
     var flagGroup = "", flagGroupAt = "", flagGroupBy = "";
+    var cncFile = null; // (2026-10-04) the file name typed with "Sent to CNC": kept when the rework is then flagged on to the Machine shop (a flag clears the drafter step)
     evs.filter(function(ev){ return ev.kind === "drafterAssigned" || ev.kind === "drafterAction" || ev.kind === "flaggedTo"; })
        .sort(function(a, b){ return String(a.at).localeCompare(String(b.at)); })
        .forEach(function(ev){
@@ -9126,7 +9137,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
            if (!a) return;
            drafterHistory.push({ kind: a, to: ev.to || "", fileName: String(ev.fileName || "").trim(), at: ev.at || "", by: ev.by || "", app: ev.app || "" });
            if (a === "passedOn"){ drafter = String(ev.to || "").trim(); drafterAt = ev.at || ""; drafterBy = ev.by || ""; drafterAction = null; flagGroup = "drafter"; flagGroupAt = ev.at || ""; flagGroupBy = ev.by || ""; }
-           else drafterAction = { action: a, fileName: String(ev.fileName || "").trim(), at: ev.at || "", by: ev.by || "", app: ev.app || "" };
+           else{ drafterAction = { action: a, fileName: String(ev.fileName || "").trim(), at: ev.at || "", by: ev.by || "", app: ev.app || "" }; if (a === "resentToCnc" && drafterAction.fileName) cncFile = { fileName: drafterAction.fileName, at: ev.at || "", by: ev.by || "" }; }
          }
        });
     // (2026-10-02) Machine Schedule: "Cutting not required" -- the latest cutNotRequired event wins (undo: true clears it)
@@ -9148,7 +9159,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       latestChange: latest, previousStatus: before, changes: changes,
       delivered: delivered, closed: closed, isDone: !!(delivered || closed),
       comments: comments, lastComment: comments.length ? comments[comments.length - 1] : null,
-      drafter: drafter, drafterAt: drafterAt, drafterBy: drafterBy, drafterAction: drafterAction, drafterHistory: drafterHistory,
+      drafter: drafter, drafterAt: drafterAt, drafterBy: drafterBy, drafterAction: drafterAction, cncFile: cncFile, drafterHistory: drafterHistory,
       flagGroup: flagGroup, flagGroupAt: flagGroupAt, flagGroupBy: flagGroupBy,
       cutNotRequired: cutNotRequired, cutHistory: cutHistory
     };
@@ -9337,6 +9348,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     // extra row costs 28pt and would push photos off page 1 on every other PDF
     if (f.cutNotRequired) fields.push(["Cutting", "Not required — " + [fmtDate(f.cutNotRequired.at, true), f.cutNotRequired.by].filter(Boolean).join(", ")]);
     if (!f.drafter && f.flagGroup && FLAG_GROUPS[f.flagGroup]) fields.push(["Flagged to", FLAG_GROUPS[f.flagGroup]], ["", ""]);
+    if (f.cncFile && !f.drafter) fields.push(["CNC file", f.cncFile.fileName + (f.cncFile.by ? " (sent by " + f.cncFile.by + ")" : "")], ["", ""]);
     if (f.drafter) fields.push(["Drafter", f.drafter + (f.drafterAction ? " — " + drafterActionLabel(f.drafterAction.action) + (f.drafterAction.fileName ? " (" + f.drafterAction.fileName + ")" : "") : " (flagged)")], ["", ""]);
     while (fields.length && fields[fields.length - 1][0] === "" ) fields.pop();
     var rowPitch = 28;
@@ -9589,10 +9601,10 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // (2026-10-02) a short "Drafter: X -- Sent to CNC" tag for the register / strip rows ("" when the rework was never flagged to one)
   function drafterTag(f){
     if (!f.drafter){
-      if (f.flagGroup && FLAG_GROUPS[f.flagGroup]) return "<div class=\"urw-small urw-drafter-tag\">Flagged to: <b>" + escapeHtml(FLAG_GROUPS[f.flagGroup]) + "</b></div>";
+      if (f.flagGroup && FLAG_GROUPS[f.flagGroup]) return "<div class=\"urw-small urw-drafter-tag\">Flagged to: <b>" + escapeHtml(FLAG_GROUPS[f.flagGroup]) + "</b>" + (f.cncFile ? " — CNC file: <b>" + escapeHtml(f.cncFile.fileName) + "</b>" : "") + "</div>";
       return "";
     }
-    return "<div class=\"urw-small urw-drafter-tag\">Drafter: " + escapeHtml(f.drafter) + " — " + (f.drafterAction ? "<b>" + escapeHtml(drafterActionLabel(f.drafterAction.action)) + "</b>" + (f.drafterAction.fileName ? " (" + escapeHtml(f.drafterAction.fileName) + ")" : "") : "flagged") + "</div>";
+    return "<div class=\"urw-small urw-drafter-tag\">Drafter: " + escapeHtml(f.drafter) + " — " + (f.drafterAction ? "<b>" + escapeHtml(drafterActionLabel(f.drafterAction.action)) + "</b>" + (f.drafterAction.fileName ? " (" + escapeHtml(f.drafterAction.fileName) + ")" : "") : "flagged") + (f.cncFile && !(f.drafterAction && f.drafterAction.fileName) ? " — CNC file: <b>" + escapeHtml(f.cncFile.fileName) + "</b>" : "") + "</div>";
   }
   function rowKey(row){ return (row.project || "") + "\u0000" + (row.isFlat ? "F" : "L") + "\u0000" + (row.levelDir || "") + "\u0000" + (row.roomDir || "") + "\u0000" + row.fileName; }
   function entryKey(row){ return rowKey(row) + "\u0000" + (row.entry.id || row.entry.createdAt || ""); }
@@ -9821,7 +9833,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         var f = foldRow(r);
         switch (col){
           case "project": return r.project; case "level": return r.level; case "room": return r.room; case "code": return r.code;
-          case "cabinet": return r.entry.cabinetNumber || ""; case "text": return r.entry.text || ""; case "photos": return r.entry.photoCount || 0;
+          case "cnc": return (f.cncFile && f.cncFile.fileName) || ""; case "cabinet": return r.entry.cabinetNumber || ""; case "text": return r.entry.text || ""; case "photos": return r.entry.photoCount || 0;
           case "state": return STATE_ORDER.indexOf(f.status);
           case "loggedIn": return appLabel(r.entry.createdApp);
           case "latest": var l = logLines(r.entry, eventsOf(r) || [])[0]; return l ? l.at : "";
@@ -9836,7 +9848,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     }
     // State and the action sit right after the item's identity, so on a
     // tablet in portrait they're on screen without scrolling sideways.
-    var COLS = [["project", "Project"], ["level", "Level"], ["room", "Room"], ["code", "Joinery ID"], ["cabinet", "Cabinet"], ["state", "State"], ["", ""], ["text", "Rework"], ["photos", "Photos"], ["logged", "Logged"], ["loggedIn", "Logged in"], ["latest", "Latest"]];
+    var COLS = [["project", "Project"], ["level", "Level"], ["room", "Room"], ["code", "Joinery ID"], ["cabinet", "Cabinet"], ["state", "State"], ["", ""], ["text", "Rework"], ["cnc", "CNC file"], ["photos", "Photos"], ["logged", "Logged"], ["loggedIn", "Logged in"], ["latest", "Latest"]];
     function theadHtml(){
       return "<thead><tr>" + COLS.map(function(c){
         if (!c[0]) return "<th></th>";
@@ -9859,6 +9871,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         "<td>" + pillHtml(f) + drafterTag(f) + "</td>" +
         "<td class=\"urw-acts\">" + act + "<button type=\"button\" class=\"btn secondary sm\" data-urw-open=\"" + idx + "\">Open</button></td>" +
         "<td class=\"urw-text\">" + escapeHtml(e.text || "(no description)") + "</td>" +
+        "<td class=\"urw-cncfile\">" + (f.cncFile ? "<b>" + escapeHtml(f.cncFile.fileName) + "</b>" : "<span class=\"urw-muted\">—</span>") + "</td>" +
         "<td>" + (e.photoCount ? e.photoCount : "—") + "</td>" +
         "<td>" + escapeHtml(fmtDate(e.createdAt, true)) + (e.createdBy ? "<div class=\"urw-small urw-muted\">" + escapeHtml(e.createdBy) + "</div>" : "") + "</td>" +
         "<td class=\"urw-loggedin\">" + (e.createdApp ? escapeHtml(appLabel(e.createdApp)) : "<span class=\"urw-muted\">—</span>") + "</td>" +
@@ -9998,11 +10011,15 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         }
         return writeEv(row, "state", { status: cfg.action.status }, user, cfg.appName).then(function(ev){
           (st.logs[rowKey(row)] = st.logs[rowKey(row)] || []).push(ev);
+          if (ev && ev._flag) st.logs[rowKey(row)].push(ev._flag);
           var cur = foldRow(row);
           // cut while flagged to the Machine shop -> over to the Factory managers
-          var handOver = cfg.action.status === "machined" && !cur.drafter && cur.flagGroup === "machineShop";
-          return (handOver ? autoFlag(row, "factoryManagers", user) : Promise.resolve(false)).then(function(moved){
-            toast((cfg.action.doneToast || "Saved.") + (moved ? " Flagged to Factory managers." : ""));
+          // (2026-10-04) Andrew: "once a rework is marked as cut, it goes to the factory managers, once they flag it ready to deliver, it goes to
+          // delivery, once flagged delivered, it goes to install"
+          // (ready to deliver -> Delivery and delivered -> Install are flagged by writeEvent itself, so every app's write does it)
+          var next = cfg.action.status === "machined" && !cur.drafter && cur.flagGroup === "machineShop" ? "factoryManagers" : "";
+          return (next ? autoFlag(row, next, user) : Promise.resolve(false)).then(function(moved){
+            toast((cfg.action.doneToast || "Saved.") + (moved ? " Flagged to " + FLAG_GROUPS[next] + "." : ""));
             afterChange(row);
             return true;
           });
@@ -10370,6 +10387,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
             "<dt>State</dt><dd>" + pillHtml(f) + (f.statusAt ? " <span class=\"urw-small urw-muted\">" + escapeHtml([f.statusBy, fmtDate(f.statusAt, true)].filter(Boolean).join(", ")) + "</span>" : "") + "</dd>" +
             (f.delivered ? "<dt>Delivered</dt><dd>" + escapeHtml([f.delivered.date || fmtDate(f.delivered.at), f.delivered.by].filter(Boolean).join(" — ")) + "</dd>" : "") +
             (!f.drafter && f.flagGroup && FLAG_GROUPS[f.flagGroup] ? "<dt>Flagged to</dt><dd>" + escapeHtml(FLAG_GROUPS[f.flagGroup]) + " <span class=\"urw-small urw-muted\">" + escapeHtml([f.flagGroupBy, fmtDate(f.flagGroupAt, true)].filter(Boolean).join(", ")) + "</span></dd>" : "") +
+            (f.cncFile && !f.drafter ? "<dt>CNC file</dt><dd><b>" + escapeHtml(f.cncFile.fileName) + "</b> <span class=\"urw-small urw-muted\">" + escapeHtml([f.cncFile.by, fmtDate(f.cncFile.at, true)].filter(Boolean).join(", ")) + "</span></dd>" : "") +
             (f.drafter ? "<dt>Drafter</dt><dd>" + escapeHtml(f.drafter) + (f.drafterAction ? " — <b>" + escapeHtml(drafterActionLabel(f.drafterAction.action)) + "</b>" + (f.drafterAction.fileName ? " <span class=\"urw-small\">(file: " + escapeHtml(f.drafterAction.fileName) + ")</span>" : "") + " <span class=\"urw-small urw-muted\">" + escapeHtml([f.drafterAction.by, fmtDate(f.drafterAction.at, true)].filter(Boolean).join(", ")) + "</span>" : " <span class=\"urw-small urw-muted\">(flagged" + (f.drafterBy ? " by " + escapeHtml(f.drafterBy) : "") + ")</span>") + "</dd>" : "") +
           "</dl>" +
           "<p class=\"urw-desc\">" + escapeHtml(e.text || "(no description)") + "</p>" +
@@ -10497,6 +10515,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
             div.innerHTML = "<div class=\"urw-item-main\"><div class=\"urw-item-head\">" + escapeHtml(r.entry.cabinetNumber ? "Cabinet " + r.entry.cabinetNumber : "No cabinet number") + " " + pillHtml(f) + "</div>" +
               (r.entry.text ? "<div style=\"margin-top:4px;white-space:pre-wrap;\">" + escapeHtml(r.entry.text) + "</div>" : "") +
               "<div class=\"urw-item-sub\">Logged " + escapeHtml([fmtDate(r.entry.createdAt, true), r.entry.createdBy].filter(Boolean).join(" — ")) + (r.entry.photoCount ? " · " + r.entry.photoCount + " photo" + (r.entry.photoCount === 1 ? "" : "s") : "") + "</div>" +
+              drafterTag(f) + // (2026-10-04) who it is flagged to, and the CNC file name once it was sent
               (evs && evs.length ? "<div class=\"urw-item-sub\">Latest: " + escapeHtml(latestLine(r, evs)) + "</div>" : "") + "</div>";
             var ob = document.createElement("button");
             ob.type = "button"; ob.className = "btn secondary sm"; ob.textContent = "Open rework";
@@ -10711,7 +10730,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       yes: "Mark delivered to site",
       question: function(n, code, o){ return "“" + code + "” is signed off, and it has " + (n === 1 ? "a rework" : n + " reworks") + " that " + (n === 1 ? "isn't" : "aren't") + " delivered yet. Is this the rework being delivered? Ticked ones are marked delivered to site" + (hasPin(o) ? ", with this item's delivery pin and photo." : ". This item has no delivery pin + photo yet, so the rework is only noted — drop its pin on the Rework screen to finish."); },
       write: function(ph, r, o){
-        if (hasPin(o)) return writeEvent(ph, r, "delivered", { receivedDate: new Date().toISOString().slice(0, 10), deliveryLocationPin: { x: o.deliveryPin.x, y: o.deliveryPin.y }, locationSnapshot: o.locationSnapshot }, o.user, o.appName);
+        if (hasPin(o)) return writeEvent(ph, r, "delivered", { receivedDate: new Date().toISOString().slice(0, 10), deliveryLocationPin: { x: o.deliveryPin.x, y: o.deliveryPin.y }, locationSnapshot: o.locationSnapshot }, o.user, o.appName); 
         return writeEvent(ph, r, "comment", { text: "Delivery ITP signed off for this rework — its delivery pin and photo are still to add on the Rework screen." }, o.user, o.appName);
       },
       done: function(n, code, o){ return (hasPin(o) ? (n === 1 ? "Rework on " + code + " marked delivered to site." : n + " reworks on " + code + " marked delivered to site.") : "Noted on the rework — drop its delivery pin on the Rework screen to mark it delivered."); }
