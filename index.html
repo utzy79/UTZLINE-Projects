@@ -237,8 +237,8 @@
       ".upv-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}",
       ".upv-btn{font:inherit;font-size:14px;min-height:40px;padding:6px 12px;border-radius:8px;border:1px solid #4a5258;background:#2b3135;color:#fff;cursor:pointer;}",
       ".upv-btn.upv-close{background:#c8391c;border-color:#c8391c;font-weight:600;}",
-      ".upv-pages{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:10px 0 40px;touch-action:pan-x pan-y pinch-zoom;}",
-      ".upv-page{margin:0 auto 10px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.4);position:relative;}",
+      ".upv-pages{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:10px 0 40px;touch-action:pan-x pan-y;}",
+      ".upv-page{margin:0 8px 10px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.4);position:relative;}",
       ".upv-page canvas,.upv-page img{display:block;width:100%;height:100%;}",
       ".upv-msg{padding:30px 16px;text-align:center;color:#ccd;}"
     ].join("\n");
@@ -274,7 +274,7 @@
     if (!navigator.share) el.querySelector('[data-a="share"]').style.display = "none"; // Fully Kiosk / an Android WebView has no share sheet
     document.body.appendChild(el);
     var pagesEl = el.querySelector(".upv-pages");
-    var c = current = { el: el, doc: null, zoom: 1, observer: null, pushed: false };
+    var c = current = { el: el, doc: null, zoom: 1, max: 4, observer: null, pushed: false };
     // the device Back button closes the viewer, not the app
     c.prevState = history.state; // Close turns our entry back into this one (history.back() would also reach the app's own Back and leave its screen)
     try{ history.pushState({ utzPdfView: true }, ""); c.pushed = true; }catch(e){}
@@ -284,17 +284,38 @@
       if (a === "close") close();
       else if (a === "save") download(blob, name);
       else if (a === "share"){
-        var f = null; try{ f = new File([blob], name, { type: blob.type || "application/pdf" }); }catch(err){}
-        if (f && navigator.share && (!navigator.canShare || navigator.canShare({ files: [f] }))) navigator.share({ files: [f] }).catch(function(){});
-        else download(blob, name);
+        // (2026-10-04) Android: the file needs a real ".pdf" name and type or the share sheet refuses it (an anonymous "PDF" did); a share that
+        // fails for any reason but the person closing the sheet saves the file instead of doing nothing
+        var isPdfShare = /pdf/i.test(blob.type || "") || /\.pdf$/i.test(name) || /^(PDF|File)$/i.test(name);
+        var shareName = isPdfShare && !/\.pdf$/i.test(name) ? (/^(PDF|File)$/i.test(name) ? "Document" : name) + ".pdf" : name;
+        var f = null; try{ f = new File([blob], shareName, { type: isPdfShare ? "application/pdf" : (blob.type || "") }); }catch(err){}
+        if (f && navigator.share && (!navigator.canShare || navigator.canShare({ files: [f] }))){
+          navigator.share({ files: [f], title: shareName }).catch(function(err){
+            if (err && err.name === "AbortError") return;
+            console.error("Share failed:", err); download(blob, shareName);
+          });
+        } else download(blob, shareName);
       }
-      else if (a === "in" || a === "out"){ c.zoom = Math.max(1, Math.min(4, c.zoom * (a === "in" ? 1.5 : 1 / 1.5))); layout(); }
+      else if (a === "in" || a === "out"){ c.zoom = Math.max(1, Math.min(c.max, c.zoom * (a === "in" ? 1.5 : 1 / 1.5))); layout(); }
     });
     var pageBoxes = [];
     function layout(){
-      var w = Math.max(200, (pagesEl.clientWidth - 16) * c.zoom);
-      pageBoxes.forEach(function(p){ p.box.style.width = w + "px"; p.box.style.height = (w * p.ratio) + "px"; if (p.drawnAt && p.drawnAt < w * 0.9){ p.drawnAt = 0; if (p.visible) draw(p); } });
+      var w = Math.max(200, (pagesEl.clientWidth - 16) * c.zoom), wide = w > pagesEl.clientWidth - 16;
+      // centred while it fits; left-aligned once wider than the screen, so every part can be scrolled to
+      pageBoxes.forEach(function(p){ p.box.style.width = w + "px"; p.box.style.height = (w * p.ratio) + "px"; p.box.style.marginLeft = p.box.style.marginRight = wide ? "8px" : "auto"; if (!p.img && p.drawnAt && p.drawnAt < w * 0.9){ p.drawnAt = 0; if (p.visible) draw(p); } });
     }
+    // two-finger pinch (the page's own pinch-zoom is off inside the viewer, and +/- were the only zoom)
+    var pinch = null;
+    pagesEl.addEventListener("touchstart", function(e){
+      if (e.touches.length === 2) pinch = { d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY) || 1, z: c.zoom };
+    }, { passive: true });
+    pagesEl.addEventListener("touchmove", function(e){
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY) || 1;
+      c.zoom = Math.max(1, Math.min(c.max, pinch.z * d / pinch.d)); layout();
+    }, { passive: false });
+    pagesEl.addEventListener("touchend", function(e){ if (e.touches.length < 2) pinch = null; }, { passive: true });
     function draw(p){
       if (!c.doc || p.busy) return;
       var w = p.box.clientWidth; if (!w) return;
@@ -318,8 +339,14 @@
         // not a PDF (a photo): just show it
         var url = URL.createObjectURL(blob);
         pagesEl.innerHTML = ""; var box = document.createElement("div"); box.className = "upv-page"; box.style.width = "calc(100% - 16px)";
-        var img = document.createElement("img"); img.src = url; img.style.height = "auto"; box.appendChild(img); pagesEl.appendChild(box);
+        var img = document.createElement("img"); img.src = url; box.appendChild(img); pagesEl.appendChild(box);
         c.doc = { destroy: function(){ URL.revokeObjectURL(url); } };
+        // (2026-10-04) Andrew: no zoom on the site measure picture -- it is laid out like a page, so + / - and pinch resize it
+        c.max = 8;
+        var p = { n: 0, box: box, ratio: 0.75, visible: true, img: true };
+        pageBoxes.push(p);
+        img.onload = function(){ if (img.naturalWidth) p.ratio = img.naturalHeight / img.naturalWidth; layout(); };
+        layout();
         return;
       }
       return Promise.all([loadLib(), blob.arrayBuffer()]).then(function(r){
@@ -356,13 +383,19 @@
     });
     return el;
   }
+  // the name of a File behind each blob: URL, so a file opened through window.open keeps its own name for Share / Save (not "PDF")
+  var blobNames = {};
+  try{
+    var origCreate = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = function(obj){ var u = origCreate(obj); if (obj && obj.name) blobNames[u] = obj.name; return u; };
+  }catch(e){}
   // window.open(<blob: URL>) on a phone / tablet -> this viewer
   if (MOBILE){
     var nativeOpen = window.open;
     window.open = function(url, target, features){
       var u = String(url || "");
       if (/^blob:/i.test(u)){
-        fetch(u).then(function(r){ return r.blob(); }).then(function(b){ open(b, /pdf/i.test(b.type || "") ? "PDF" : "File"); }).catch(function(err){
+        fetch(u).then(function(r){ return r.blob(); }).then(function(b){ open(b, blobNames[u] || (/pdf/i.test(b.type || "") ? "Document.pdf" : "File")); }).catch(function(err){
           console.error("Couldn't open that file here:", err);
           try{ nativeOpen.call(window, url, target, features); }catch(e){}
         });
@@ -2581,9 +2614,9 @@
      are not read (2026-10-04, Andrew: "I DONT WANT BACKWRDS COMPATIBILITY"). docsDir() hands back a stand-in folder.
      An item moved to another room afterwards keeps its files in the old room's folder: they are not listed with the
      item (logged in the notes). */
-  // (v98+) the folder under PDFs\ for each kind: job notes are "IFC" (Issued For Construction -- Andrew 2026-10-02: "change JN to IFC"); the code
+  // (v98+) the folder under PDFs\ for each kind: job notes are "AS BUILT" (2026-10-04, Andrew: "change IFC folder name to AS BUILT"; was "IFC", Issued For Construction -- Andrew 2026-10-02: "change JN to IFC"); the code
   // (and every call site) still says "JN" -- only the folder and the file-name tag read IFC.
-  var DOC_NEW = { JN: "IFC", SD: "SD" };
+  var DOC_NEW = { JN: "AS BUILT", SD: "SD" };
   var NO_WHERE = { level: "", room: "" }; // an item the app can't place: PDFs\IFC\No level\No room\<item>
   // (2026-10-04) Andrew: "use the level Abbreviation in projects (when you import)" -- Projects keeps each level's abbreviation on its
   // items ("levelAbbr" in joinery-items.json); register() collects them, and every level folder is that abbreviation when the level has one.
@@ -2595,6 +2628,40 @@
     var ab = abbrOf(level, project); if (ab) return ab;
     if (window.UtzEvents && UtzEvents.levelFolder) return UtzEvents.levelFolder(level);
     return clean(level, 30) || "No level";
+  }
+  // (2026-10-04) the saved site measure PDFs for an item, newest first: the item's own folder PDFs\CM\<Level>\<Room>\<item>\ and its room's
+  // PDFs\CM\<Level>\<Room>\ (a room's one site measure). -> [{ handle, name, t }]
+  function siteMeasurePdfs(ph, level, room, key){
+    var base = ["PDFs", "CM", levelSeg(level, ph && ph.name), roomSeg(room)];
+    function pdfs(segs){
+      return tryWalk(ph, segs).then(function(d){
+        if (!d) return [];
+        return listHandles(d).then(function(hs){
+          var files = hs.filter(function(h){ return h && h.kind === "file" && /\.pdf$/i.test(h.name); });
+          return Promise.all(files.map(function(h){ return h.getFile().then(function(f){ return { handle: h, name: h.name, t: f.lastModified || 0 }; }, function(){ return { handle: h, name: h.name, t: 0 }; }); }));
+        });
+      }, function(){ return []; });
+    }
+    return Promise.all([pdfs(base.concat([clean(key, 50) || "item"])), pdfs(base)]).then(function(r){
+      var all = r[0].concat(r[1]); all.sort(function(a, b){ return b.t - a.t; }); return all;
+    });
+  }
+  /* (2026-10-04) Andrew: the name a document is shown and saved under on the summary pages --
+       <project> -- <TAG> -- <room no.> - <code> - <no.> [- <revision>] - <saved>
+     e.g. "3756 - Jones Radiology Mt Barker -- AS BUILT -- G.01 - JG.01.1 - 001 - 2026-10-04 22-04-55". Display and download / share name only: the file on disk keeps
+     its own name. saved: the "YYYY-MM-DD HH-mm-ss" in the file's name, else the file's own date. */
+  function docStamp(fileName, lastModified){
+    var m = /(\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})/.exec(String(fileName || ""));
+    if (m) return m[1];
+    if (!lastModified) return "";
+    var d = new Date(lastModified); function p2(n){ return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + " " + p2(d.getHours()) + "-" + p2(d.getMinutes()) + "-" + p2(d.getSeconds());
+  }
+  function docTitle(o){
+    // o: { tag, project, room, code, no, rev, stamp }
+    var item = [roomShort(o.room), o.code, o.no, o.rev, o.stamp].filter(function(x){ return x != null && String(x) !== ""; });
+    // the room belongs with the code ("G.01 - JG.01.1"), the number and revision follow it
+    return [clean(o.project || "", 40), o.tag, item.join(" - ")].filter(Boolean).join(" -- ");
   }
   // the room NUMBER: the first part with a digit ("H1.MH.040", "101"); no number: the name itself, cut to 14
   function roomShort(room){
@@ -2891,7 +2958,7 @@
     version: 1, MAX: MAX,
     clean: clean, baseOf: baseOf, valid: valid, assign: assign, register: register, fileKey: fileKey,
     initials: initials, stamp: stamp, tripleKey: tripleKey, roomMeasureKey: roomMeasureKey,
-    levelSeg: levelSeg, roomShort: roomShort, roomSeg: roomSeg, where: where, docPathSegs: docPathSegs,
+    levelSeg: levelSeg, roomShort: roomShort, docTitle: docTitle, docStamp: docStamp, siteMeasurePdfs: siteMeasurePdfs, roomSeg: roomSeg, where: where, docPathSegs: docPathSegs,
     docsDir: docsDir, docsKeys: docsKeys, docsForget: docsForget, isNotFound: isNF,
     itemNo: itemNo, label: label, pad3: pad3, itemSegs: itemSegs, roomSegs: roomSegs, itemDir: itemDir, roomDir: roomDir, listItemDirs: listItemDirs, itpChecklist: itpChecklist, itpLogDir: itpLogDir, itpPdfDir: itpPdfDir, smParent: smParent, smDir: smDir, smDirForItem: smDirForItem, smParentSegs: smParentSegs, listSiteMeasureKeys: listSiteMeasureKeys, ordersDir: ordersDir, listOrdersDirs: listOrdersDirs, ORDERS_ROOT: ORDERS_ROOT, walk: walkDirs, tryWalk: tryWalk,
     _maps: function(){ return maps; }
@@ -8821,7 +8888,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       return {
         project: where.project || "", level: (data && data.level) || where.level || "", room: (data && data.room) || where.room || "",
         code: (data && data.joineryNo) || where.code || "", fileBase: where.fileBase, fileName: where.fileName,
-        isFlat: where.isFlat, flatOld: where.flatOld, levelDir: where.levelDir || "", roomDir: where.roomDir || "", entry: slimEntry(e)
+        isFlat: where.isFlat, flatOld: where.flatOld, levelDir: where.levelDir || "", roomDir: where.roomDir || "", dirH: where.dirH || null, entry: slimEntry(e)
       };
     });
   }
@@ -8854,7 +8921,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
             var parts = base.split(" - ");
             var old = parts.length >= 3 && !(global.UtzItemFiles && global.UtzItemFiles.valid && global.UtzItemFiles.valid(base) && base.length <= 46);
             return readFile(fh, {
-              project: projectName, fileBase: base, fileName: fh.name, isFlat: true, flatOld: x.old,
+              project: projectName, fileBase: base, fileName: fh.name, isFlat: true, flatOld: x.old, dirH: x.dir,
               level: old ? parts[0] : "", room: old ? parts[1] : "",
               code: old ? parts.slice(2).join(" - ") : base
             });
@@ -8909,6 +8976,9 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       levelDir: "", roomDir: "", entry: entry || {} };
   }
   function dataDir(projectHandle, row){
+    // (2026-10-04) a row found by the folder scan knows its own folder: go straight to it (the level folder is an abbreviation that an app
+    // which hasn't read this project's items yet can't work out -- that gave "That rework isn't in the file any more" on a fresh rework)
+    if (row.dirH) return Promise.resolve(row.dirH);
     return itemDataDir(projectHandle, row.fileName, false, rowLoc(row)); // (2026-10-04) the item's own folder
   }
   // The full entry (photos included) for one row, read fresh. Rejects with
@@ -8935,7 +9005,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
 
   /* ------------------------------ the log (event files) ------------------------------ */
   function logDir(projectHandle, row, create){
-    return itemDataDir(projectHandle, row.fileName || (row.fileBase + ".json"), create, rowLoc(row)).then(function(d){ return d.getDirectoryHandle(RW_LOG, { create: !!create }); });
+    return (row.dirH ? Promise.resolve(row.dirH) : itemDataDir(projectHandle, row.fileName || (row.fileBase + ".json"), create, rowLoc(row))).then(function(d){ return d.getDirectoryHandle(RW_LOG, { create: !!create }); });
   }
   // Every event for one item file (all its entries). Missing folder -> [].
   // A single file mid-sync is skipped (it shows up on the next read); the
@@ -9223,7 +9293,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     }catch(e){ qrImg = null; }
     var y = M + logoH + (logoH ? 14 : 0);
     function drawLogos(first){
-      if (clSize){ try{ doc.addImage(cl.dataUrl, imageFormat(cl.dataUrl), M, M + (logoH - clSize.h) / 2, clSize.w, clSize.h, undefined, "FAST"); }catch(e){} }
+      if (clSize){ try{ doc.addImage(cl.dataUrl, imageFormat(cl.dataUrl), M, M - 10 + (logoH - clSize.h) / 2, clSize.w, clSize.h, undefined, "FAST"); }catch(e){} }
       var rx = W - M;
       if (al && al.dataUrl){
         rx -= ALS;
@@ -13684,6 +13754,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       case "delivered": return 5;
       case "manufactured": return 4;
       case "machined": return 3;
+      case "ready_to_inspect": return 3.5; // (2026-10-04) the joinery builder has signed the Manufacture ITP, the factory manager has not
       case "in_manufacture": return 2;
       case "measured": return 1;
       default: return 0;
@@ -13695,6 +13766,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       case "delivered": return "Delivered";
       case "manufactured": return "Ready to dispatch";
       case "machined": return "Machined";
+      case "ready_to_inspect": return "Ready to inspect";
       case "in_manufacture": return "In manufacture";
       case "measured": return "Check measured";
       default: return "Created";
@@ -13706,6 +13778,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       case "delivered": return "🚚";
       case "manufactured": return "📦";
       case "machined": return "⚙️";
+      case "ready_to_inspect": return "🔍";
       case "in_manufacture": return "🏭";
       case "measured": return "📏";
       default: return "";
@@ -14260,6 +14333,16 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     return -1;
   }
 
+  // (2026-10-04) Andrew: "the shop drawing file name is completely wrong" -- a drawing's file is saved as "REV n - <saved> - <item file name>.pdf", so
+  // the name it was added with is read from the .json beside it ("original")
+  function shopFillOriginals(groupH, revisions){
+    return Promise.all(revisions.map(function(r){
+      return groupH.getFileHandle(r.fileName.replace(/\.pdf$/i, "") + ".json", { create: false }).then(function(fh){ return fh.getFile(); }).then(function(f){ return f.text(); }).then(function(t){
+        var info = null; try{ info = JSON.parse(t); }catch(e){}
+        if (info && typeof info.original === "string" && info.original.trim()) r.displayName = info.original.replace(/\.pdf$/i, "").trim();
+      }, function(){});
+    }));
+  }
   function listShopDrawingsForItem(projectHandle, item){
     return getShopDrawingsDirForItem(projectHandle, joineryItemKey(item)).then(function(dirH){
       return everySubdir(dirH).then(function(groupHandles){
@@ -14275,7 +14358,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
             // (v35) the copies that came back, in the drawing's own "Returned" folder -- and (2026-10-01) the approved ones, in "Approved"
             return Promise.all([listShopDrawingPart(groupH, "Returned"), listShopDrawingPart(groupH, "Approved")]).then(function(r){
               r[0].concat(r[1]).forEach(function(x){ x.revLabel = shopRevLabelReturned(x, revisions); });
-              return { drawingId: groupH.name, revisions: revisions, returned: r[0], approved: r[1] }; // (v45) the label of the revision it answers
+              return shopFillOriginals(groupH, revisions).then(function(){ return { drawingId: groupH.name, revisions: revisions, returned: r[0], approved: r[1] }; }); // (v45) the label of the revision it answers
             });
           });
         }));
@@ -14350,7 +14433,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     el.innerHTML = "";
     if (!list.length){ el.innerHTML = "<p class=\"sub\" style=\"margin:0;\">" + emptyText + "</p>"; return; }
     var latest = list[0];
-    el.appendChild(docRow(escapeHtml(latest.displayName), subFor(latest) + (list.length > 1 ? " · latest" : ""), latest.handle));
+    var lt = summaryDocTitle("SHOP DRAWING", latest.fileName, latest.revLabel); el.appendChild(docRow(escapeHtml(lt), (latest.displayName ? latest.displayName + " · " : "") + subFor(latest) + (list.length > 1 ? " · latest" : ""), latest.handle, lt + ".pdf"));
     if (list.length < 2) return;
     var btn = document.createElement("button");
     btn.type = "button"; btn.className = "btn secondary sm sd-revs-btn";
@@ -14358,7 +14441,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     btn.textContent = "All " + allWord + " (" + list.length + ")";
     var box = document.createElement("div");
     box.className = "sd-revs"; box.hidden = true;
-    list.forEach(function(r){ box.appendChild(docRow(escapeHtml(r.displayName), subFor(r), r.handle)); });
+    list.forEach(function(r){ var rt = summaryDocTitle("SHOP DRAWING", r.fileName, r.revLabel); box.appendChild(docRow(escapeHtml(rt), (r.displayName ? r.displayName + " · " : "") + subFor(r), r.handle, rt + ".pdf")); });
     btn.addEventListener("click", function(){
       box.hidden = !box.hidden;
       btn.setAttribute("aria-expanded", String(!box.hidden));
@@ -14437,6 +14520,27 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // here, just with no image -- see this card's own render code below).
   // Resolves to null for "nobody has measured this item yet", the normal
   // empty state for most items.
+  // (2026-10-04) Andrew: "make site measure overlays openable on all joinery summary pages" -- the picture opens in the viewer
+  // (zoom, share, save) and every earlier save is listed under it, each opening the same way
+  function wireOverlayOpen(container, overlay){
+    function openSnap(url){ fetch(url).then(function(r){ return r.blob(); }).then(function(b){ if (window.UtzPdfView) window.UtzPdfView.open(b, "Site measure.jpg"); }).catch(function(){ showToast("Couldn't open that picture."); }); }
+    var img = container.querySelector(".overlay-snapshot-img");
+    if (img){ img.style.cursor = "zoom-in"; img.title = "Tap to open"; img.addEventListener("click", function(){ openSnap(overlay.snapshotDataUrl); }); }
+    var all = overlay.all || []; if (all.length < 2) return;
+    var wrap = document.createElement("div"); wrap.style.marginTop = "8px";
+    all.forEach(function(s){
+      var b = document.createElement("button"); b.type = "button"; b.className = "btn secondary sm"; b.style.cssText = "display:block;width:100%;text-align:left;margin:4px 0;";
+      b.textContent = (s.user || "Unnamed") + " — " + formatOverlayStamp(s.stamp);
+      b.addEventListener("click", function(){
+        s.handle.getFile().then(function(f){ return f.text(); }).then(function(t){
+          var d = null; try{ d = JSON.parse(t); }catch(e){}
+          if (d && d.overlaySnapshotDataURL) openSnap(d.overlaySnapshotDataURL); else showToast("That save has no picture — open Site Measure to see it.");
+        }).catch(function(){ showToast("Couldn't open that save just now."); });
+      });
+      wrap.appendChild(b);
+    });
+    container.appendChild(wrap);
+  }
   function readLatestJoineryOverlayForItem(projectHandle, item){
     return listJoineryOverlaysForItem(projectHandle, item).then(function(list){
       if (!list.length) return null;
@@ -14445,11 +14549,11 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         var data = null;
         try{ data = JSON.parse(text); }catch(e){}
         return {
-          user: (data && data.savedBy) || latest.user, stamp: latest.stamp, otherCount: list.length - 1, // (2026-10-01) the file's name has initials only; the full name is in the body
+          user: (data && data.savedBy) || latest.user, stamp: latest.stamp, otherCount: list.length - 1, all: list, // (2026-10-01) the file's name has initials only; the full name is in the body
           snapshotDataUrl: (data && data.overlaySnapshotDataURL) || null
         };
       }, function(){
-        return { user: latest.user, stamp: latest.stamp, otherCount: list.length - 1, snapshotDataUrl: null };
+        return { user: latest.user, stamp: latest.stamp, otherCount: list.length - 1, all: list, snapshotDataUrl: null };
       });
     }, function(){ return null; });
   }
@@ -16440,8 +16544,10 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // Opens a file handle's contents in a new tab -- same pattern source.html
   // already uses for "View job note"/"View shop drawing" (an object URL,
   // revoked a minute later, long enough for the browser to have opened it).
-  function openLinkedFileHandle(handle){
+  function openLinkedFileHandle(handle, saveName){
     handle.getFile().then(function(file){
+      // (2026-10-04) opened in the viewer under the document's display name, so Save / Share use it
+      if (saveName && window.UtzPdfView && window.UtzPdfView.open){ window.UtzPdfView.open(file, saveName); return; }
       var url = URL.createObjectURL(file);
       window.open(url, "_blank");
       setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
@@ -16457,7 +16563,14 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       return isNaN(d.getTime()) ? "" : "Signed off " + d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + ", " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     }, function(){ return ""; });
   }
-  function docRow(nameHtml, subText, handle){
+  // (2026-10-04) Andrew: documents on the summary page are named <project> -- <TAG> -- <room no.> - <code> - <no.> [- <rev>] - <saved>
+  // (shown, and used as the Save / Share name; the file on disk keeps its own name)
+  function summaryDocTitle(tag, fileName, rev){
+    var r0 = activeJoineryItem; if (!r0 || !window.UtzItemFiles || !UtzItemFiles.docTitle) return fileName || "";
+    var proj = activeProjectHandle ? activeProjectHandle.name : "";
+    return UtzItemFiles.docTitle({ tag: tag, project: proj, room: r0.room, code: r0.joineryId, no: UtzItemFiles.itemNo(r0.level, r0.room, r0.joineryId, proj), rev: rev || "", stamp: UtzItemFiles.docStamp(fileName, 0) });
+  }
+  function docRow(nameHtml, subText, handle, saveName){
     var row = document.createElement("div");
     row.className = "doc-row";
     var left = document.createElement("div");
@@ -16466,7 +16579,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     var openBtn = document.createElement("button");
     openBtn.type = "button"; openBtn.className = "btn secondary";
     openBtn.textContent = "Open";
-    openBtn.addEventListener("click", function(e){ e.stopPropagation(); openLinkedFileHandle(handle); });
+    openBtn.addEventListener("click", function(e){ e.stopPropagation(); openLinkedFileHandle(handle, saveName); });
     row.appendChild(openBtn);
     return row;
   }
@@ -16510,6 +16623,17 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     itemJobNotesList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
     itemItpList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Loading…</p>";
 
+    // (2026-10-04) the newest saved site measure PDF (sharp, unlike the picture), opened in the viewer under its display name
+    (function(){
+      var box = document.getElementById("itemSmPdf");
+      if (!box){ box = document.createElement("div"); box.id = "itemSmPdf"; box.style.marginTop = "8px"; itemOverlaysList.parentNode.insertBefore(box, itemOverlaysList.nextSibling); }
+      box.innerHTML = "";
+      UtzItemFiles.siteMeasurePdfs(activeProjectHandle, item.level, item.room, UtzItemFiles.fileKey(item.level, item.room, item.joineryId, activeProjectHandle.name)).then(function(list){
+        if (activeJoineryItem !== item || !list.length) return;
+        var top = list[0], ttl = summaryDocTitle("SITE MEASURE", top.name);
+        box.appendChild(docRow(escapeHtml(ttl), "Site measure PDF" + (list.length > 1 ? " (newest of " + list.length + ")" : "") + (top.t ? " · " + new Date(top.t).toLocaleDateString() : ""), top.handle, ttl + ".pdf"));
+      }, function(){});
+    })();
     readLatestJoineryOverlayForItem(activeProjectHandle, item).then(function(overlay){
       if (activeJoineryItem !== item) return; // navigated away before this resolved
       if (!overlay){
@@ -16525,6 +16649,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
           ? "<img class=\"overlay-snapshot-img\" src=\"" + overlay.snapshotDataUrl + "\" alt=\"Site Measure overlay for this item\">"
           : "<p class=\"sub\" style=\"margin:0;\">Saved before overlay previews existed — open Site Measure to view it.</p>") +
         "<p class=\"sub overlay-snapshot-caption\">" + caption + "</p>";
+      wireOverlayOpen(itemOverlaysList, overlay);
     }).catch(function(err){
       console.error("Reading Site Measure overlay failed:", err);
       itemOverlaysList.innerHTML = "<p class=\"sub\" style=\"margin:0;\">Couldn't load the Site Measure overlay.</p>";
@@ -16550,7 +16675,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         return;
       }
       notes.forEach(function(n){
-        itemJobNotesList.appendChild(docRow(escapeHtml(n.original || n.fileName), n.original ? n.fileName : "", n.handle)); // (2026-10-01) the name it came in with; the saved name under it
+        var jt = summaryDocTitle("AS BUILT", n.fileName); itemJobNotesList.appendChild(docRow(escapeHtml(jt), n.original || "", n.handle, jt + ".pdf")); // (2026-10-01) the name it came in with; the saved name under it
       });
     }).catch(function(err){
       console.error("Listing job notes failed:", err);
@@ -16599,7 +16724,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         header.innerHTML = "<div class=\"doc-row-name\">" + escapeHtml(r.app.name) + "</div><div class=\"doc-row-sub\">" + escapeHtml(summaryText) + "</div>";
         itemItpList.appendChild(header);
         r.pdfs.forEach(function(p){
-          var pr = docRow(escapeHtml(p.fileName), "", p.handle); itemItpList.appendChild(pr);
+          var it = summaryDocTitle(String(r.app.name || "ITP").toUpperCase(), p.fileName); var pr = docRow(escapeHtml(it), "", p.handle, it + ".pdf"); itemItpList.appendChild(pr);
           itpPdfSignedOffLabel(p.handle).then(function(w){ if (w){ var sub = document.createElement("div"); sub.className = "doc-row-sub"; sub.textContent = w; pr.firstChild.appendChild(sub); } });
         });
       });
