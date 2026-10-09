@@ -274,7 +274,7 @@
     if (!navigator.share) el.querySelector('[data-a="share"]').style.display = "none"; // Fully Kiosk / an Android WebView has no share sheet
     document.body.appendChild(el);
     var pagesEl = el.querySelector(".upv-pages");
-    var c = current = { el: el, doc: null, zoom: 1, max: 4, observer: null, pushed: false };
+    var c = current = { el: el, doc: null, zoom: 1, min: 0.2 /* (2026-10-08) "can't zoom out enough": down to a fifth of the screen width, not just fit-to-width */, max: 4, observer: null, pushed: false };
     // the device Back button closes the viewer, not the app
     c.prevState = history.state; // Close turns our entry back into this one (history.back() would also reach the app's own Back and leave its screen)
     try{ history.pushState({ utzPdfView: true }, ""); c.pushed = true; }catch(e){}
@@ -296,11 +296,11 @@
           });
         } else download(blob, shareName);
       }
-      else if (a === "in" || a === "out"){ c.zoom = Math.max(1, Math.min(c.max, c.zoom * (a === "in" ? 1.5 : 1 / 1.5))); layout(); }
+      else if (a === "in" || a === "out"){ c.zoom = Math.max(c.min, Math.min(c.max, c.zoom * (a === "in" ? 1.5 : 1 / 1.5))); layout(); }
     });
     var pageBoxes = [];
     function layout(){
-      var w = Math.max(200, (pagesEl.clientWidth - 16) * c.zoom), wide = w > pagesEl.clientWidth - 16;
+      var w = Math.max(60, (pagesEl.clientWidth - 16) * c.zoom), wide = w > pagesEl.clientWidth - 16;
       // centred while it fits; left-aligned once wider than the screen, so every part can be scrolled to
       pageBoxes.forEach(function(p){ p.box.style.width = w + "px"; p.box.style.height = (w * p.ratio) + "px"; p.box.style.marginLeft = p.box.style.marginRight = wide ? "8px" : "auto"; if (!p.img && p.drawnAt && p.drawnAt < w * 0.9){ p.drawnAt = 0; if (p.visible) draw(p); } });
     }
@@ -313,7 +313,7 @@
       if (!pinch || e.touches.length !== 2) return;
       e.preventDefault();
       var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY) || 1;
-      c.zoom = Math.max(1, Math.min(c.max, pinch.z * d / pinch.d)); layout();
+      c.zoom = Math.max(c.min, Math.min(c.max, pinch.z * d / pinch.d)); layout();
     }, { passive: false });
     pagesEl.addEventListener("touchend", function(e){ if (e.touches.length < 2) pinch = null; }, { passive: true });
     function draw(p){
