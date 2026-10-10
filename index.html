@@ -830,6 +830,12 @@
   }
   /* the Levels list: a level with several zones is a heading with its zones under it */
   .list-group-head{ font-weight: 700; font-size: 14px; color: var(--muted); padding: 10px 6px 2px; letter-spacing: .02em; }
+  /* (2026-10-10) Andrew: "zones are not levels" -- a level split over several plans shows them as tabs */
+  .plan-tabs{ display: flex; gap: 4px; flex-wrap: wrap; margin: 2px 0 12px; border-bottom: 1px solid var(--border); }
+  .plan-tabs button{ background: transparent; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; color: var(--muted); font: inherit; font-size: 14px; font-weight: 700; padding: 8px 12px; cursor: pointer; touch-action: manipulation; }
+  .plan-tabs button.on{ color: var(--text); border-bottom-color: var(--accent); }
+  .plan-tabs-canvas{ margin: 0 0 0 10px; border-bottom: 0; }
+  .plan-tabs-canvas button{ padding: 4px 10px; font-size: 13px; }
   .list-item.list-item-zone{ margin-left: 18px; width: calc(100% - 18px); }
   .wo-zones{ display:flex; flex-direction:column; gap:8px; margin: 0 0 12px; }
   .wo-zone-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size: 14px; }
@@ -1800,7 +1806,7 @@
       });
       return out;
     }
-    var CUTS = { carcase: "Carcase", colourBoard: "Colour board", solidSurface: "Solid surface" };
+    var CUTS = { carcase: "Carcase cut", colourBoard: "CB cut", carcaseEdged: "Carcase edged / bored", cbEdged: "CB edged / bored", solidSurface: "Solid surface" };
     function histFromEvents(branch, evs){
       var out = [];
       if (branch === "Joinery Status") evs.forEach(function(e){
@@ -3022,6 +3028,98 @@
 })();
 </script>
 <!-- UTZLINE-ITEM-FILES END -->
+<!-- UTZLINE-LEVEL-ZONES BEGIN (generated from shared/level-zones -- don't edit here) -->
+<script>
+/* ============================== UTZLINE level zones (2026-10-10) ==============================
+   Andrew: "zones are not levels". UTZLINE Projects saves a level split over several floor plans as one level file PER PLAN, named
+   "<Level> (<Zone>)" on disk ("LEVEL 1 (H1b)"), and keeps the split in Project Saves\level-zones.json
+   ({ byLevel: { "<disk name>": { level, zone, codes } } }). Items carry the disk name as their level. An app that SHOWS levels reads
+   this to show the real level ("LEVEL 1") -- the zone is which plan the room is drawn on, not a level.
+     UtzLevelZones.read(projectHandle) -> Promise<meta>  ({ byLevel: {} } when the project has none; never throws)
+     UtzLevelZones.split(diskName, meta) -> { level, zone }   (the file, else the "(zone)" pattern of the name, else the name itself)
+     UtzLevelZones.label(diskName, meta) -> the level to show      UtzLevelZones.full(diskName, meta) -> "LEVEL 1 · H1b" (the name when no zone)
+     UtzLevelZones.groups(names, meta) -> [{ level, members: [{ name, zone }] }]   UtzLevelZones.siblings(name, names, meta) -> the group when split, else null
+     UtzLevelZones.optionsHtml(names, meta, esc) -> <option>s for a <select>: a split level is an <optgroup> of its plans (values stay the disk names)
+     UtzLevelZones.tabs(el, name, names, meta, onPick(diskName)) -> the level's plans as tabs in el (hidden when the level has one plan)
+     UtzLevelZones.use(ph, onLoaded) -> the cached meta for this project at once ({ byLevel: {} } before the file is read), onLoaded(meta) once read
+   Plain ES5, no dependencies. Generated into each app between UTZLINE-LEVEL-ZONES markers -- edit here, run shared/sync_app_blocks.py. */
+(function(){
+  "use strict";
+  if (window.UtzLevelZones) return;
+  var RE = /^(.*\S)\s*\(([^()]+)\)\s*$/;
+  function read(ph){
+    if (!ph) return Promise.resolve({ byLevel: {} });
+    return ph.getDirectoryHandle("Project Saves", { create: false }).then(function(d){ return d.getFileHandle("level-zones.json", { create: false }); })
+      .then(function(fh){ return fh.getFile(); }).then(function(f){ return f.text(); })
+      .then(function(t){ var j = JSON.parse(t); return j && j.byLevel && typeof j.byLevel === "object" ? j : { byLevel: {} }; }, function(){ return { byLevel: {} }; })
+      .then(null, function(){ return { byLevel: {} }; });
+  }
+  function split(name, meta){
+    name = String(name == null ? "" : name);
+    var m = meta && meta.byLevel && meta.byLevel[name];
+    if (m && m.level) return { level: String(m.level), zone: String(m.zone || "") };
+    var mm = RE.exec(name);
+    return mm ? { level: mm[1], zone: mm[2] } : { level: name, zone: "" };
+  }
+  function label(name, meta){ return split(name, meta).level; }
+  function full(name, meta){ var s = split(name, meta); return s.zone ? s.level + " · " + s.zone : s.level; }
+  function groups(names, meta){
+    var out = [], by = {};
+    (names || []).forEach(function(n){ var sp = split(n, meta), k = sp.level.toLowerCase(); if (!by[k]){ by[k] = { level: sp.level, members: [] }; out.push(by[k]); } by[k].members.push({ name: n, zone: sp.zone }); });
+    return out;
+  }
+  function siblings(name, names, meta){
+    var gs = groups(names, meta);
+    for (var i = 0; i < gs.length; i++){ var g = gs[i]; if (g.members.length >= 2 && g.members.some(function(m){ return m.name === name; })) return g; }
+    return null;
+  }
+  function esc0(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function optionsHtml(names, meta, esc){
+    esc = esc || esc0;
+    return groups(names, meta).map(function(g){
+      if (g.members.length < 2) return '<option value="' + esc(g.members[0].name) + '">' + esc(g.members[0].zone ? g.level : g.members[0].name) + "</option>";
+      return '<optgroup label="' + esc(g.level) + '">' + g.members.map(function(m){ return '<option value="' + esc(m.name) + '">' + esc(m.zone || m.name) + "</option>"; }).join("") + "</optgroup>";
+    }).join("");
+  }
+  var cssDone = false;
+  function css(){
+    if (cssDone || !document.head) return; cssDone = true;
+    var st = document.createElement("style"); st.id = "utzLevelZonesCss";
+    st.textContent = ".utz-lz-tabs{display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center;margin:0 0 0 10px;vertical-align:middle}" +
+      ".utz-lz-tabs.block{display:flex;margin:2px 0 10px;border-bottom:1px solid var(--border,#555)}" +
+      ".utz-lz-tabs button{background:transparent;border:0;border-bottom:3px solid transparent;margin-bottom:-1px;color:var(--muted,#999);font:inherit;font-size:13px;font-weight:700;padding:4px 10px;cursor:pointer;touch-action:manipulation}" +
+      ".utz-lz-tabs.block button{padding:8px 12px;font-size:14px}" +
+      ".utz-lz-tabs button.on{color:var(--text,#fff);border-bottom-color:var(--accent,#3db2ff)}";
+    document.head.appendChild(st);
+  }
+  function tabs(el, name, names, meta, onPick){
+    if (!el) return null;
+    css();
+    var g = siblings(name, names, meta);
+    el.innerHTML = ""; el.hidden = !g;
+    if (!g) return null;
+    g.members.forEach(function(m){
+      var b = document.createElement("button"); b.type = "button"; b.textContent = m.zone || m.name; b.className = m.name === name ? "on" : "";
+      b.setAttribute("data-plan", m.name); b.title = "Open this plan of " + g.level;
+      b.addEventListener("click", function(){ if (m.name !== name) onPick(m.name); });
+      el.appendChild(b);
+    });
+    return g;
+  }
+  var cache = {}, pending = {};
+  function use(ph, onLoaded){
+    var k = ph && ph.name; if (!k) return { byLevel: {} };
+    if (cache[k]) return cache[k];
+    if (!pending[k]){ pending[k] = read(ph).then(function(m){ cache[k] = m; delete pending[k]; if (onLoaded) onLoaded(m); }); }
+    return { byLevel: {} };
+  }
+  function forget(ph){ var k = ph && ph.name; if (k) delete cache[k]; else cache = {}; }
+  // load(ph) -> Promise<meta>: reads once and seeds use()'s cache so the next use(ph) is the real file (for screens that can wait for it)
+  function load(ph){ var k = ph && ph.name; if (!k) return Promise.resolve({ byLevel: {} }); if (cache[k]) return Promise.resolve(cache[k]); return read(ph).then(function(m){ cache[k] = m; return m; }); }
+  window.UtzLevelZones = { read: read, split: split, label: label, full: full, groups: groups, siblings: siblings, optionsHtml: optionsHtml, tabs: tabs, use: use, load: load, forget: forget };
+})();
+</script>
+<!-- UTZLINE-LEVEL-ZONES END -->
 <!-- UTZLINE-EVENT-STORE BEGIN (generated from shared/event-store -- don't edit here) -->
 <script>
 /* ============================== UTZLINE event store v2 (2026-09-30) ==============================
@@ -4020,7 +4118,8 @@
   var APP_CODES = [
     ["SiteMeasure", "Site Measure"], ["Viewer", "Viewer"], ["Projects", "Projects"], ["Scheduler", "Scheduler"],
     ["MachineSchedule", "Machine Schedule"], ["SolidSurfaceSchedule", "Solid Surface Schedule"],
-    ["ManufactureITP", "Manufacture ITP"], ["DeliveryITP", "Delivery ITP"], ["InstallITP", "Install ITP"], ["SubOrders", "Sub Orders"], ["ShopDrawings", "Shop Drawings"], ["Drafting", "Drafting Schedule"], ["DollarSummary", "$ Summary (finance)"]
+    ["ManufactureITP", "Manufacture ITP"], ["DeliveryITP", "Delivery ITP"], ["InstallITP", "Install ITP"], ["SubOrders", "Sub Orders"], ["ShopDrawings", "Shop Drawings"], ["Drafting", "Drafting Schedule"], ["DollarSummary", "$ Summary (finance)"],
+    ["Variations", "Variations & RFIs"], ["Defects", "Defects & Handover"], ["ProgressClaims", "Progress Claims"], ["Dashboard", "Management Dashboard"]
   ];
   var DEFAULT_ADMINS = ["Andrew Utz"], ADMIN_FILE = "utzline-admins.json", PENDING_FILE = "utzline-users-pending.json";
   var cfg = null, admins = DEFAULT_ADMINS.slice(), adminsAt = 0, busy = false, shownFor = {};
@@ -4092,7 +4191,9 @@
     if (isAdminName(name)) return true;
     var row = rows.filter(function(r){ return r && low(r.name) === low(name); })[0];
     var own = row ? codesOf(row) : [];
-    if (!deptCache || !deptAppsRead) return own.length ? appMatch(own, code) : true; // departments not read yet (first run, nothing remembered): old rule
+    // (2026-10-09) Andrew: "only people assigned to an app should show on the login page" -- a name with no app ticked used to show EVERYWHERE while the department
+    // files hadn't been read (or don't exist yet); now only the apps ticked on the name (and, once read, its department's) put a name on the login page
+    if (!deptCache || !deptAppsRead) return appMatch(own, code);
     return appMatch(own, code) || appMatch(defaultApps(name) || [], code);
   }
   function showsHere(row, rows){ return !!(row && row.name) && canUse(row.name, rows); }
@@ -4598,7 +4699,7 @@
       return p === "granted";
     }, function(){ return false; });
   }
-  window.UtzUsers = { ensureAccess: ensureAccess, canUse: canUse, noAccessNames: noAccessNames, defaultApps: defaultApps, refreshDefaults: refreshDefaults, DEPARTMENTS: DEPARTMENTS, departmentsOf: departmentsOf, setDepartments: setDepartments, pickDepartments: pickDepartments, APP_CODES: APP_CODES, init: init, filterNames: filterNames, showsHere: showsHere, needsApproval: needsApproval, request: request, poke: poke, loadAdmins: loadAdmins, isAdmin: isAdminName, PENDING_FILE: PENDING_FILE, openUsers: openManage, ADMIN_FILE: ADMIN_FILE };
+  window.UtzUsers = { name: function(){ try { return (cfg && cfg.getName && cfg.getName()) || ""; } catch (e) { return ""; } }, rows: function(){ return cfg && cfg.readUsers ? Promise.resolve(cfg.readUsers()).then(function(r){ return r || []; }) : Promise.resolve([]); }, ensureAccess: ensureAccess, canUse: canUse, noAccessNames: noAccessNames, defaultApps: defaultApps, refreshDefaults: refreshDefaults, DEPARTMENTS: DEPARTMENTS, departmentsOf: departmentsOf, setDepartments: setDepartments, pickDepartments: pickDepartments, APP_CODES: APP_CODES, init: init, filterNames: filterNames, showsHere: showsHere, needsApproval: needsApproval, request: request, poke: poke, loadAdmins: loadAdmins, isAdmin: isAdminName, PENDING_FILE: PENDING_FILE, openUsers: openManage, ADMIN_FILE: ADMIN_FILE };
 })();
 </script>
 <!-- UTZLINE-USERS END -->
@@ -5196,7 +5297,8 @@
     if (s === "installed") return "🏆";
     if (s === "delivered") return "🚚";
     if (s === "manufactured") return "📦";
-    if (s === "machined") return "⚙️";
+    if (s === "machined") return "🔨";
+    if (s === "cut") return "⚙️";
     if (s === "in_manufacture") return "🏭";
     if (rec.jobNote) return "🏭";
     if (s === "measured") return "📏";
@@ -5229,7 +5331,7 @@
     parent.appendChild(g);
     return g;
   }
-  function fontStack(f){ return f === "mono" ? "-apple-system, 'Segoe UI', Roboto, 'IBM Plex Sans', Arial, sans-serif" : "'IBM Plex Sans',Arial,sans-serif"; }
+  function fontStack(f){ return f === "mono" ? "'IBM Plex Mono',monospace" : "'IBM Plex Sans',Arial,sans-serif"; }
   function drawLabel(parent, o){
     var fs = Number(o.fontSize) > 0 ? Number(o.fontSize) : 16;
     var lines = String(o.text == null ? "" : o.text).split("\n");
@@ -5491,7 +5593,14 @@
          <th> with no text and no data-col, e.g. the row-actions column) likewise
        - toggle: ids of frozen columns that stay in place but can still be ticked off (2026-10-04: the item "No.")
        - mountBefore: the button goes inside this element (the .tv-zoom bar) or before the table's box
-     UtzColumns.apply(tableEl) / reset(tableEl) / state(tableEl) -> { order, hidden }
+       - sort: true (2026-10-10, Andrew: "all tables need to be sortable, selectable columns"): tap a column heading to sort by it
+         (ascending, then descending, then the original order; remembered per device). Numbers, $ amounts, %, dd.mm.yyyy dates and text
+         sort properly; empty cells go last. Rows with data-sort-fixed (group headings, totals) are boundaries: the rows between two of
+         them are sorted among themselves; a row with data-sort-last stays at the end of its group. A row with data-utz-span (a group
+         heading with one cell) is stretched across the visible columns. A cell's data-sv attribute overrides what is sorted on.
+     UtzColumns.ensure(tableEl, key, opts) -> attaches (once the table has its heading row), and re-attaches under a new key when the app
+       switches the table to another set of columns (e.g. Variations / RFIs); detach(tableEl) removes it
+     UtzColumns.apply(tableEl) / reset(tableEl) / state(tableEl) -> { order, hidden, sort }
    Plain ES5. */
 (function(){
   "use strict";
@@ -5515,6 +5624,7 @@
     return st.front.concat(mov, st.end);
   }
   function applyRow(st, row, order, hiddenSet){
+    if (row.hasAttribute("data-utz-span")) return; // stretched over the visible columns in apply()
     var cells = tagRow(st, row), byId = {};
     cells.forEach(function(c){ byId[c.getAttribute("data-utz-col")] = c; });
     var frag = document.createDocumentFragment(), extra = cells.filter(function(c){ return order.indexOf(c.getAttribute("data-utz-col")) === -1; });
@@ -5530,16 +5640,70 @@
     try{
       var hr = headRow(t); if (hr) applyRow(st, hr, order, hiddenSet);
       Array.prototype.forEach.call(t.tBodies, function(tb){ Array.prototype.forEach.call(tb.rows, function(r){ applyRow(st, r, order, hiddenSet); }); });
+      if (st.sortable){ sortBodies(st); markSort(st); }
+      var visible = order.filter(function(id){ return !hiddenSet[id]; }).length;
+      Array.prototype.forEach.call(t.tBodies, function(tb){ Array.prototype.forEach.call(tb.rows, function(r){ if (r.hasAttribute("data-utz-span") && r.cells[0]) r.cells[0].colSpan = Math.max(1, visible); }); });
     } finally { st.applying = false; }
     if (st.btn) st.btn.classList.toggle("utz-cols-on", st.hidden.length > 0 || JSON.stringify(st.order) !== JSON.stringify(st.movable));
     if (st.onApply){ try{ st.onApply(t); }catch(e){} }
   }
+  // ---- sorting (opt-in: sort: true) ----
+  function cellKey(c){
+    if (!c) return null;
+    var t = c.hasAttribute("data-sv") ? c.getAttribute("data-sv") : null;
+    if (t === null){ var inp = c.querySelector("input,select"); t = inp ? inp.value : (c.textContent || ""); }
+    t = String(t).replace(/\s+/g, " ").trim();
+    if (!t) return null;
+    var d = /^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})$/.exec(t); if (d) return { n: +d[3] * 10000 + +d[2] * 100 + +d[1] };
+    var n = t.replace(/[$,%\s]/g, ""); if (/^-?\d+(\.\d+)?$/.test(n)) return { n: parseFloat(n) };
+    return { s: t.toLowerCase() };
+  }
+  function cmpKeys(a, b){
+    if (a.n !== undefined && b.n !== undefined) return a.n - b.n;
+    var x = a.n !== undefined ? String(a.n) : a.s, y = b.n !== undefined ? String(b.n) : b.s;
+    return x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" });
+  }
+  function sortBodies(st){
+    var s = st.sort;
+    Array.prototype.forEach.call(st.table.tBodies, function(tb){
+      var rows = Array.prototype.slice.call(tb.rows), out = [], run = [], i0 = 0;
+      rows.forEach(function(r){ if (!r.hasAttribute("data-utz-i")) r.setAttribute("data-utz-i", String(i0)); i0++; });
+      function idx(r){ return +r.getAttribute("data-utz-i"); }
+      function flush(){
+        if (!run.length) return;
+        var body = run.filter(function(r){ return !r.hasAttribute("data-sort-last"); }), tail = run.filter(function(r){ return r.hasAttribute("data-sort-last"); });
+        if (s && s.id){
+          var keyed = body.map(function(r){ var cell = null; for (var k = 0; k < r.cells.length; k++) if (r.cells[k].getAttribute("data-utz-col") === s.id){ cell = r.cells[k]; break; } return { r: r, k: cellKey(cell) }; });
+          keyed.sort(function(a, b){
+            if (!a.k && !b.k) return idx(a.r) - idx(b.r);
+            if (!a.k) return 1; if (!b.k) return -1;   // empty last, whichever way it is sorted
+            var c = cmpKeys(a.k, b.k); if (s.dir === "desc") c = -c;
+            return c || idx(a.r) - idx(b.r);
+          });
+          body = keyed.map(function(x){ return x.r; });
+        } else body.sort(function(a, b){ return idx(a) - idx(b); });
+        out = out.concat(body, tail); run = [];
+      }
+      rows.forEach(function(r){ if (r.hasAttribute("data-sort-fixed") || r.hasAttribute("data-utz-span")){ flush(); out.push(r); } else run.push(r); });
+      flush();
+      var changed = false; for (var i = 0; i < rows.length; i++) if (rows[i] !== out[i]){ changed = true; break; }
+      if (changed){ var frag = document.createDocumentFragment(); out.forEach(function(r){ frag.appendChild(r); }); tb.appendChild(frag); }
+    });
+  }
+  function markSort(st){
+    var hr = headRow(st.table); if (!hr) return;
+    Array.prototype.forEach.call(hr.cells, function(th, i){
+      var id = th.getAttribute("data-utz-col") || st.ids[i], on = st.sort && st.sort.id === id;
+      th.classList.add("utz-sortable"); th.classList.toggle("utz-sort-asc", !!on && st.sort.dir === "asc"); th.classList.toggle("utz-sort-desc", !!on && st.sort.dir === "desc");
+      th.setAttribute("aria-sort", on ? (st.sort.dir === "asc" ? "ascending" : "descending") : "none");
+    });
+  }
   function canHide(st, id){ return st.movable.indexOf(id) !== -1 || st.toggle.indexOf(id) !== -1; }
-  function save(st){ if (st.storageKey) lsSet(st.storageKey, { order: st.order, hidden: st.hidden }); }
+  function save(st){ if (st.storageKey) lsSet(st.storageKey, { order: st.order, hidden: st.hidden, sort: st.sort || null }); }
   function label(st, id){ var th = st.thById[id]; return th ? ((th.textContent || "").trim() || id) : id; }
   function buildPop(st){
     var pop = st.pop; pop.innerHTML = "";
-    var h = document.createElement("div"); h.className = "utz-cols-head"; h.textContent = "Columns — tick to show, ▲ ▼ to move"; pop.appendChild(h);
+    var h = document.createElement("div"); h.className = "utz-cols-head"; h.textContent = "Columns — tick to show, ▲ ▼ to move" + (st.sortable ? ". Tap a heading to sort." : ""); pop.appendChild(h);
     var order = desiredOrder(st).filter(function(id){ return st.movable.indexOf(id) !== -1; });
     st.toggle.forEach(function(id){ // fixed in place: a tick box, no arrows
       var row = document.createElement("div"); row.className = "utz-cols-row";
@@ -5563,7 +5727,7 @@
       row.appendChild(lab); row.appendChild(up); row.appendChild(dn); pop.appendChild(row);
     });
     var reset = document.createElement("button"); reset.type = "button"; reset.className = "utz-cols-reset"; reset.textContent = "Show all, original order";
-    reset.addEventListener("click", function(){ st.order = st.movable.slice(); st.hidden = []; save(st); apply(st.table); buildPop(st); });
+    reset.addEventListener("click", function(){ st.order = st.movable.slice(); st.hidden = []; st.sort = null; save(st); apply(st.table); buildPop(st); });
     pop.appendChild(reset);
   }
   function move(st, id, dir){
@@ -5586,11 +5750,23 @@
     if (fixedEnd === undefined){ fixedEnd = 0; for (var k = ths.length - 1; k >= 0; k--){ var th = ths[k]; if (!th.getAttribute("data-col") && !(th.textContent || "").trim()) fixedEnd++; else break; } }
     var st = { table: t, ids: ids, thById: thById, front: ids.slice(0, frozen), end: fixedEnd ? ids.slice(ids.length - fixedEnd) : [], movable: ids.slice(frozen, ids.length - fixedEnd),
                toggle: (o.toggle || []).filter(function(id){ return ids.slice(0, frozen).indexOf(id) !== -1; }),
-               order: [], hidden: [], storageKey: o.storageKey || null, onApply: o.onApply || null, applying: false };
+               order: [], hidden: [], sort: null, sortable: !!o.sort, storageKey: o.storageKey || null, onApply: o.onApply || null, applying: false };
     var saved = st.storageKey ? lsGet(st.storageKey) : null;
     if (saved && typeof saved === "object"){
       if (Array.isArray(saved.order)) st.order = saved.order.filter(function(id){ return st.movable.indexOf(id) !== -1; });
       if (Array.isArray(saved.hidden)) st.hidden = saved.hidden.filter(function(id){ return canHide(st, id); });
+      if (st.sortable && saved.sort && ids.indexOf(saved.sort.id) !== -1 && (saved.sort.dir === "asc" || saved.sort.dir === "desc")) st.sort = { id: saved.sort.id, dir: saved.sort.dir };
+    }
+    if (st.sortable){ // a tap on a column heading: ascending, descending, original order
+      t.addEventListener("click", function(e){
+        if (t.__utzCols !== st) return;
+        var th = e.target && e.target.closest ? e.target.closest("th") : null;
+        if (!th || !t.tHead || th.parentNode.parentNode !== t.tHead || e.target.closest("input,select,button,a")) return;
+        var id = th.getAttribute("data-utz-col") || ids[Array.prototype.indexOf.call(th.parentNode.cells, th)];
+        if (!id || !(th.textContent || "").trim()) return;
+        st.sort = !st.sort || st.sort.id !== id ? { id: id, dir: "asc" } : st.sort.dir === "asc" ? { id: id, dir: "desc" } : null;
+        save(st); apply(t);
+      });
     }
     if (!st.order.length) st.order = st.movable.slice();
     t.__utzCols = st;
@@ -5608,18 +5784,34 @@
     // re-apply after every redraw of the rows
     try{
       var raf = 0;
-      var mo = new MutationObserver(function(){ if (st.applying) return; if (!raf) raf = requestAnimationFrame(function(){ raf = 0; apply(t); }); });
+      var mo = new MutationObserver(function(){ if (st.applying || t.__utzCols !== st) return; if (!raf) raf = requestAnimationFrame(function(){ raf = 0; apply(t); }); });
       Array.prototype.forEach.call(t.tBodies, function(tb){ mo.observe(tb, { childList: true }); });
       if (t.tHead) mo.observe(t.tHead, { childList: true }); // rows replaced only -- never subtree, this module's own cell moves must not re-trigger it
+      st.mo = mo;
     }catch(e){}
     apply(t);
     return st;
   }
-  function reset(t){ var st = t && t.__utzCols; if (!st) return; st.order = st.movable.slice(); st.hidden = []; save(st); apply(t); }
-  function state(t){ var st = t && t.__utzCols; return st ? { order: desiredOrder(st).filter(function(x){ return st.movable.indexOf(x) !== -1; }), hidden: st.hidden.slice() } : null; }
+  function detach(t){
+    var st = t && t.__utzCols; if (!st) return;
+    try{ if (st.mo) st.mo.disconnect(); }catch(e){}
+    if (openPop === st) close();
+    if (st.btn && st.btn.parentNode && st.btn.parentNode.parentNode) st.btn.parentNode.parentNode.removeChild(st.btn.parentNode);
+    t.__utzCols = null;
+    if (t.tHead) Array.prototype.forEach.call(t.tHead.querySelectorAll("th"), function(th){ th.classList.remove("utz-sortable", "utz-sort-asc", "utz-sort-desc"); th.removeAttribute("data-utz-col"); });
+  }
+  function ensure(t, key, o){
+    if (!t || !t.tHead || !t.tHead.rows.length) return null;
+    var st = t.__utzCols;
+    if (st && st.key !== key){ detach(t); st = null; }
+    if (st) return st;
+    o = o || {}; o.storageKey = key; st = attach(t, o); if (st) st.key = key; return st;
+  }
+  function reset(t){ var st = t && t.__utzCols; if (!st) return; st.order = st.movable.slice(); st.hidden = []; st.sort = null; save(st); apply(t); }
+  function state(t){ var st = t && t.__utzCols; return st ? { order: desiredOrder(st).filter(function(x){ return st.movable.indexOf(x) !== -1; }), hidden: st.hidden.slice(), sort: st.sort ? { id: st.sort.id, dir: st.sort.dir } : null } : null; }
   document.addEventListener("click", function(){ close(); });
   document.addEventListener("keydown", function(e){ if (e.key === "Escape") close(); });
-  window.UtzColumns = { attach: attach, apply: apply, reset: reset, state: state, close: close };
+  window.UtzColumns = { attach: attach, ensure: ensure, detach: detach, apply: apply, reset: reset, state: state, close: close };
 })();
 </script>
 <style>
@@ -5638,6 +5830,11 @@
   .utz-cols-move{ width: 34px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 12px; cursor: pointer; touch-action: manipulation; }
   .utz-cols-move:disabled{ opacity: .35; cursor: default; }
   .utz-cols-reset{ display: block; width: 100%; margin-top: 8px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; }
+  /* sortable headings (sort: true) */
+  th.utz-sortable{ cursor: pointer; user-select: none; -webkit-user-select: none; }
+  th.utz-sortable:hover{ color: var(--text); }
+  th.utz-sort-asc::after{ content: " \25B2"; font-size: 9px; color: var(--accent); }
+  th.utz-sort-desc::after{ content: " \25BC"; font-size: 9px; color: var(--accent); }
 </style>
 <!-- UTZLINE-COLUMNS END -->
 <!-- UTZLINE-ADMIN-GATE BEGIN (generated from shared/admin-gate -- don't edit here) -->
@@ -5945,6 +6142,7 @@
   <section id="screenRooms" class="screen">
     <div class="backrow"><button class="btn secondary" id="backToLevelsBtn">&larr; Levels</button></div>
     <h1 id="roomsLevelLabel">Rooms</h1>
+    <div class="plan-tabs" id="levelPlanTabs" hidden></div>
     <div class="card">
       <div class="status-line" id="levelPlanStatus"></div>
       <div class="plan-preview" id="levelPlanPreview" hidden></div>
@@ -6268,6 +6466,7 @@
     <div class="plan-canvas-topbar">
       <button class="btn secondary" id="backFromPlanCanvasBtn">&larr; Back</button>
       <span id="planCanvasTitle">Level plan</span>
+      <span class="plan-tabs plan-tabs-canvas" id="planCanvasTabs" hidden></span>
       <!-- (v31) imported items not yet on this plan; (v32) drag them on, work orders with no room too -->
       <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
         <!-- (v34) markers placed from the plan's own labels, not yet checked -->
@@ -6454,6 +6653,7 @@
       <button type="button" class="btn secondary" id="planSideAbove">Above</button>
       <button type="button" class="btn secondary" id="planSideBelow">Below</button></div>
     <p class="sub">Resizes every marker on this plan, and sets the size for the ones placed from now on. 100% is the size used on an A0 sheet.</p>
+    <label class="qty-row" id="planSizeAllWrap" style="cursor:pointer;" hidden><input type="checkbox" id="planSizeAll"> <span id="planSizeAllText">Apply to every plan of this level</span></label>
     <div class="modal-actions">
       <button class="btn secondary" id="planSizeAutoBtn" type="button">Use this sheet's default</button>
       <button class="btn" id="planSizeDoneBtn" type="button">Done</button>
@@ -10395,6 +10595,13 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       el.querySelector("[data-urw=outTable]").innerHTML = html;
       el.querySelector("[data-urw=outEmpty]").hidden = !!out.length || st.loading;
       el.querySelector("[data-urw=delivTable]").innerHTML = theadHtml() + "<tbody>" + deliv.map(function(r, i){ return rowHtml(r, out.length + i); }).join("") + "</tbody>";
+      // (2026-10-10) Andrew: "all tables need to be sortable, selectable columns" -- the headings already sort; the shared Columns menu (when the app has it) adds
+      // show / hide / move. The tables are rebuilt on every render, so the choice is re-applied each time.
+      if (window.UtzColumns){
+        var tOut = el.querySelector("[data-urw=outTable]"), tDel = el.querySelector("[data-urw=delivTable]");
+        UtzColumns.ensure(tOut, "utzline-rework:columns:outstanding", { frozen: 0, mountBefore: el.querySelector("[data-urw=refresh]").parentNode }); UtzColumns.apply(tOut);
+        UtzColumns.ensure(tDel, "utzline-rework:columns:delivered", { frozen: 0 }); UtzColumns.apply(tDel);
+      }
       el.querySelector("[data-urw=delivEmpty]").hidden = !!deliv.length;
       el.querySelector("[data-urw=delivCard]").hidden = !st.showDelivered;
       el.querySelector("[data-urw=delivToggle]").textContent = "Delivered (" + deliv.length + ") " + (st.showDelivered ? "▾" : "▸");
@@ -12501,6 +12708,12 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // but couldn't be read right now (mid-sync): a DISPLAY of the list may
   // carry on without them (and say so), but anything that DECIDES from the
   // list (New Level's name dedupe) must refuse while it's non-empty.
+  // (2026-10-10) Andrew: "sometimes the same item is shown on 2 floor plans ... if i take it off one plan i cant put it on the other. the place
+  // list should include anything thats not placed on any plan". placed: { "<room>\0<code>" (lower case): [plan names it has a marker on] }
+  function planMarkerKeyList(markers){
+    var out = {}; (markers || []).forEach(function(o){ if (o && o.type === "roomlink") out[(String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase()] = true; }); return Object.keys(out);
+  }
+  function projectPlacedIndex(projectHandle){ return listLevelNames(projectHandle).then(function(res){ return res.placed || {}; }, function(){ return {}; }); }
   function levelNameCacheKey(projectHandle){ return "flatLevelNames\u0000" + (projectsRootName || "") + "\u0000" + ((projectHandle && projectHandle.name) || ""); }
   function forgetLevelNameCacheEntry(projectHandle, fname){
     var cacheKey = levelNameCacheKey(projectHandle);
@@ -12521,21 +12734,26 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
           return fh.getFile().then(function(file){
             var statOk = typeof file.size === "number" && typeof file.lastModified === "number";
             var hit = cached[fh.name];
-            if (statOk && hit && hit.name && hit.size === file.size && hit.lastModified === file.lastModified){
+            if (statOk && hit && hit.name && hit.size === file.size && hit.lastModified === file.lastModified && Array.isArray(hit.keys)){
               next[fh.name] = hit;
-              return hit.name;
+              return hit;
             }
             return file.text().then(function(text){
               var parsed = parseLevelFileText(text);
-              if (statOk) next[fh.name] = { name: parsed.name, size: file.size, lastModified: file.lastModified };
-              return parsed.name;
+              // (2026-10-10) each plan's marker keys (room + code) ride along: the To place list needs to know what is on ANY plan
+              var entry = { name: parsed.name, size: file.size, lastModified: file.lastModified, keys: planMarkerKeyList(parsed.markers) };
+              if (statOk) next[fh.name] = entry;
+              return entry;
             });
           }).catch(function(){ unreadable.push(fh.name); return null; });
-        })).then(function(names){
+        })).then(function(entries){
           idbSet(cacheKey, next).catch(function(){});
-          names = names.filter(Boolean);
+          entries = entries.filter(Boolean);
+          var placed = {};
+          entries.forEach(function(e){ (e.keys || []).forEach(function(k){ (placed[k] = placed[k] || []).push(e.name); }); });
+          var names = entries.map(function(e){ return e.name; });
           names.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
-          return { names: names, unreadable: unreadable };
+          return { names: names, unreadable: unreadable, placed: placed };
         });
       });
     });
@@ -13517,6 +13735,23 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
      Install". Project Saves\ITP Items.json = { manufacture: { antiLigature, security, infection, hingeAngle, hingeType, custom: [...] }, install: { ... } }; the Manufacture and
      Install ITPs read it when a checklist is first opened (a checklist already started keeps the lines it began with). ---- */
   var ITP_ITEMS_FILE = "ITP Items.json";
+  // (2026-10-10) Andrew: "make the itp editor more readable, much to look like the itp app" -- the checklist as numbered cards, the ITP app's own look
+  (function(){ var st = document.createElement("style"); st.textContent =
+    "#itpItemsBackdrop .modal{ max-width:760px !important; width:calc(100vw - 24px); }" +
+    "#itpItemsBackdrop h3.ie-title{ margin:0 0 4px; font-size:16px; color:var(--accent); letter-spacing:.02em; }" +
+    "#itpItemsBackdrop .ie-sec{ border-top:1px solid var(--border); padding:14px 0 6px; }" +
+    "#itpItemsBackdrop .ie-row{ display:flex; align-items:flex-start; gap:10px; border:1px solid var(--border); border-radius:9px; padding:10px 12px; margin:0 0 8px; background:var(--panel); font-size:13.5px; line-height:1.4; }" +
+    "#itpItemsBackdrop .ie-num{ flex:none; width:22px; height:22px; border-radius:6px; background:var(--panel2); color:var(--muted); font-size:11px; display:flex; align-items:center; justify-content:center; margin-top:1px; }" +
+    "#itpItemsBackdrop .ie-body{ flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }" +
+    "#itpItemsBackdrop .ie-line{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }" +
+    "#itpItemsBackdrop .ie-tag{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }" +
+    "#itpItemsBackdrop .ie-opt{ border-color:var(--accent); }" +
+    "#itpItemsBackdrop .ie-opt label{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; }" +
+    "#itpItemsBackdrop .ie-opt input[type=checkbox]{ width:20px; height:20px; margin:0; flex:none; accent-color:var(--accent); }" +
+    "#itpItemsBackdrop .ie-own{ border-left:3px solid var(--accent); }" +
+    "#itpItemsBackdrop .ie-off{ opacity:.55; }" +
+    "#itpItemsBackdrop .ie-sub{ font-size:12.5px; color:var(--muted); margin:2px 0 10px; }";
+    document.head.appendChild(st); })();
   var ITP_HINGE_ANGLES = ["90°", "Wide angle"], ITP_HINGE_TYPES = ["Soft close", "Standard"];
   var ITP_OPTION_LABELS = [["antiLigature", "Anti-ligature hardware"], ["security", "Security fittings"], ["infection", "Infection control (exposed edges sealed)"]];
   // (2026-10-07) Andrew: the dialog "to show all the standard items also". The checklist lines of each ITP, in order (opt = one of the three optional lines
@@ -13580,62 +13815,67 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       var box = document.createElement("div"); box.className = "modal"; box.setAttribute("role", "dialog");
       box.style.cssText = "max-width:560px;max-height:85vh;overflow:auto;";
       var h = document.createElement("h2"); h.textContent = "ITP items — " + (activeProjectName || ""); box.appendChild(h);
-      var p = document.createElement("p"); p.className = "sub"; p.textContent = "Every line of each ITP is listed. Under Manufacture ITP, tick the optional lines this project carries and choose the hinge angle and type — the Install ITP follows them. Add lines of your own to either ITP. An ITP already started keeps the lines it began with."; box.appendChild(p);
+      var p = document.createElement("p"); p.className = "ie-sub"; p.textContent = "Every line of each ITP is listed. Under Manufacture ITP, tick the optional lines this project carries and choose the hinge angle and type — the Install ITP follows them. Add lines of your own to either ITP. An ITP already started keeps the lines it began with."; box.appendChild(p);
       var state2 = { manufacture: JSON.parse(JSON.stringify(cur.manufacture || {})), install: { custom: ((cur.install || {}).custom || []).slice() } }; // install keeps only its own lines
       state2.refresh = function(){ if (state2.refreshInstall) state2.refreshInstall(); };
       [["manufacture", "Manufacture ITP"], ["install", "Install ITP"]].forEach(function(kv){
         var kind = kv[0], cfg = state2[kind]; cfg.custom = Array.isArray(cfg.custom) ? cfg.custom : [];
-        var sec = document.createElement("div"); sec.style.cssText = "border-top:1px solid var(--border,#444);padding:10px 0;";
-        var t = document.createElement("h3"); t.textContent = kv[1]; t.style.margin = "0 0 6px"; sec.appendChild(t);
+        var sec = document.createElement("div"); sec.className = "ie-sec";
+        var t = document.createElement("h3"); t.textContent = kv[1]; t.className = "ie-title"; sec.appendChild(t);
         // (2026-10-07) the whole checklist in its real order: standard lines as plain text; the three optional lines and the hinges are set here for the
         // MANUFACTURE ITP and the Install ITP follows them ("all 3 options come from manufacture"); each ITP adds its own lines below
-        var stdBox = document.createElement("div"); stdBox.style.cssText = "margin:4px 0 8px;font-size:13px;"; stdBox.setAttribute("data-itp-standard", kind);
+        var stdBox = document.createElement("div"); stdBox.style.cssText = "margin:4px 0 8px;"; stdBox.setAttribute("data-itp-standard", kind);
         var mirrors = [];
         if (kind === "install"){
-          var note = document.createElement("p"); note.className = "sub"; note.style.cssText = "margin:0 0 6px;";
+          var note = document.createElement("p"); note.className = "ie-sub";
           note.textContent = "Anti-ligature, security fittings, infection control and the hinges follow what is set under Manufacture ITP; add this ITP's own lines at the bottom."; stdBox.appendChild(note);
         }
-        ITP_STANDARD[kind].forEach(function(it){
-          var r = document.createElement("div"); r.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:3px 0;";
+        ITP_STANDARD[kind].forEach(function(it, idx){
+          var rowEl = document.createElement("div"); rowEl.className = "ie-row" + (it.opt ? " ie-opt" : "");
+          var numEl = document.createElement("div"); numEl.className = "ie-num"; numEl.textContent = String(idx + 1); rowEl.appendChild(numEl);
+          var r = document.createElement("div"); r.className = "ie-body"; rowEl.appendChild(r);
           if (it.opt){
             if (kind === "manufacture"){
               var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!cfg[it.opt]; cb.setAttribute("data-itp-opt", kind + "-" + it.opt);
               cb.addEventListener("change", function(){ cfg[it.opt] = cb.checked; state2.refresh(); });
-              var l = document.createElement("label"); l.style.cssText = "display:flex;gap:8px;align-items:center;"; l.appendChild(cb); l.appendChild(document.createTextNode(it.t)); r.appendChild(l);
+              var l = document.createElement("label"); l.appendChild(cb); l.appendChild(document.createTextNode(it.t)); r.appendChild(l);
+              var tg = document.createElement("div"); tg.className = "ie-tag"; tg.textContent = "Optional — tick when this project carries it"; r.appendChild(tg);
             } else {
-              var tick = document.createElement("span"); tick.style.cssText = "width:18px;text-align:center;"; r.appendChild(tick);
-              var tx = document.createElement("span"); tx.textContent = it.t; r.appendChild(tx);
-              var nt = document.createElement("span"); nt.className = "sub"; nt.style.margin = "0"; r.appendChild(nt);
-              mirrors.push(function(){ var on = !!state2.manufacture[it.opt]; tick.textContent = on ? "\u2611" : "\u2610"; tx.style.opacity = on ? "1" : ".5"; nt.textContent = on ? "" : "(not on this project's Manufacture ITP, so not here)"; });
+              var ln = document.createElement("div"); ln.className = "ie-line"; r.appendChild(ln);
+              var tick = document.createElement("span"); tick.style.cssText = "width:18px;text-align:center;"; ln.appendChild(tick);
+              var tx = document.createElement("span"); tx.textContent = it.t; ln.appendChild(tx);
+              var nt = document.createElement("div"); nt.className = "ie-tag"; r.appendChild(nt);
+              mirrors.push(function(){ var on = !!state2.manufacture[it.opt]; tick.textContent = on ? "\u2611" : "\u2610"; rowEl.classList.toggle("ie-off", !on); nt.textContent = on ? "Follows Manufacture ITP" : "Not on this project's Manufacture ITP, so not here"; });
             }
           } else if (it.hinge){
-            r.appendChild(document.createTextNode("Hinges:"));
+            var hl = document.createElement("div"); hl.className = "ie-line"; r.appendChild(hl);
+            hl.appendChild(document.createTextNode("Hinges:"));
             if (kind === "manufacture"){
               [["hingeAngle", "Angle", ITP_HINGE_ANGLES], ["hingeType", "Type", ITP_HINGE_TYPES]].forEach(function(f){
                 var sel = document.createElement("select"); sel.setAttribute("data-itp-hinge", kind + "-" + f[0]); sel.style.cssText = "font:inherit;min-height:34px;padding:3px 8px;border-radius:8px;";
                 sel.innerHTML = "<option value=\"\">" + f[1] + " — not set</option>" + f[2].map(function(v){ return "<option>" + escapeHtml(v) + "</option>"; }).join("");
                 sel.value = cfg[f[0]] || ""; sel.addEventListener("change", function(){ cfg[f[0]] = sel.value; state2.refresh(); });
-                r.appendChild(sel);
+                hl.appendChild(sel);
               });
-              var rest = document.createElement("span"); rest.textContent = "Restrictors fitted where a clash is imminent"; r.appendChild(rest);
+              var rest = document.createElement("span"); rest.textContent = "Restrictors fitted where a clash is imminent"; hl.appendChild(rest);
             } else {
-              var hv = document.createElement("span"); hv.setAttribute("data-itp-hinge-mirror", "install"); r.appendChild(hv);
+              var hv = document.createElement("span"); hv.setAttribute("data-itp-hinge-mirror", "install"); hl.appendChild(hv);
               mirrors.push(function(){ var m = state2.manufacture, parts = [m.hingeAngle, m.hingeType].filter(Boolean); hv.textContent = (parts.length ? parts.join(", ") : "not set under Manufacture ITP") + " — Restrictors fitted where a clash is imminent"; });
             }
           } else {
-            var dot = document.createElement("span"); dot.textContent = "\u2022"; dot.style.cssText = "width:18px;text-align:center;opacity:.6;"; r.appendChild(dot);
             var tt = document.createElement("span"); tt.textContent = it.t; r.appendChild(tt);
           }
-          stdBox.appendChild(r);
+          stdBox.appendChild(rowEl);
         });
         if (kind === "install") state2.refreshInstall = function(){ mirrors.forEach(function(f){ f(); }); };
         sec.appendChild(stdBox);
-        var custT = document.createElement("div"); custT.className = "sub"; custT.style.cssText = "margin:4px 0;"; custT.textContent = "Lines of your own for this ITP"; sec.appendChild(custT);
+        var custT = document.createElement("div"); custT.className = "ie-sub"; custT.style.cssText = "margin:10px 0 6px;"; custT.textContent = "Lines of your own for this ITP — they come after the lines above"; sec.appendChild(custT);
         var list = document.createElement("div"); sec.appendChild(list);
         function paint(){
           list.innerHTML = "";
           cfg.custom.forEach(function(txt, i){
-            var r = document.createElement("div"); r.style.cssText = "display:flex;gap:8px;align-items:center;padding:3px 0;";
+            var r = document.createElement("div"); r.className = "ie-row ie-own";
+            var nm = document.createElement("div"); nm.className = "ie-num"; nm.textContent = String(ITP_STANDARD[kind].length + i + 1); r.appendChild(nm);
             var sp = document.createElement("span"); sp.style.flex = "1"; sp.textContent = txt; r.appendChild(sp);
             var rm = document.createElement("button"); rm.type = "button"; rm.className = "btn secondary sm"; rm.textContent = "Remove"; rm.addEventListener("click", function(){ cfg.custom.splice(i, 1); paint(); }); r.appendChild(rm);
             list.appendChild(r);
@@ -14510,6 +14750,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       case "delivered": return 5;
       case "manufactured": return 4;
       case "machined": return 3;
+      case "cut": return 2.5; // (2026-10-09) Carcase Cut + CB Cut done (between In manufacture and Machined)
       case "ready_to_inspect": return 3.5; // (2026-10-04) the joinery builder has signed the Manufacture ITP, the factory manager has not
       case "in_manufacture": return 2;
       case "measured": return 1;
@@ -14522,6 +14763,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       case "delivered": return "Delivered";
       case "manufactured": return "Ready to dispatch";
       case "machined": return "Machined";
+      case "cut": return "Cut";
       case "ready_to_inspect": return "Ready to inspect";
       case "in_manufacture": return "In manufacture";
       case "measured": return "Check measured";
@@ -14533,7 +14775,8 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       case "installed": return "🏆";
       case "delivered": return "🚚";
       case "manufactured": return "📦";
-      case "machined": return "⚙️";
+      case "machined": return "🔨";
+      case "cut": return "⚙️"; // (2026-10-09) cut = cog; machined = hammer
       case "ready_to_inspect": return "🔍";
       case "in_manufacture": return "🏭";
       case "measured": return "📏";
@@ -16230,7 +16473,8 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // so backing out lands the visitor back on the item they were reading.
   var planCanvasReturnScreen = "rooms";
   function openPlanCanvasForLevel(centerOnMarker){
-    planCanvasTitle.textContent = activeProjectName + " — " + activeLevelName;
+    planCanvasTitle.textContent = activeProjectName + " — " + levelTitleText(activeLevelName);
+    renderPlanTabs(planCanvasTabs, activeLevelName, function(n){ openLevel(n).then(function(){ return openPlanCanvasForLevel(); }); });
     // Clear the previous level's plan straight away, so a slow read never
     // shows (or lets someone tap-to-add onto) the LAST level's plan under
     // this level's title. planSaved stays null until this level has read.
@@ -18860,6 +19104,9 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       head.className = "list-group-head";
       head.setAttribute("data-level-group", g.level);
       head.textContent = g.level;
+      head.title = "Open " + g.level + " (its first plan; the plans are tabs inside)";
+      head.style.cursor = "pointer";
+      head.addEventListener("click", function(){ openLevel(g.members[0].name); }); // (2026-10-10) the level opens; its plans are tabs inside
       levelListItems.appendChild(head);
       g.members.forEach(function(m){ appendRow(m.name, m.zone || m.name, true); });
     });
@@ -18979,10 +19226,35 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // a file that exists but can't be read says so instead of "Couldn't
   // open" / being treated as a new level. `create` only ever writes a
   // fresh file when the strict read said the file genuinely isn't there.
+  // (2026-10-10) Andrew: "zones are not levels". In this app a level split over several plans reads as ONE level whose plans are tabs:
+  // the heading says "LEVEL 1 · H1b", the tabs (Rooms screen and the plan canvas) switch plan. On disk and in every other app each plan
+  // is still its own level file / level name ("LEVEL 1 (H1b)") -- Andrew: Projects only for now.
+  function levelPlanSiblings(name){
+    var groups = psGroupLevels(psLastLevelNames && psLastLevelNames.length ? psLastLevelNames : [name], psZonesMetaFor(activeProjectName));
+    for (var i = 0; i < groups.length; i++){
+      var g = groups[i];
+      if (g.members.length >= 2 && g.members.some(function(m){ return m.name === name; })) return g;
+    }
+    return null;
+  }
+  function levelTitleText(name){ var g = levelPlanSiblings(name); if (!g) return name; var m = g.members.filter(function(x){ return x.name === name; })[0]; return g.level + " · " + ((m && m.zone) || name); }
+  function renderPlanTabs(el, name, onPick){
+    var g = levelPlanSiblings(name);
+    el.innerHTML = ""; el.hidden = !g;
+    if (!g) return;
+    g.members.forEach(function(m){
+      var b = document.createElement("button"); b.type = "button"; b.textContent = m.zone || m.name; b.className = m.name === name ? "on" : "";
+      b.setAttribute("data-plan", m.name); b.title = "Open this plan of " + g.level;
+      b.addEventListener("click", function(){ if (m.name !== activeLevelName) onPick(m.name); });
+      el.appendChild(b);
+    });
+  }
+  var levelPlanTabs = document.getElementById("levelPlanTabs"), planCanvasTabs = document.getElementById("planCanvasTabs");
   function openLevel(name, opts){
     var create = !!(opts && opts.create);
     activeLevelName = name;
-    roomsLevelLabel.textContent = activeProjectName + " — " + name;
+    roomsLevelLabel.textContent = activeProjectName + " — " + levelTitleText(name);
+    renderPlanTabs(levelPlanTabs, name, function(n){ openLevel(n); });
     return Promise.resolve([]).then(function(){
       return readLevelFile(activeProjectHandle, activeProjectName, name);
     }).then(function(level){
@@ -19550,7 +19822,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         "<img alt=\"\" src=\"" + (r.thumb || "") + "\">" +
         "<span class=\"ps-src\">" + escapeHtml(r.srcLabel) + "</span>" +
         "<input type=\"text\" class=\"ps-level\" maxlength=\"30\" placeholder=\"" + escapeHtml(r.hint ? "Type it, e.g. " + r.hint : "Type the level name") + "\" value=\"" + escapeHtml(r.level) + "\"" + (r.result ? " disabled" : "") + ">" +
-        "<input type=\"text\" class=\"ps-zone\" maxlength=\"20\" placeholder=\"" + escapeHtml(r.zoneHint ? "e.g. " + r.zoneHint : "Zone (optional)") + "\" value=\"" + escapeHtml(r.zone) + "\"" + (r.result ? " disabled" : "") + ">" +
+        "<input type=\"text\" class=\"ps-zone\" maxlength=\"20\" placeholder=\"" + escapeHtml(r.zoneHint ? "e.g. " + r.zoneHint : "Zone (when a level has several plans)") + "\" value=\"" + escapeHtml(r.zone) + "\"" + (r.result ? " disabled" : "") + ">" +
         "<input type=\"text\" class=\"ps-code\" maxlength=\"5\" placeholder=\"Abbr.\" value=\"" + escapeHtml(r.code) + "\"" + (r.result ? " disabled" : "") + " title=\"The level abbreviation, e.g. H1 or G: it names this level's folders in every app, and is the work-order report's zone code\">" +
         "<span class=\"ps-status" + (r.statusCls ? " " + r.statusCls : "") + "\">" + escapeHtml(r.status || "") + "</span>";
       row.querySelector(".ps-tick").addEventListener("change", function(e){ r.on = e.target.checked; row.classList.toggle("off", !r.on); psValidate(); });
@@ -19561,8 +19833,44 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     });
     psValidate();
   }
+  // (2026-10-10) Andrew: "we need a way to have multiple floor plans per level" / "but i cant name them all level 1 - it wont let me".
+  // Rows that share a level name are that level's zones: "Levels, then zones" turns itself on and every blank zone is filled in -- from the
+  // drawing's title block (ZONE A), else its file name (..._ZONE_H1_...), else "Plan 1", "Plan 2" -- so the same name typed five times just works.
+  // A zone typed by hand is kept; two plans with the same hint read "H1a" / "H1b".
+  function psZoneFromFileName(r){ var m = /(?:^|[^A-Z0-9])ZONE[ _\-]*([A-Z0-9]{1,6})(?![A-Z0-9])/i.exec(String((r.file && r.file.name) || r.srcLabel || "")); return m ? m[1].toUpperCase() : ""; }
+  function psAutoZones(){
+    var st = psState; if (!st) return false;
+    var groups = {}, order = [];
+    st.rows.forEach(function(r){ if (!r.on || r.result) return; var k = String(r.level || "").trim().toLowerCase(); if (!k) return; if (!groups[k]){ groups[k] = []; order.push(k); } groups[k].push(r); });
+    var shared = order.filter(function(k){ return groups[k].length > 1; });
+    if (!shared.length) return false;
+    if (!psZonesOn()){
+      psZonesToggle.checked = true; psRows.classList.remove("no-zones"); psHead.classList.remove("no-zones");
+      if (!st.zonesAutoNoted){ st.zonesAutoNoted = true; showToast("Several plans share a level, so “Levels, then zones” is on — each plan is a zone of that level (zones filled in; change them if you like).", 6500); }
+    }
+    var changed = false;
+    shared.forEach(function(k){
+      var rows = groups[k], taken = {}, cands = [], counts = {};
+      rows.forEach(function(r){ if (String(r.zone || "").trim() && r.zone !== r.zoneAuto) taken[String(r.zone).trim().toLowerCase()] = true; });
+      rows.forEach(function(r, i){ var c = (String(r.zone || "").trim() && r.zone !== r.zoneAuto) ? null : (String(r.zoneHint || "").trim() || psZoneFromFileName(r) || ""); cands.push(c); if (c) counts[c.toLowerCase()] = (counts[c.toLowerCase()] || 0) + 1; });
+      var letterIx = {};
+      rows.forEach(function(r, i){
+        if (cands[i] === null) return;
+        var base = cands[i], z;
+        if (!base) z = "Plan " + (i + 1);
+        else if (counts[base.toLowerCase()] > 1){ var n = letterIx[base.toLowerCase()] = (letterIx[base.toLowerCase()] || 0) + 1; z = base + String.fromCharCode(96 + n); }
+        else z = base;
+        var guard = 0; while (taken[z.toLowerCase()] && guard++ < 30) z = z + "'";
+        taken[z.toLowerCase()] = true;
+        if (r.zone !== z){ r.zone = z; r.zoneAuto = z; changed = true; var el = psRows.querySelector(".ps-row[data-idx=\"" + st.rows.indexOf(r) + "\"] .ps-zone"); if (el && el.value !== z) el.value = z; }
+        else r.zoneAuto = z;
+      });
+    });
+    return changed;
+  }
   function psValidate(){
     var st = psState; if (!st) return;
+    psAutoZones();
     var todo = st.rows.filter(function(r){ return r.on && !r.result; });
     var seen = {}, dup = "", blank = false, noAbbr = false;
     todo.forEach(function(r){
@@ -19644,7 +19952,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       if (!psZonesOn()){
         var seen = {}, same = false;
         st.rows.forEach(function(r){ var k = String(r.level || r.hint || "").trim().toLowerCase(); if (k && seen[k]) same = true; seen[k] = true; });
-        if (same){ psZonesToggle.checked = true; showToast("Two plans name the same level, so “Levels, then zones” is on — give each plan its zone.", 6000); }
+        if (same){ psZonesToggle.checked = true; st.zonesAutoNoted = true; showToast("Two plans name the same level, so “Levels, then zones” is on — each plan is a zone of that level (zones filled in; change them if you like).", 6500); }
       }
     }).then(function(){ st.busy = false; psDropText.textContent = "Drag more floor plans here"; psRenderRows(); },
       function(err){ st.busy = false; console.error(err); psDropText.textContent = "Drag floor plans here — PDFs or images, several at once"; psRenderRows(); });
@@ -20459,17 +20767,46 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // level": a work order the report gave NO room is imported as a real joinery item on the Unknown level in the room "Unknown room" (so it is in the
   // project, with its dollar value). It waits in every level's To place list; dropping it on a plan asks which room, then it belongs to that level + room.
   var UNKNOWN_ROOM = "Unknown room";
-  function woPlanImport(interp, zoneMap, levelRooms, items){
+  // (2026-10-10) Andrew: "its importing to the wrong places, needs to be off room code and joinery code, not zone". A level split over
+  // several plans (zones) has one zone code (H1) for all of them, so the zone picker can only send every H1 room to ONE plan. A room now goes
+  // to the plan whose labels (Plan Labels, read when the plan was imported) or room list carry its room number -- "AH.002", or "H1.AH.002" as
+  // the drawings write it; several plans show it (sheets overlap): the zone picker's plan if it is one of them, else the plan that also
+  // carries the item's joinery code. A room on no plan still goes where the zone picker says.
+  function woLevelForRoom(room, zoneMap, levelLabels, levelRooms){
+    var fallback = zoneMap[room.zone] === WO_SKIP ? "" : (zoneMap[room.zone] || UNKNOWN_LEVEL);
+    var keys = woRoomNumberKeysFor(room).map(function(k){ return woRoomToken(k); }).filter(Boolean), zone = String(room.zone || "").toUpperCase();
+    var codes = (room.wos || []).map(function(w){ return String(w.code || "").trim().toUpperCase(); }).filter(Boolean);
+    if (!keys.length) return { level: fallback, how: "" };
+    var hits = [];
+    Object.keys(levelLabels || {}).forEach(function(lv){
+      if (lv === UNKNOWN_LEVEL) return;
+      var set = {}, tails = {};
+      (levelLabels[lv] || []).forEach(function(l){ var t = String(l || "").trim().toUpperCase(); if (!t) return; set[t] = true; if (t.indexOf("-") === -1){ var d = t.lastIndexOf("."); if (d > 0) (tails[t.slice(d + 1)] = tails[t.slice(d + 1)] || []).push(t); } });
+      (levelRooms && levelRooms[lv] || []).forEach(function(r){ var t = woRoomToken(r); if (t) set[t] = true; });
+      var n = 0;
+      keys.forEach(function(k){ var num = k.slice(k.lastIndexOf(".") + 1); if (set[k] || (zone && set[zone + "." + k]) || (tails[num] && tails[num].length === 1 && tails[num][0].slice(-k.length) === k)) n++; });
+      if (!n) return;
+      var c = 0; codes.forEach(function(cd){ if (set[cd]) c++; });
+      hits.push({ lv: lv, n: n, c: c });
+    });
+    if (!hits.length) return { level: fallback, how: "" };
+    if (hits.length === 1) return { level: hits[0].lv, how: "plan" };
+    var z = hits.filter(function(h){ return h.lv === fallback; })[0];
+    if (z) return { level: z.lv, how: "plan" };
+    hits.sort(function(a, b){ return b.c - a.c || b.n - a.n; });
+    return { level: hits[0].lv, how: "plan" };
+  }
+  function woPlanImport(interp, zoneMap, levelRooms, items, levelLabels){
     var rows = [];
     var seen = {};
     interp.rooms.forEach(function(room){
-      var level = zoneMap[room.zone] === WO_SKIP ? "" : (zoneMap[room.zone] || UNKNOWN_LEVEL);
+      var found = woLevelForRoom(room, zoneMap, levelLabels, levelRooms), level = found.level;
       var names = woRoomNamesFor(room), keys = woRoomNumberKeysFor(room);
       names.forEach(function(wanted, idx){
         var existingRoom = level && level !== UNKNOWN_LEVEL ? woMatchExistingRoom(levelRooms[level] || [], wanted, keys[idx]) : null;
         var roomName = existingRoom || sanitizeFileBase(wanted);
         room.wos.forEach(function(w){
-          var row = { zone: room.zone, level: level, room: roomName, roomIsNew: !existingRoom, heading: room.heading, itemNo: room.itemNo, wo: w.wo, code: w.code, desc: w.desc,
+          var row = { zone: room.zone, level: level, levelHow: found.how, room: roomName, roomIsNew: !existingRoom, heading: room.heading, itemNo: room.itemNo, wo: w.wo, code: w.code, desc: w.desc,
             sell: (w.sell === undefined ? null : w.sell), status: w.status || "" }; // (v32) sell price from the Cost Analysis report
           if (!level){ row.action = "skip-zone"; rows.push(row); return; }
           // The same code twice in one room is two real items (two work
@@ -20811,7 +21148,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   }
   function woRenderImportDialog(){
     var st = woImportState;
-    st.plan = woApplyLeftOut(st, woPlanImport(st.interp, st.zoneMap, st.levelRooms, st.items)); // (v40) lines left out
+    st.plan = woApplyLeftOut(st, woPlanImport(st.interp, st.zoneMap, st.levelRooms, st.items, st.levelLabels)); // (v40) lines left out
     var counts = {};
     st.plan.forEach(function(r){ counts[r.action] = (counts[r.action] || 0) + 1; });
     var newRooms = {};
@@ -20850,6 +21187,8 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     woRenderFormat(st); // (v37)
     // zone -> level
     woImportZonesEl.innerHTML = "";
+    var onPlan = st.plan.filter(function(r){ return r.levelHow === "plan"; }).length;
+    if (onPlan){ var nt = document.createElement("p"); nt.className = "sub"; nt.textContent = onPlan + " line" + (onPlan === 1 ? "" : "s") + " found by room number on a plan's labels go to that plan (· on its plan). The levels picked here are for the rest."; woImportZonesEl.appendChild(nt); }
     woZonesOf(st.interp).forEach(function(z){
       var n = st.interp.rooms.filter(function(r){ return r.zone === z; }).length;
       var row = document.createElement("div"); row.className = "wo-zone-row";
@@ -20880,7 +21219,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         (room && room.isList ? " <label class=\"wo-split\"><input type=\"checkbox\" data-split=\"" + escapeHtml(no) + "\"" + (room.split ? " checked" : "") + "> one item per room (" + room.numbers.length + ")</label>" : "") + "</div>";
       rs.forEach(function(r){
         html += "<div class=\"wo-row wo-" + r.action + "\" data-out=\"" + escapeHtml(woOutKeyForRow(r)) + "\" title=\"Right-click (or press and hold) to leave it out\"><span class=\"wo-wo\">" + escapeHtml(r.wo) + "</span><span class=\"wo-code\">" + escapeHtml(r.code) + "</span>" +
-          "<span class=\"wo-where\">" + (r.level ? escapeHtml(r.level) + " · " : "") + escapeHtml(r.room) + (r.roomIsNew && r.level ? " <i>(new room)</i>" : "") + "</span>" +
+          "<span class=\"wo-where\">" + (r.level ? escapeHtml(r.level) + " · " : "") + escapeHtml(r.room) + (r.roomIsNew && r.level ? " <i>(new room)</i>" : "") + (r.levelHow === "plan" ? " <i title=\"This room's number is on that plan's labels, so it goes there whatever the zone picker says\">· on its plan</i>" : "") + "</span>" +
           "<span class=\"wo-desc\">" + escapeHtml(r.desc) + "</span>" +
           "<span class=\"wo-value\">" + (r.sell !== null && r.sell !== undefined ? escapeHtml(woMoney(r.sell)) : "") + "</span>" +
           "<span class=\"wo-action\">" + escapeHtml(WO_ACTION_LABELS[r.action] || r.action) + (r.action === "differs" ? " (has " + escapeHtml(r.existingWo) + ")" : "") + "</span></div>";
@@ -20941,20 +21280,21 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   function woCloseImportDialog(){ woImportBackdrop.hidden = true; woImportState = null; }
   if (woImportCancelBtn) woImportCancelBtn.addEventListener("click", woCloseImportDialog);
   if (woImportConfirmBtn) woImportConfirmBtn.addEventListener("click", function(){ woConfirmImport(); });
-  function woConfirmImport(){
+  function woConfirmImport(pinJustGiven){
     var st = woImportState;
     if (!st) return Promise.resolve();
-    if (!deviceUserName){ showToast("Sign in with your name on the Projects screen first — imports are logged under your name."); return Promise.resolve(); }
+    // (2026-10-10) sign in over the import list, then carry on -- the PIN typed to sign in is the confirmation (not asked twice)
+    if (!deviceUserName) return signInThen("the import").then(function(ok){ if (ok && woImportState === st) return woConfirmImport(true); });
     var who = deviceUserName;
     return readUsersCsv().then(function(rows){
       if (!findUserRowCI(rows, who)){ showToast("“" + who + "” is no longer in the shared name/PIN list — sign in again."); return; }
-      return openNumberpad({
+      return (pinJustGiven ? Promise.resolve("signed in") : openNumberpad({
         title: "Confirm PIN",
         subtitle: "to import work orders as “" + who + "”",
         verify: function(pin){
           return readUsersCsv().then(function(fresh){ var r = findUserRowCI(fresh, who); return !!(r && window.UtzPin.eq(r.pin, pin)); });
         }
-      }).then(function(pin){
+      })).then(function(pin){
         if (pin === null){ showToast("Import cancelled — nothing was changed."); return; }
         woImportConfirmBtn.disabled = true;
         splashShow("Importing the work orders", "Starting…"); // (v57) the progress screen, until the result below
@@ -21039,7 +21379,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     function say(text){ stepNo++; prog(text, Math.min(stepNo, stepTotal), stepTotal); }
     prog("Reading the project's levels and items…", 0, 0);
     return woLoadProjectContext().then(function(ctx){
-      var plan = woApplyLeftOut(st, woPlanImport(st.interp, st.zoneMap, ctx.levelRooms, ctx.items)); // (v40)
+      var plan = woApplyLeftOut(st, woPlanImport(st.interp, st.zoneMap, ctx.levelRooms, ctx.items, ctx.levelLabels)); // (v40)
       var at = new Date().toISOString();
       var items = ctx.items;
       var added = 0, filled = 0;
@@ -21182,17 +21522,26 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     var levelAtCall = activeLevelName;
     return Promise.all([
       readJoineryItems(activeProjectHandle),
-      woListRead(activeProjectHandle).catch(function(err){ console.error("Reading work-orders.json failed:", err); return { workOrders: [], unreadable: true }; })
+      woListRead(activeProjectHandle).catch(function(err){ console.error("Reading work-orders.json failed:", err); return { workOrders: [], unreadable: true }; }),
+      projectPlacedIndex(activeProjectHandle)
     ]).then(function(res){
       if (levelAtCall !== activeLevelName) return;
-      var items = res[0], list = res[1];
+      var items = res[0], list = res[1], anywhere = res[2] || {};
       planWoList = list;
       var placed = woMarkerKeys();
+      ((planSaved && planSaved.objects) || []).forEach(function(o){ if (o.type === "roomlink"){ var k = (String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase(); if (!anywhere[k] || anywhere[k].indexOf(activeLevelName) === -1) anywhere[k] = (anywhere[k] || []).concat([activeLevelName]); } }); // this plan as it is on screen
       var sortItems = function(a, b){
         return String(a.room).localeCompare(String(b.room), undefined, { numeric: true, sensitivity: "base" }) ||
           String(a.joineryId).localeCompare(String(b.joineryId), undefined, { numeric: true, sensitivity: "base" });
       };
-      var unplaced = items.filter(function(it){ return (it.level === activeLevelName || it.level === UNKNOWN_LEVEL) && !placed[woItemKey(it)]; }).sort(sortItems); // (2026-10-06) Unknown level: on every plan's list
+      var onSomePlan = function(it){ var l = anywhere[woItemKey(it)]; return !!(l && l.length); };
+      var unplaced = items.filter(function(it){ return (it.level === activeLevelName || it.level === UNKNOWN_LEVEL) && !placed[woItemKey(it)] && !onSomePlan(it); }).sort(sortItems); // (2026-10-06) Unknown level: on every plan's list; (2026-10-10) not when it is on another plan
+      // (2026-10-10) Andrew: "the place list should include anything thats not placed on any plan" -- another level's items with no marker on any plan
+      // are listed too (dropping one here moves it to this plan); an item of this level with markers on two plans is noted so one can be taken off
+      var elsewhere = items.filter(function(it){ return it.level !== activeLevelName && it.level !== UNKNOWN_LEVEL && it.joineryId && it.room !== UNKNOWN_ROOM && !onSomePlan(it); })
+        .sort(function(a, b){ return String(a.level).localeCompare(String(b.level), undefined, { numeric: true, sensitivity: "base" }) || sortItems(a, b); });
+      planDoubleUps = items.filter(function(it){ var l = anywhere[woItemKey(it)]; return l && l.length > 1 && l.indexOf(activeLevelName) !== -1; }).sort(sortItems)
+        .map(function(it){ return { item: it, plans: anywhere[woItemKey(it)].slice() }; });
       var byWo = {};
       items.forEach(function(it){ var k = String(it.workOrderNo || "").trim(); if (k) (byWo[k] = byWo[k] || []).push(it); });
       var roomlessTodo = [], placedWos = [], copies = [], removedWos = [];
@@ -21208,7 +21557,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       var byCode = function(a, b){ return String(a.w.code).localeCompare(String(b.w.code), undefined, { numeric: true, sensitivity: "base" }); };
       roomlessTodo.sort(byCode); placedWos.sort(byCode);
       copies.sort(byCode);
-      planUnplacedItems = copies.concat(unplaced.map(function(it){ return { kind: "item", item: it }; })).concat(roomlessTodo);
+      planUnplacedItems = copies.concat(unplaced.map(function(it){ return { kind: "item", item: it }; })).concat(roomlessTodo).concat(elsewhere.map(function(it){ return { kind: "item", item: it, other: true }; }));
       planPlacedWos = placedWos;
       planRemovedWos = removedWos; // (v40)
       planItemsCache = items;     // (v40) for the extra copies' pins
@@ -21217,6 +21566,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       if (!planUnplacedPanel.hidden) renderUnplacedList();
     }).catch(function(err){ console.error("Reading items for the To place list failed:", err); });
   }
+  var planDoubleUps = []; // (2026-10-10) this level's items that have a marker on more than one plan
   function renderUnplacedButton(){
     var n = planUnplacedItems.length;
     var hasPlan = !!(planSaved && (planSaved.imageDataURL || (planSaved.imageTiles && planSaved.imageTiles.length)));
@@ -21260,12 +21610,14 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     planUnplacedItems.forEach(function(e){
       if (q && hay(e).indexOf(q) === -1) return;
       var idx = planListEntries.push(e) - 1;
-      var head = e.copy ? "More of the same — drag each to its room" : e.kind === "item" ? (e.item.level === UNKNOWN_LEVEL ? (e.item.room === UNKNOWN_ROOM ? "Unknown room — no level or room yet (drop it here, then pick its room)" : e.item.room + " — no level yet (drop it here to put it on this level)") : e.item.room) : "No room yet — pick the room when you drop it";
+      var head = e.copy ? "More of the same — drag each to its room" : e.kind === "item" ? (e.other ? e.item.level + " — not on any plan (drop it here to move it to this plan)" : e.item.level === UNKNOWN_LEVEL ? (e.item.room === UNKNOWN_ROOM ? "Unknown room — no level or room yet (drop it here, then pick its room)" : e.item.room + " — no level yet (drop it here to put it on this level)") : e.item.room) : "No room yet — pick the room when you drop it";
       if (head !== lastRoom){ html += "<div class=\"unplaced-room\">" + escapeHtml(head) + "</div>"; lastRoom = head; }
-      html += woEntryRowHtml(e, idx, e.copy ? (e.w.copiesToPlace + " more to place (" + (e.items.length + Number(e.w.copiesToPlace)) + " in all) · now in " + e.items.map(function(it){ return it.room; }).join(", "))
-        : e.kind === "wo" ? [e.w.group, e.w.roomHint ? "suggested: " + e.w.roomHint : ""].filter(Boolean).join(" · ") : "");
+      html += woEntryRowHtml(e, idx, e.copy ? (e.w.copiesToPlace + " more to place (" + (e.items.length + Number(e.w.copiesToPlace)) + " in all) · now in " + e.items.map(function(it){ return it.room + (it.level !== activeLevelName ? " (" + levelTitleText(it.level) + ")" : ""); }).join(", ") + " — drop one here for this plan")
+        : e.kind === "wo" ? [e.w.group, e.w.roomHint ? "suggested: " + e.w.roomHint : ""].filter(Boolean).join(" · ")
+        : e.other ? (e.item.room ? "Room " + e.item.room : "") : ""); // (2026-10-10) Andrew: "this needs to show a room name also if it has one"
     });
     if (!planListEntries.length) html += "<p class=\"sub\" style=\"margin:8px 0;\">" + (planUnplacedItems.length ? "Nothing to place matches." : "Everything on this level is placed.") + "</p>";
+    if (planDoubleUps.length && !q) html += "<div class=\"unplaced-room\">On two plans — take it off the wrong one (tap the pin → Remove from plan)</div>" + planDoubleUps.map(function(d){ return "<p class=\"sub unplaced-double\" style=\"margin:2px 0 6px;\"><b>" + escapeHtml(d.item.joineryId) + "</b> " + escapeHtml(d.item.room) + " — on " + escapeHtml(d.plans.join(" and ")) + "</p>"; }).join("");
     var placedRows = "", nPlaced = 0;
     planPlacedWos.forEach(function(e){
       if (q && hay(e).indexOf(q) === -1) return;
@@ -21570,9 +21922,10 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         });
       }).catch(dropFailed);
     }
+    var fromOther = item.level !== levelName, wasLevel = item.level; // (2026-10-10) another level's item that was on no plan: it moves to this plan
     return addMarkerToLevel(levelName, item.room, item.joineryId, pt).then(function(res){
       if (res.already){ showToast((item.joineryId || item.room) + " is already on the plan (placed elsewhere meanwhile)."); refreshUnplacedForLevel(); return false; }
-      return fromUnknown ? moveUnknownItemToLevel(item, levelName).then(function(){ return res; }) : res;
+      return fromOther ? moveItemToLevel(item, levelName).then(function(){ return res; }) : res;
     }).then(function(res){
       if (res === false) return false;
       showPlacedMarker(levelName, res.marker);
@@ -21580,7 +21933,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       planUnplacedItems = planUnplacedItems.filter(function(e){ return !(e.kind === "item" && e.item === item); });
       renderUnplacedButton();
       if (!planUnplacedPanel.hidden) renderUnplacedList();
-      offerUndo("Placed " + (item.joineryId || item.room) + " in " + item.room + ".", { level: levelName, markerId: res.marker.id, room: item.room, code: item.joineryId, createdItem: null, wo: null, fromLevel: fromUnknown ? UNKNOWN_LEVEL : "" });
+      offerUndo("Placed " + (item.joineryId || item.room) + " in " + item.room + "." + (fromOther && !fromUnknown ? " It moved here from " + wasLevel + "." : ""), { level: levelName, markerId: res.marker.id, room: item.room, code: item.joineryId, createdItem: null, wo: null, fromLevel: fromOther ? wasLevel : "" });
       return true;
     }).catch(dropFailed);
   }
@@ -21602,22 +21955,24 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     });
   }
   // (2026-10-06) an item imported onto the Unknown level, dropped on a plan: it now belongs to that level (logged on the item)
-  function moveUnknownItemToLevel(item, levelName){
+  function moveItemToLevel(item, levelName){ // (2026-10-10) from Unknown or from another level: the item now belongs to the plan it was dropped on (logged on the item)
+    var from = item.level;
     return readJoineryItems(activeProjectHandle).then(function(items){
-      var it = items.filter(function(x){ return x.level === UNKNOWN_LEVEL && String(x.room || "") === String(item.room || "") && String(x.joineryId || "") === String(item.joineryId || ""); })[0];
+      var it = items.filter(function(x){ return x.level === from && String(x.room || "") === String(item.room || "") && String(x.joineryId || "") === String(item.joineryId || ""); })[0];
       if (!it) return;
       it.level = levelName;
       it.editHistory = Array.isArray(it.editHistory) ? it.editHistory : [];
-      it.editHistory.push({ at: new Date().toISOString(), by: deviceUserName || "", changes: [{ field: "Level", from: UNKNOWN_LEVEL, to: levelName }], note: "Placed on the plan" });
+      it.editHistory.push({ at: new Date().toISOString(), by: deviceUserName || "", changes: [{ field: "Level", from: from, to: levelName }], note: from === UNKNOWN_LEVEL ? "Placed on the plan" : "Placed on another level's plan" });
       item.level = levelName;
       return writeJoineryItems(activeProjectHandle, items);
     });
   }
+  function moveUnknownItemToLevel(item, levelName){ return moveItemToLevel(item, levelName); }
   // A work order dropped in a room: adds its item there (or places an
   // existing unplaced one), then re-shares the sell price.
   function dropWorkOrderInRoom(w, room, pt, opts){
     opts = opts || {};
-    if (!deviceUserName){ showToast("Sign in with your name on the Projects screen first — every drop is logged under your name.", 4500); return Promise.resolve(false); }
+    if (!deviceUserName) return signInThen("every drop").then(function(ok){ return ok ? dropWorkOrderInRoom(w, room, pt, opts) : false; }); // (2026-10-10) sign in, then the drop goes ahead
     var who = deviceUserName, levelName = activeLevelName, at = new Date().toISOString();
     var created = null, count = 0, share = 0, code = w.code;
     return readJoineryItems(activeProjectHandle).then(function(items){
@@ -21846,9 +22201,9 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // Resolves { placed, byCode, byRoom, left, candidates, noLabels }.
   function autoPlaceFromPlanLabels(levelName, opts){
     return Promise.resolve([]).then(function(){
-      return Promise.all([readJoineryItems(activeProjectHandle), readLevelFile(activeProjectHandle, activeProjectName, levelName), readPlanLabels(activeProjectHandle, activeProjectName, levelName), psReadZonesMeta(activeProjectHandle)]);
+      return Promise.all([readJoineryItems(activeProjectHandle), readLevelFile(activeProjectHandle, activeProjectName, levelName), readPlanLabels(activeProjectHandle, activeProjectName, levelName), psReadZonesMeta(activeProjectHandle), projectPlacedIndex(activeProjectHandle)]);
     }).then(function(res){
-      var items = res[0], level = res[1], labels = res[2], zonesMeta = res[3];
+      var items = res[0], level = res[1], labels = res[2], zonesMeta = res[3], anywhere = res[4] || {};
       if (!level || !levelHasPlanLabels(labels)) return { placed: 0, byCode: 0, byRoom: 0, left: 0, candidates: 0, noLabels: true };
       var idx = planLabelIndex(labels);
       level.markers = level.markers || [];
@@ -21864,7 +22219,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       });
       var have = {};
       level.markers.forEach(function(o){ if (o.type === "roomlink") have[(String(o.roomName || "") + "\u0000" + String(o.joineryCode || "")).toLowerCase()] = true; });
-      var todo = items.filter(function(it){ return (it.level === levelName || it.level === UNKNOWN_LEVEL) && it.room !== UNKNOWN_ROOM && it.joineryId && !have[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()]; }); // (2026-10-06) Unknown-level items too: found on this plan = this level
+      var todo = items.filter(function(it){ var k = (String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase(); return (it.level === levelName || it.level === UNKNOWN_LEVEL) && it.room !== UNKNOWN_ROOM && it.joineryId && !have[k] && !(anywhere[k] && anywhere[k].some(function(n){ return n !== levelName; })); }); // (2026-10-10) never an item that is already on another plan (one pin per item) // (2026-10-06) Unknown-level items too: found on this plan = this level
       // (v35) opening the plan only moves v34's markers -- an item waiting in To place stays there
       if (opts && opts.onlyMoveOld) todo = todo.filter(function(it){ return !!redo[(String(it.room || "") + "\u0000" + String(it.joineryId || "")).toLowerCase()]; });
       var existingMaxId = level.markers.reduce(function(m, o){ return Math.max(m, parseInt(String(o.id || "o0").slice(1), 10) || 0); }, 0);
@@ -22260,6 +22615,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     if (copy){
       openCtxMenu(clientX, clientY, copy.w.code + " — one more to place", [
         { label: "Drag it to its room", note: "then pick the room", disabled: true },
+        { label: "Put one on another plan / level…", note: "it waits at the top of that plan's To place list", run: function(){ planCopyToOtherLevel(copy.w); } },
         { label: "Cancel the extra ones", note: "keep " + copy.have + ", don't add more", cls: "danger", run: function(){ planSetCopies(copy.w, 0); } }
       ]);
       return;
@@ -22388,6 +22744,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     } else if (entry.copy){
       openCtxMenu(clientX, clientY, title + " — " + entry.w.copiesToPlace + " more to place", [
         { label: "Change how many…", run: function(){ planAskMultiples(entry.items[0]); } },
+        { label: "Put one on another plan / level…", note: "it waits at the top of that plan's To place list", run: function(){ planCopyToOtherLevel(entry.w); } },
         { label: "Cancel the extra ones", note: "keep " + entry.items.length + ", don't add more", cls: "danger", run: function(){ planSetCopies(entry.w, 0); } }
       ]);
     } else if (entry.removed){
@@ -22410,9 +22767,27 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       return { items: items, item: it || null };
     });
   }
+  // (2026-10-10) Andrew: "this comes up after uploading, requiring you to close out and start again, not good" (Import 294 items, not signed in).
+  // Nobody signed in: the names list (name + PIN) comes up OVER what is open -- the import list, the plan -- and what was asked for carries on
+  // once signed in. Nothing is closed or lost. -> Promise<bool> (true = signed in now)
+  var signInWaiters = [];
+  // while signing in over an open dialog, that dialog sits UNDER the names list (normally every dialog sits over it so the PIN pad can show);
+  // the PIN pad itself stays on top
+  (function(){ var st = document.createElement("style"); st.textContent = "body.utz-signin-over .modal-backdrop:not(#numberpadBackdrop){z-index:50 !important}"; document.head.appendChild(st); })();
+  window.addEventListener("utzline-signed-in", function(){ document.body.classList.remove("utz-signin-over"); var w = signInWaiters.splice(0); w.forEach(function(f){ f(!!deviceUserName); }); });
+  function signInThen(what){
+    if (deviceUserName) return Promise.resolve(true);
+    if (!window.UtzSignIn || !UtzSignIn.lock || (UtzSignIn.active && !UtzSignIn.active())){ showToast("Sign in with your name first — " + what + " is logged under your name.", 4500); return Promise.resolve(false); }
+    return new Promise(function(res){
+      signInWaiters.push(res);
+      showToast("Who is this? Pick your name and PIN — " + what + " is logged under your name. Nothing you've done here is lost.", 5000);
+      document.body.classList.add("utz-signin-over");
+      UtzSignIn.lock();
+    });
+  }
   function planNeedName(what){
     if (deviceUserName) return true;
-    showToast("Sign in with your name on the Projects screen first — " + what + " is logged under your name.", 4500);
+    signInThen(what).then(function(ok){ if (ok) showToast("Signed in as " + deviceUserName + " — now do that again.", 3500); });
     return false;
   }
   function itemKeyMatch(a, b){ return a.level === b.level && (a.room || "") === (b.room || "") && (a.joineryId || "") === (b.joineryId || ""); }
@@ -22475,7 +22850,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
       var have = mine.length, pending = Number(w.copiesToPlace) || 0;
       document.getElementById("planQtyTitle").textContent = "How many " + (w.code || item.joineryId) + "?";
       document.getElementById("planQtySub").textContent = [w.desc, "WO " + wo, (w.sellPrice !== null && w.sellPrice !== undefined) ? woMoney(w.sellPrice) + " in all" : ""].filter(Boolean).join(" · ") +
-        " — in " + mine.map(function(it){ return it.room; }).join(", ") + ". Drag each extra one to its room (the same room asks first — a double-up?); the value is shared equally.";
+        " — in " + mine.map(function(it){ return it.room; }).join(", ") + ". Drag each extra one to its room — on this plan, or on any other plan / level (Put one on another plan in its menu); the same room asks first — a double-up? The value is shared equally.";
       planQtyInput.value = String(have + pending > have ? have + pending : have + 1);
       return new Promise(function(resolve){
         planQtyState = { w: w, have: have, resolve: resolve };
@@ -22488,7 +22863,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
         var extra = n - have;
         return planSetCopies(w, extra).then(function(res2){
           if (res2 === null) return null;
-          showToast(extra ? extra + " more " + (w.code || item.joineryId) + " to place — drag each dashed pin (next to it on the plan, or in To place) to its room." : (w.code || item.joineryId) + ": no extra ones to place.", 6500);
+          showToast(extra ? extra + " more " + (w.code || item.joineryId) + " to place — drag each dashed pin (next to it on the plan, or in To place) to its room, here or on another plan (its menu: Put one on another plan / level)." : (w.code || item.joineryId) + ": no extra ones to place.", 6500);
           return extra;
         });
       });
@@ -22537,7 +22912,39 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
   // ---- (2026-10-02) the "Marker size" dialog ----
   var planSizeBackdrop = document.getElementById("planSizeBackdrop"), planSizeChain = Promise.resolve();
   function planSizePct(v){ return Math.round(v * 100) + "%"; }
+  // (2026-10-10) Andrew: "give an option with marker size to do across all plans on that level (tick box when saved)". Ticked, every size step,
+  // the sheet default and Text sits go to every plan of this level (the same markerScale / textScale / textSide; each plan's own markers
+  // rescaled); ticking it also brings the other plans to this plan's setting straight away. The tick is remembered on this device (on by default).
+  var planSizeAll = document.getElementById("planSizeAll"), planSizeAllWrap = document.getElementById("planSizeAllWrap");
+  function planSizeOtherPlans(){ var g = levelPlanSiblings(activeLevelName); return g ? g.members.map(function(m){ return m.name; }).filter(function(n){ return n !== activeLevelName; }) : []; }
+  function planSizeAllOn(){ return !planSizeAllWrap.hidden && planSizeAll.checked; }
+  function planSizeShowAll(){
+    var others = planSizeOtherPlans(), g = levelPlanSiblings(activeLevelName);
+    planSizeAllWrap.hidden = !others.length;
+    if (!others.length) return;
+    var keep = localStorage.getItem("utzline-projects:planSizeAll"); planSizeAll.checked = keep !== "0";
+    document.getElementById("planSizeAllText").textContent = "Apply to every plan of " + g.level + " (" + g.members.map(function(m){ return m.zone || m.name; }).join(", ") + ")";
+  }
+  // the other plans of the level take (m, t) and/or the text side, one file each
+  function planSizeApplyOthers(m, t, side){
+    var names = planSizeOtherPlans();
+    return names.reduce(function(p, lv){ return p.then(function(){
+      return readLevelFile(activeProjectHandle, activeProjectName, lv).then(function(level){
+        if (!level) return;
+        if (m > 0 && t > 0){ var old = planScalesFor(level); (level.markers || []).forEach(function(o){ if (o && o.type === "roomlink") planRescaleMarker(o, m / old.m, t / old.t); }); level.markerScale = Math.round(m * 1000) / 1000; level.textScale = Math.round(t * 1000) / 1000; }
+        if (side){ (level.markers || []).forEach(function(o){ if (!o || o.type !== "roomlink" || !o.label) return; var r = Number(o.r) || 27.2, fs = Number(o.label.fontSize) || 32; o.label.x = o.x; o.label.y = Math.round(planLabelY(o.y, r, fs, side) * 100) / 100; o.label.anchor = "middle"; o.label.rot = 0; }); if (side === "above") level.textSide = "above"; else delete level.textSide; }
+        return writeLevelFile(activeProjectHandle, activeProjectName, lv, level);
+      });
+    }); }, Promise.resolve()).then(function(){ if (names.length) showToast("Applied to " + (names.length + 1) + " plans of this level."); });
+  }
+  planSizeAll.addEventListener("change", function(){
+    localStorage.setItem("utzline-projects:planSizeAll", planSizeAll.checked ? "1" : "0");
+    if (!planSizeAll.checked || !planSaved) return;
+    var sc = planScalesFor(planSaved), side = planSaved.textSide === "above" ? "above" : "below";
+    planSizeChain = planSizeChain.then(function(){ return planSizeApplyOthers(sc.m, sc.t, side); }).catch(function(err){ console.error(err); showToast("Couldn't apply to the other plans — try again."); });
+  });
   function planSizeShow(){
+    planSizeShowAll();
     var sc = planScalesFor(planSaved), w = planSaved && planSaved.imageW, h = planSaved && planSaved.imageH;
     var sheet = planSheetName(w, h), auto = planAutoScale(w, h);
     document.getElementById("planSizeMkVal").textContent = planSizePct(sc.m);
@@ -22560,6 +22967,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
             planSaved.objects = (level.markers || []).slice(); planSaved.markerScale = level.markerScale; planSaved.textScale = level.textScale;
             planRenderMarkers(); planSizeShow();
           }
+          if (planSizeAllOn()) return planSizeApplyOthers(m, t, null);
         });
       });
     }).catch(function(err){ console.error("Resizing the markers failed:", err); showToast("Couldn't resize the markers — try again."); });
@@ -22593,6 +23001,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
             planRenderMarkers();
           }
           showToast("Codes moved " + side + " their dots.");
+          if (planSizeAllOn()) return planSizeApplyOthers(0, 0, side);
         });
       });
     }).catch(function(err){ console.error("Moving the marker text failed:", err); showToast("Couldn't move the text — try again."); });
@@ -22730,6 +23139,29 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     });
   }
 
+  // (2026-10-10) Andrew: "if making multiples, we need to be able to split them across plans / levels" / "they need to go into the menu under
+  // multiples". The extra copies already sit in every plan's To place list; this picks the plan and opens it with the list open, the copy on top.
+  function planCopyToOtherLevel(w){
+    return listExistingLevelsStrict(activeProjectHandle).then(function(levels){
+      var others = levels.filter(function(lv){ return lv !== activeLevelName; });
+      if (!others.length){ showToast("This project has no other plan to put one on."); return null; }
+      document.getElementById("planLevelPickTitle").textContent = "Put one " + (w.code || "") + " on which plan?";
+      document.getElementById("planLevelPickSub").textContent = (Number(w.copiesToPlace) || 0) + " more to place. That plan opens with it at the top of its To place list — drag it to its room there; the value is shared equally.";
+      document.getElementById("planLevelPickList").innerHTML = others.map(function(lv){ return "<button type=\"button\" class=\"room-pick\" data-level=\"" + escapeHtml(lv) + "\">" + escapeHtml(levelTitleText(lv)) + "</button>"; }).join("");
+      planLevelPickBackdrop.hidden = false;
+      return new Promise(function(resolve){ planLevelPickResolve = resolve; });
+    }).then(function(lv){
+      if (!lv) return null;
+      return openLevel(lv).then(function(){ return openPlanCanvasForLevel(); }).then(function(){
+        var tries = 0;
+        (function openList(){ // the To place list fills once the plan's items are read
+          if (planUnplacedBtn && !planUnplacedBtn.hidden){ if (planUnplacedPanel.hidden) planUnplacedBtn.click(); return; }
+          if (++tries < 40) setTimeout(openList, 250);
+        })();
+        return lv;
+      });
+    }).catch(function(err){ console.error("Put one on another plan failed:", err); if (isReadFailed(err)) readFailedToast("the project's files"); else showToast("Couldn't open that plan — try again."); return null; });
+  }
   /* ---- Move to another level ---- */
   var planLevelPickBackdrop = document.getElementById("planLevelPickBackdrop");
   var planLevelPickResolve = null;
@@ -22882,7 +23314,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     // (v31) work order import + pin-drop
     woParseReportRowsForTest: function(pages){ return woParseReportRows(pages); },
     woInterpretGroupsForTest: function(groups){ return woInterpretGroups(groups); },
-    woImportStateForTest: function(){ return woImportState; },
+    woImportStateForTest: function(){ return woImportState; }, woPlanImportForTest: function(interp, zoneMap, levelRooms, items, levelLabels){ return woPlanImport(interp, zoneMap, levelRooms, items, levelLabels); },
     keptReportForTest: function(){ return keptReport; }, splashStateForTest: function(){ return { visible: !splashEl.hidden, title: document.getElementById("utzSplashTitle").textContent, log: splashLog.slice() }; },
     piTakeReportForTest: function(file){ return piTakeReport(file); },
     woParseReportHeaderForTest: function(pages){ return woParseReportHeader(pages); },
@@ -22890,7 +23322,7 @@ window.UTZLINE_LOGO_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ
     woSplitCodeByFormatForTest: function(t, rule){ return woSplitCodeByFormat(t, rule); },
     pmNamesForTest: function(){ return pmNames.slice(); },
     woStartImportFromFileForTest: function(file){ return woStartImportFromFile(file); },
-    unplacedItemsForTest: function(){ return planUnplacedItems.map(function(e){ var d = woEntryDisplay(e); return { kind: e.kind, room: d.room, joineryId: d.joineryId, workOrderNo: d.workOrderNo }; }); },
+    unplacedItemsForTest: function(){ return planUnplacedItems.map(function(e){ var d = woEntryDisplay(e); return { kind: e.kind, room: d.room, joineryId: d.joineryId, workOrderNo: d.workOrderNo, other: !!e.other }; }); },
     placedWosForTest: function(){ return planPlacedWos.map(function(e){ return { wo: e.w.wo, code: e.w.code, rooms: e.items.map(function(it){ return it.room; }) }; }); },
     pinModeForTest: function(){ return planPinMode ? { item: { room: planPinMode.item.room, joineryId: planPinMode.item.joineryId }, draft: planPinMode.draft } : null; },
     // (v32) Work Order Cost Analysis import + drag-and-drop
